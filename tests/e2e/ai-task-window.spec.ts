@@ -330,13 +330,14 @@ for (const viewport of [VIEWPORTS[5], VIEWPORTS[1]]) {
       }
     });
 
-    test("a restart in working continues once with a red entry; a second restart at once stops at needs you", async ({ page }) => {
+    test("a restart in working continues with a red entry; the third unexpected restart in a row stops at needs you", async ({ page }) => {
       await aiTaskWorld(page, shared.server);
       const taskId = await openFix(page, shared.server);
       await expectPhase(page, "working");
       const turns = shared.server.temporary!.captured.temporaryTurns.length;
       // The turn is interrupted while Vibe64 is down. Marked while the old server still ran, a read the page made
-      // in between woke that server, which read the interrupted turn as one the person stopped.
+      // in between woke that server, which read the interrupted turn as one the person stopped. This server keeps no
+      // record of its runs, so no stop in order is known: each restart counts as an unexpected one.
       await shared.server.aiTasks.restart(() => shared.server.temporary!.setNativeStatus(taskId, "interrupted"));
       // The AI continues by itself, once, in the same chat, with Vibe64's note leading its message.
       await expect.poll(() => shared.server.temporary!.captured.temporaryTurns.length).toBe(turns + 1);
@@ -346,16 +347,21 @@ for (const viewport of [VIEWPORTS[5], VIEWPORTS[1]]) {
       const entry = taskWindow(page).locator(".vibe64-turn-interruption");
       await expect(entry).toHaveCount(1);
       await expect(entry).toContainText(/Resumed after Vibe64 restarted at \d\d:\d\d/u);
-      // Interrupted again at once: a crash loop waits for the person.
+      // Interrupted again at once: the second in a row is continued too.
+      await shared.server.aiTasks.restart(() => shared.server.temporary!.setNativeStatus(taskId, "interrupted"));
+      await expect.poll(() => shared.server.temporary!.captured.temporaryTurns.length).toBe(turns + 2);
+      await expect(entry).toHaveCount(2);
+      // A third time at once: a crash loop waits for the person.
       await shared.server.aiTasks.restart(() => shared.server.temporary!.setNativeStatus(taskId, "interrupted"));
       await taskWindow(page).locator("[data-vibe64-ai-task-view='progress']").click();
       await expectPhase(page, "needs_you", "interrupted");
       await expect(taskWindow(page).locator("[data-vibe64-ai-task-status]")).toHaveText("Vibe64 restarted while the AI was working");
-      await expect(taskWindow(page)).toContainText("Stopped: Vibe64 restarted twice while it ran. Choose Continue to try again.");
-      expect(shared.server.temporary!.captured.temporaryTurns.length).toBe(turns + 1);
+      await expect(taskWindow(page)).toContainText(
+        "Stopped: Vibe64 stopped unexpectedly three times in a row while it ran. Choose Continue to try again.");
+      expect(shared.server.temporary!.captured.temporaryTurns.length).toBe(turns + 2);
       await taskWindow(page).locator("[data-vibe64-ai-task-action='continue']").click();
       await expectPhase(page, "working");
-      await expect.poll(() => shared.server.temporary!.captured.temporaryTurns.length).toBe(turns + 2);
+      await expect.poll(() => shared.server.temporary!.captured.temporaryTurns.length).toBe(turns + 3);
     });
 
     test("a restart in checking runs the same check again and finishes", async ({ page }) => {

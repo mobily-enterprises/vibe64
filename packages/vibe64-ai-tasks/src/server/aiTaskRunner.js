@@ -3,7 +3,8 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { outsideSessionLocks } from "@local/vibe64-runtime/server/sessionStoreLocks";
 import {
   INTERRUPTION_CAUSE,
-  TURN_RESUME_LOOP_WINDOW_MS,
+  interruptionLoopError,
+  nextTurnInterruptions,
   resumeNoteForAi
 } from "@local/vibe64-terminals/server/turnInterruptions";
 import { AI_TASK_PHASES, AI_TASK_REASONS } from "../shared/aiTaskPhases.js";
@@ -306,20 +307,22 @@ function createAiTaskRunner({
       drive.again = true;
       return;
     }
-    // The previous server ended while the AI worked: the task continues once in the same chat, unless it was
-    // continued after an interruption less than the loop window ago, and its chat's history says so in red.
+    // The previous server ended while the AI worked: the task continues in the same chat unless the loop rule stops
+    // it (Terminals' nextTurnInterruptions: a planned stop never counts, the third unexpected one in a row stops), and
+    // its chat's history says so. A previous end that is unknown (no record of server runs) reads as unexpected.
     const ended = await terminals.previousServerEnd().catch(() => null);
     const interruption = {
       key: `task:${conversationId}:${task.turnMessageId}`,
-      cause: INTERRUPTION_CAUSE.RESTART,
       at: new Date().toISOString(),
-      ...ended
+      ...(ended || { cause: INTERRUPTION_CAUSE.CRASH, unknownRun: true })
     };
-    const lastResume = Date.parse(task.resumedAt || "");
-    const resume = !(Number.isFinite(lastResume) && Date.now() - lastResume < TURN_RESUME_LOOP_WINDOW_MS);
+    const decision = nextTurnInterruptions(task.interruptions, interruption, Date.now());
+    if (decision.repeated) return;
+    const { resume } = decision;
     const sendId = randomUUID();
     const saved = (await applyFound(sessionId, conversationId, {
-      ...event, resume, ...(resume ? { id: sendId, note: resumeNoteForAi(interruption) } : {})
+      ...event, resume, interruptions: decision.history,
+      ...(resume ? { id: sendId, note: resumeNoteForAi(interruption) } : { message: interruptionLoopError(interruption.cause) })
     }))?.task;
     // Only this event's own move is told: a task cancelled meanwhile just ends.
     const told = resume

@@ -8,8 +8,8 @@ import { createServerRun } from "../../packages/vibe64-terminals/src/server/turn
 import { fixture } from "../fixtures/assistantRouting.js";
 
 // An AI turn that ends without finishing, and without the person stopping it, is resumed once in the same
-// conversation with Vibe64's note leading its message, and its chat's history keeps a red entry of what happened and
-// what Vibe64 did. The server-level proof (a real process killed mid-turn) is turnResumeAfterKill.integration.test.js.
+// conversation with Vibe64's note leading its message, and its chat's history keeps an entry of what happened and
+// what Vibe64 did: red for an unexpected end, one informational line for a planned restart it carried on through. The server-level proof (a real process killed mid-turn) is turnResumeAfterKill.integration.test.js.
 
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
 // After the per-turn role instructions every routed message carries, the note leads the request itself.
@@ -82,21 +82,44 @@ test("a turn the previous server was running when it crashed is resumed once, wi
   assert.equal(h.notices().length, 1);
 });
 
-test("a resumed turn interrupted again within the loop window stops with Continue and says why", async t => {
+test("a resumed turn whose server ends unexpectedly again is resumed once more, and the third time in a row stops with Continue and says why", async t => {
   const h = await runningTurn(t);
   await (await h.next()).routing.reconcile("session-1", h.f.context);
   assert.equal(h.f.sends.length, 2);
-  // The resumed turn's server dies too, at once.
+  // The resumed turn's server dies too, at once: the second unplanned end in a row is resumed too.
   await (await h.next()).routing.reconcile("session-1", h.f.context);
-  assert.equal(h.f.sends.length, 2, "a crash loop is not resumed again");
+  assert.equal(h.f.sends.length, 3, "the second unplanned end in a row is resumed");
+  assert.equal(h.entries().at(-1).outcome, "resumed");
+  // And at once a third time: a crash loop is not resumed again.
+  await (await h.next()).routing.reconcile("session-1", h.f.context);
+  assert.equal(h.f.sends.length, 3, "a crash loop is not resumed again");
   assert.equal(h.f.state().status, "waiting");
-  assert.equal(h.f.state().error, "Stopped: Vibe64 restarted twice while it ran. Choose Continue to try again.");
+  assert.equal(h.f.state().error, "Stopped: Vibe64 stopped unexpectedly three times in a row while it ran. Choose Continue to try again.");
   assert.ok(h.f.state().followup?.messageId, "Continue has the prepared resume to send");
   assert.equal(h.entries().at(-1).outcome, "loop");
-  assert.match(h.notices().at(-1).text, /\nNot resumed: stopped: Vibe64 restarted twice while it ran\. Choose Continue to try again\.$/u);
+  assert.match(h.notices().at(-1).text,
+    /\nNot resumed: stopped: Vibe64 stopped unexpectedly three times in a row while it ran\. Choose Continue to try again\.$/u);
   // Continue sends that resume once.
   await h.f.service.send("session-1", { ...request, reviewAction: "retry" }, h.f.context);
-  assert.equal(h.f.sends.length, 3);
+  assert.equal(h.f.sends.length, 4);
+});
+
+test("a turn carries on through planned restarts however close together, each told in one informational line", async t => {
+  const h = await runningTurn(t);
+  let run = h.first;
+  for (let restart = 1; restart <= 3; restart += 1) {
+    // Each server stops in order, as a release, its rollback and a VPS restart stop it.
+    await run.recordPlannedStop("server-shutdown");
+    const next = await h.next();
+    await next.routing.reconcile("session-1", h.f.context);
+    assert.equal(h.f.sends.length, restart + 1, `restart ${restart} is carried on with exactly one message`);
+    run = next.run;
+  }
+  assert.equal(h.f.state().status, "working");
+  assert.equal(h.f.state().error, undefined);
+  assert.deepEqual(h.notices().map(notice => notice.text.replace(/\d\d:\d\d/u, "HH:MM")),
+    Array(3).fill("Vibe64 was restarted at HH:MM UTC; this turn carried on."));
+  assert.deepEqual(h.entries().map(entry => [entry.cause, entry.outcome]), Array(3).fill(["restart", "resumed"]));
 });
 
 test("an interruption long after the last resume is resumed again", async t => {
@@ -114,14 +137,16 @@ test("an orderly restart and an update are named as such", async t => {
   const h = await runningTurn(t);
   await h.first.recordPlannedStop("server-shutdown");
   await (await h.next()).routing.reconcile("session-1", h.f.context);
-  assert.match(h.notices()[0].text, /^Vibe64 restarted at \d\d:\d\d UTC \(it was stopped and started again\)\./u);
+  assert.match(h.notices()[0].text, /^Vibe64 was restarted at \d\d:\d\d UTC; this turn carried on\.$/u);
+  assert.match(h.f.sends[1].input.message, /Vibe64 restarted at \d\d:\d\d UTC \(it was stopped and started again\)\./u,
+    "the AI's note still says what stopped its turn");
   // An earlier release's run that stopped in order: this server's version differs.
   const updated = await runningTurn(t);
   const file = updated.runFile(updated.first);
   const record = JSON.parse(await readFile(file, "utf8"));
   await writeFile(file, JSON.stringify({ ...record, version: "0.0.0-earlier", stoppedAt: new Date().toISOString() }));
   await (await updated.next()).routing.reconcile("session-1", updated.f.context);
-  assert.match(updated.notices()[0].text, /^Vibe64 was updated at \d\d:\d\d UTC, which stopped this turn\.\nResumed after Vibe64 was updated at/u);
+  assert.match(updated.notices()[0].text, /^Vibe64 was updated at \d\d:\d\d UTC; this turn carried on\.$/u);
   assert.match(updated.f.sends[1].input.message, /Vibe64 was updated at/u);
 });
 
@@ -135,7 +160,7 @@ test("a turn whose message an orderly stop catches while it is sent is resumed o
   assert.match(h.f.sends[1].input.message, NOTE);
   const [entry] = h.entries();
   assert.deepEqual({ cause: entry?.cause, outcome: entry?.outcome }, { cause: "restart", outcome: "resumed" });
-  assert.match(h.notices()[0].text, /^Vibe64 restarted at \d\d:\d\d UTC \(it was stopped and started again\)\.\nResumed after/u);
+  assert.match(h.notices()[0].text, /^Vibe64 was restarted at \d\d:\d\d UTC; this turn carried on\.$/u);
 });
 
 test("a turn the person stopped is never resumed; a Stop the crash overtook says so", async t => {

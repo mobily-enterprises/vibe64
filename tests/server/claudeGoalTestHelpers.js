@@ -105,6 +105,13 @@ async function goalHarness(t, { root: sharedRoot = "" } = {}) {
   // While this file exists, the next goal command meets the AI account's limit it names: Claude's own
   // API-error message ends the turn at the usage limit (with its reset time) or out of credit.
   const limitPath = path.join(root, "next-goal-limit.json");
+  // While this file exists, Claude's account status is the one it holds (another account, or signed out).
+  const accountPath = path.join(root, "claude-account.json");
+  // Claude's sign-in, which JSKIT watches (by its metadata) to read the account's status again: a sign-in rewrites
+  // it and a sign-out removes it, as Claude Code does. Until it changes, a status read in this process holds.
+  const credentialsPath = path.join(root, "config", ".credentials.json");
+  await mkdir(path.dirname(credentialsPath), { recursive: true });
+  await writeFile(credentialsPath, "{}");
   await writeFile(command, `#!${process.execPath}
 const { createInterface } = require('node:readline');
 const { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } = require('node:fs');
@@ -115,7 +122,8 @@ const emit = value => process.stdout.write(JSON.stringify(value) + '\\n');
 const trace = value => appendFileSync(${JSON.stringify(tracePath)}, JSON.stringify(value) + '\\n');
 trace({ args, pid: process.pid });
 if (args[0] === 'auth') {
-  emit({ loggedIn: true, authMethod: 'claude.ai', email: 'owner@example.test' });
+  emit(existsSync(${JSON.stringify(accountPath)}) ? JSON.parse(readFileSync(${JSON.stringify(accountPath)}, 'utf8'))
+    : { loggedIn: true, authMethod: 'claude.ai', email: 'owner@example.test' });
   process.exit(0);
 }
 if (existsSync(${JSON.stringify(failStartPath)})) {
@@ -326,6 +334,12 @@ createInterface({ input: process.stdin }).on('line', async line => {
     revokeAccess() { accessRevoked = true; },
     options, store, warnings, actor, goalCommands, intent, turnActive, waitFor, trace,
     failNextStart: () => writeFile(failStartPath, ""),
+    /** Claude's account from now on, as `claude auth status` reports it: another account, or signed out. */
+    async setAccount(account) {
+      await writeFile(accountPath, JSON.stringify(account));
+      if (account.loggedIn) await writeFile(credentialsPath, JSON.stringify({ signedIn: account.email }));
+      else await rm(credentialsPath, { force: true });
+    },
     inProject: operation => runWithProjectRequestContext({ ...goalProject, vibe64User: null }, operation),
     async restart({ graceful = true } = {}) {
       if (graceful) await service.close();

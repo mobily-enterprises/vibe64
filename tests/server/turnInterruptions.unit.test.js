@@ -7,6 +7,7 @@ import test from "node:test";
 import { CRASH_KIND, crashRecordId, readVibe64CrashRecords, writeCrashRecordSync } from "@local/vibe64-core/server/crashRecords";
 import {
   TURN_RESUME_LOOP_WINDOW_MS,
+  TURN_RESUME_PLANNED_LOOP_LIMIT,
   createServerRun,
   interruptionNotice,
   nextTurnInterruptions,
@@ -14,7 +15,7 @@ import {
   resumePolicy,
   turnEnding
 } from "../../packages/vibe64-terminals/src/server/turnInterruptions.js";
-import { turnInterruptionLines } from "../../packages/vibe64-terminals/src/shared/turnInterruptionText.js";
+import { turnInterruptionCarriedOn, turnInterruptionLines } from "../../packages/vibe64-terminals/src/shared/turnInterruptionText.js";
 
 async function systemRoot(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-server-runs-"));
@@ -93,7 +94,7 @@ test("an earlier run still runs only while its own process does: not this one, n
   assert.equal(await now.isRunning(own.id), false, "an exited process no longer runs the turn");
 });
 
-test("the crash-loop rule resumes an interruption once, stops one within the window and decides each only once", () => {
+test("the loop rule resumes an unplanned end twice in a row and stops the third, each within the window of the resume before it", () => {
   const now = Date.parse("2026-11-24T04:20:00.000Z");
   const first = nextTurnInterruptions(undefined, { key: "a", at: "2026-11-24T04:18:05.000Z", cause: "crash" }, now);
   assert.equal(first.resume, true);
@@ -102,16 +103,61 @@ test("the crash-loop rule resumes an interruption once, stops one within the win
   const repeated = nextTurnInterruptions(first.history, { key: "a", at: "2026-11-24T04:18:05.000Z", cause: "crash" }, now + 1000);
   assert.equal(repeated.repeated, true);
   assert.equal(repeated.history, first.history);
-  const loop = nextTurnInterruptions(first.history, { key: "b", at: "x", cause: "crash" }, now + TURN_RESUME_LOOP_WINDOW_MS - 1);
+  // The second unplanned end in a row is resumed too.
+  const second = nextTurnInterruptions(first.history, { key: "b", at: "x", cause: "engine" }, now + 60_000);
+  assert.deepEqual([second.resume, second.loop], [true, false]);
+  // The third, within the window of the second's resume, stops: Continue or Resume goal is the person's.
+  const loop = nextTurnInterruptions(second.history, { key: "c", at: "x", cause: "crash" }, now + 60_000 + TURN_RESUME_LOOP_WINDOW_MS - 1);
   assert.deepEqual([loop.resume, loop.loop, loop.entry.resumedAt], [false, true, null]);
-  const later = nextTurnInterruptions(first.history, { key: "b", at: "x", cause: "crash" }, now + TURN_RESUME_LOOP_WINDOW_MS);
-  assert.equal(later.resume, true);
+  const later = nextTurnInterruptions(second.history, { key: "c", at: "x", cause: "crash" }, now + 60_000 + TURN_RESUME_LOOP_WINDOW_MS);
+  assert.equal(later.resume, true, "one long after the last resume starts a new run");
+  // A second end long after the first's resume starts the count again, so the third in a row is one more.
+  const slow = nextTurnInterruptions(first.history, { key: "b", at: "x", cause: "crash" }, now + TURN_RESUME_LOOP_WINDOW_MS);
+  assert.equal(nextTurnInterruptions(slow.history, { key: "c", at: "x", cause: "crash" }, now + TURN_RESUME_LOOP_WINDOW_MS + 1000).resume, true);
   // After a loop stop the next interruption is resumed again: Continue resumed it, or it ran on.
-  assert.equal(nextTurnInterruptions(loop.history, { key: "c", at: "x", cause: "crash" }, now + 2000).resume, true);
-  let history;
-  for (const key of ["1", "2", "3", "4", "5", "6", "7"]) history = nextTurnInterruptions(history, { key, at: "x", cause: "crash" }, now + Number(key) * TURN_RESUME_LOOP_WINDOW_MS).history;
-  assert.equal(history.length, 5);
+  assert.equal(nextTurnInterruptions(loop.history, { key: "d", at: "x", cause: "crash" }, now + 2 * 60_000).resume, true);
   assert.equal(nextTurnInterruptions(undefined, { key: "a", at: "x", cause: "sign-in" }, now, { resumes: false }).resume, false);
+});
+
+test("a planned stop (a release, a rollback, a restart) never counts: what ran carries on, and the stops between unplanned ends neither count nor part them", () => {
+  const now = Date.parse("2026-11-24T04:20:00.000Z");
+  let history;
+  // A move's reboot, the rollback four minutes later, the release again, and five more: each carries on.
+  for (const [index, cause] of ["restart", "update", "update", "restart", "update", "restart", "update", "restart", "update"].entries()) {
+    const decision = nextTurnInterruptions(history, { key: `p${index}`, at: "x", cause }, now + index * 60_000);
+    assert.deepEqual([decision.resume, decision.loop], [true, false], `planned stop ${index + 1}`);
+    history = decision.history;
+  }
+  // Unplanned ends with planned stops between them: the third unplanned end in a row still stops.
+  history = undefined;
+  const causes = ["crash", "update", "crash", "restart", "crash"];
+  const decisions = causes.map((cause, index) => {
+    const decision = nextTurnInterruptions(history, { key: `u${index}`, at: "x", cause }, now + index * 60_000);
+    history = decision.history;
+    return decision.resume;
+  });
+  assert.deepEqual(decisions, [true, true, true, true, false]);
+});
+
+test("the backstop: a turn that keeps stopping Vibe64 in order at once stops at the tenth planned stop in a row", () => {
+  const now = Date.parse("2026-11-24T04:20:00.000Z");
+  let history;
+  const resumes = [];
+  for (let index = 0; index < TURN_RESUME_PLANNED_LOOP_LIMIT; index += 1) {
+    const decision = nextTurnInterruptions(history, { key: `k${index}`, at: "x", cause: "restart" }, now + index * 30_000);
+    history = decision.history;
+    resumes.push(decision.resume);
+  }
+  assert.deepEqual(resumes, [...Array(TURN_RESUME_PLANNED_LOOP_LIMIT - 1).fill(true), false]);
+  // Ten minutes of work between two of them is progress: the run starts again.
+  history = undefined;
+  for (let index = 0; index < TURN_RESUME_PLANNED_LOOP_LIMIT; index += 1) {
+    const gap = index === 5 ? TURN_RESUME_LOOP_WINDOW_MS : 30_000;
+    const decision = nextTurnInterruptions(history, { key: `g${index}`, at: "x", cause: "update" }, now + index * 30_000 + (index >= 5 ? gap : 0));
+    assert.equal(decision.resume, true, `planned stop ${index + 1}`);
+    history = decision.history;
+  }
+  assert.equal(history.length, TURN_RESUME_PLANNED_LOOP_LIMIT - 1, "the history keeps what the backstop reads");
 });
 
 test("what ended a turn this server sent, and when Vibe64 resumes each", () => {
@@ -142,9 +188,31 @@ test("the red entry and the AI's note say what happened, with the time in UTC on
   assert.deepEqual(turnInterruptionLines(notice.data.vibe64TurnInterruption, perth),
     ["Vibe64 crashed at 12:18: read ECONNRESET.", "Resumed after Vibe64 restarted at 12:18."]);
   assert.equal(interruptionNotice({ ...interruption, crashMessage: "" }, "loop").text,
-    "Vibe64 restarted at 04:18 UTC (the server stopped unexpectedly).\nNot resumed: stopped: Vibe64 restarted twice while it ran. Choose Continue to try again.");
+    "Vibe64 restarted at 04:18 UTC (the server stopped unexpectedly).\nNot resumed: stopped: Vibe64 stopped unexpectedly three times in a row while it ran. Choose Continue to try again.");
   assert.equal(interruptionNotice({ key: "g", cause: "update", at: interruption.at }, "loop", { goal: true }).text,
-    "Vibe64 was updated at 04:18 UTC, which stopped this turn.\nNot resumed: stopped: Vibe64 restarted twice while it ran. Choose Resume goal to try again.");
+    "Vibe64 was updated at 04:18 UTC, which stopped this turn.\nNot resumed: stopped: Vibe64 was stopped and started again 10 times in a row while it ran. Choose Resume goal to try again.");
+  assert.equal(interruptionNotice({ key: "o", cause: "overloaded", at: interruption.at }, "loop").text,
+    "The AI service was overloaded at 04:18 UTC.\nNot resumed: stopped: the AI service was overloaded three times in a row while it ran. Choose Continue to try again.");
+  // A planned stop that what ran carried on through is one informational line, not a red entry.
+  const update = interruptionNotice({ key: "u", cause: "update", at: interruption.at }, "resumed", { goal: true });
+  assert.equal(update.text, "Vibe64 was updated at 04:18 UTC; the goal carried on.");
+  assert.deepEqual(update.data.vibe64TurnInterruption, { cause: "update", at: interruption.at, outcome: "resumed", goal: true });
+  assert.equal(turnInterruptionCarriedOn(update.data.vibe64TurnInterruption), true);
+  assert.equal(turnInterruptionCarriedOn(notice.data.vibe64TurnInterruption), false, "a crash's resume is still a red entry");
+  assert.deepEqual(turnInterruptionLines(update.data.vibe64TurnInterruption, perth), ["Vibe64 was updated at 12:18; the goal carried on."]);
+  assert.equal(interruptionNotice({ key: "r", cause: "restart", at: interruption.at }, "resumed").text,
+    "Vibe64 was restarted at 04:18 UTC; this turn carried on.");
+  // Continued on the AI account connected now, which changed since it last ran.
+  assert.equal(interruptionNotice({ key: "r", cause: "restart", at: interruption.at }, "resumed", { goal: true, newConnection: true }).text,
+    "Vibe64 was restarted at 04:18 UTC; the goal carried on with the AI account connected now.");
+  assert.equal(interruptionNotice(interruption, "resumed", { goal: true, newConnection: true }).text,
+    "Vibe64 crashed at 04:18 UTC: read ECONNRESET.\nResumed after Vibe64 restarted at 04:18 UTC, with the AI account connected now.");
+  // A goal its restart could not continue says why, and what to do.
+  assert.equal(interruptionNotice({ key: "n", cause: "restart", at: interruption.at }, "not-resumed",
+    { goal: true, error: "Sign in to Claude Code with your Claude account before continuing." }).text,
+  "Vibe64 restarted at 04:18 UTC (it was stopped and started again).\nNot resumed: Sign in to Claude Code with your Claude account before continuing. Choose Resume goal to try again.");
+  assert.equal(interruptionNotice({ key: "n", cause: "restart", at: interruption.at }, "not-resumed").text,
+    "Vibe64 restarted at 04:18 UTC (it was stopped and started again).\nNot resumed: choose Continue to try again.");
   assert.equal(interruptionNotice({ key: "e", cause: "engine", at: interruption.at, detail: "Claude stopped unexpectedly (exit 137)." }, "failed",
     { error: "The AI account is unavailable." }).text,
   "The AI engine stopped at 04:18 UTC: Claude stopped unexpectedly (exit 137).\nThe resume could not be sent: The AI account is unavailable. Choose Continue to try again.");
@@ -153,4 +221,6 @@ test("the red entry and the AI's note say what happened, with the time in UTC on
   assert.equal(resumeNoteForAi(interruption), "[Vibe64 note: your previous turn was interrupted. Vibe64 crashed at 04:18 UTC: " +
     "read ECONNRESET. Vibe64 resumed this conversation. Your work so far is kept. Before repeating any step, check the state " +
     "of what you were doing (files, Git, commands you started, anything half-done), then continue.]");
+  assert.match(resumeNoteForAi({ key: "u", cause: "update", at: interruption.at }),
+    /^\[Vibe64 note: your previous turn was interrupted\. Vibe64 was updated at 04:18 UTC, which stopped this turn\. Vibe64 resumed/u);
 });

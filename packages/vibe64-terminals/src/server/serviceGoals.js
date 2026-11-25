@@ -249,13 +249,13 @@ function createServiceGoals({
     }
     const actor = await state.assistantRuntime.authorizeProjectMessage(intent.actor, sessionAccess.projectRuntimeContext().projectSlug);
     const pin = assistantRoutingGoalFromMetadata(context.session.metadata);
-    context = {
-      ...context,
-      vibe64User: actor,
-      assistantSelection: pin?.selection || intent.selection,
-      expectedConnectionIdentity: intent.connectionIdentity
-    };
-    await sessionAgent.requireAssistantAccess(sessionId, context);
+    context = { ...context, vibe64User: actor, assistantSelection: pin?.selection || intent.selection };
+    // The goal continues on the AI connection its selection has now, as Resume goal and Main chat's messages do: an
+    // account changed or reconnected since it ran is no reason to leave it, and one its actor cannot use stops here.
+    // The rest of this recovery holds to that connection.
+    const { connectionIdentity } = await sessionAgent.requireAssistantAccess(sessionId, context);
+    context = { ...context, expectedConnectionIdentity: connectionIdentity };
+    const newConnection = Boolean(intent.connectionIdentity) && connectionIdentity !== intent.connectionIdentity;
     // Native reconciliation retains custody until the previous execution is
     // verified stopped. It never starts inference or resumes a goal itself.
     const recovered = await sessionAgent.reconcileSessions([context.session], context);
@@ -320,7 +320,7 @@ function createServiceGoals({
     }
     const observed = await readCanonicalAgentGoal(sessionId, { vibe64User: actor });
     if (!observed.goal || goalStatusIsComplete(observed.goal.status)) return { sessionId, completed: true };
-    return goalInterruptions.continueInterruptedGoal(sessionId, context, { intent, native, observed, actor });
+    return goalInterruptions.continueInterruptedGoal(sessionId, context, { intent, native, observed, actor, newConnection });
   }
 
   // A goal waiting at its AI account's usage limit continues by itself once the limit has reset.
@@ -438,8 +438,11 @@ function createServiceGoals({
    * no longer active, but continues on the current AI connection as Resume goal does.
    */
   async function writeAgentGoal(sessionId, input, options) {
-    // interruption: the interruptions a restart's continuation carries into its new intent (recoverSessionGoal).
-    const { canonical, restartIntentId = null, continuesIntentId = restartIntentId, interruption = null } = options;
+    // interruption: the interruptions a restart's continuation carries into its new intent (recoverSessionGoal), which
+    // continues on the AI connection connected now (followConnection); a limit reset's continuation keeps its own.
+    const {
+      canonical, restartIntentId = null, continuesIntentId = restartIntentId, interruption = null, followConnection = false
+    } = options;
     if (input.action === "resume" && await cancelGoalIfMainAiChanged(sessionId, input.vibe64User || null)) {
       return { ok: false, code: "vibe64_goal_main_ai_changed", error: MAIN_AI_CHANGED_GOAL_NOTICE };
     }
@@ -486,7 +489,7 @@ function createServiceGoals({
               active: true,
               daemonId: goalRuntimeId,
               restartOf: restartIntentId,
-              // A goal Vibe64 continued after an interruption keeps it, and when, for the crash-loop rule.
+              // A goal Vibe64 continued after an interruption keeps it, and when, for the loop rule.
               ...(restartIntentId && interruption ? { interruptions: interruption } : {}),
               actor: actor ? { username: actor.username, role: actor.role } : null,
               pending: canonical ? {
@@ -512,7 +515,7 @@ function createServiceGoals({
           const goalSelection = prepared.pinned?.selection || vibe64AssistantSelectionFromMetadata(context.session.metadata);
           const connectionIdentity = prepared.pinned?.connectionIdentity ??
             (await sessionAgent.requireAssistantAccess(sessionId, { ...context, assistantSelection: goalSelection })).connectionIdentity;
-          if (restartIntentId && previousIntent.connectionIdentity !== (connectionIdentity ?? null)) {
+          if (restartIntentId && !followConnection && previousIntent.connectionIdentity !== (connectionIdentity ?? null)) {
             throw new Error("The goal's AI connection changed. Resume it explicitly with the intended account.");
           }
           if (state.lifecycle.closing) throw goalRefusal("vibe64_goal_server_stopping", 503);
@@ -684,7 +687,8 @@ function createServiceGoals({
   }
 
   const recoverActiveGoals = createServiceGoalRecovery({
-    state, logger, project, sessionAccess, assistantContext, recoverSessionGoal, readGoalIntent, changeGoalIntent
+    state, logger, project, sessionAccess, assistantContext, recoverSessionGoal, readGoalIntent, changeGoalIntent,
+    stopUnrecoverableGoal: goalInterruptions.stopUnrecoverableGoal
   });
 
   async function applyGoalSelection(sessionId, selection, preferences, context) {

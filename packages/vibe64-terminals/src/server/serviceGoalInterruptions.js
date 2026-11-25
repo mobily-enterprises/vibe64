@@ -5,8 +5,8 @@ import { NO_SERVER_RUN, interruptionNotice, nextTurnInterruptions } from "./turn
 
 /**
  * What a restart does with a goal an earlier server ran (turnInterruptions.js): it waits while that server still runs
- * it, then writes the goal's red entry in the Main chat's history and continues it once in the same conversation, or
- * pauses it when the crash-loop rule stops it.
+ * it, then writes the goal's entry in the Main chat's history and continues it once in the same conversation, or
+ * pauses it when the loop rule stops it; a goal no attempt could continue stops with its reason.
  * @param {object} dependencies
  * @param {import("./types.js").ServerRun} [dependencies.serverRun] This process's run, which tells how the goal's
  *   server ended.
@@ -42,27 +42,28 @@ function createServiceGoalInterruptions({
     }
   }
 
+  /** What ended the server that ran the goal's intent. */
+  async function interruptionOf(intent) {
+    const ended = await serverRun.endOf(intent.daemonId || "");
+    return { key: `goal:${intent.id}`, cause: "restart", at: serverRun.startedAt || new Date().toISOString(), ...ended };
+  }
+
   /**
-   * Continues a goal whose server ended while it ran, once per interrupted intent, with its red entry first.
+   * Continues a goal whose server ended while it ran, once per interrupted intent, with its entry first: one
+   * informational line for a planned restart, red for an unexpected one.
    * @param {string} sessionId
    * @param {object} context the session's assistant context, authorized for actor
-   * @param {{ intent: object, native: object, observed: object, actor: object }} goal the goal's saved intent, its
-   *   native goal and its canonical read, and who it continues for
+   * @param {{ intent: object, native: object, observed: object, actor: object, newConnection?: boolean }} goal the
+   *   goal's saved intent, its native goal and its canonical read, who it continues for, and whether it continues on
+   *   an AI account other than the one it ran on
    */
-  async function continueInterruptedGoal(sessionId, context, { intent, native, observed, actor }) {
-    const ended = await serverRun.endOf(intent.daemonId || "");
-    const interruption = {
-      key: `goal:${intent.id}`,
-      cause: "restart",
-      at: serverRun.startedAt || new Date().toISOString(),
-      ...ended
-    };
+  async function continueInterruptedGoal(sessionId, context, { intent, native, observed, actor, newConnection = false }) {
+    const interruption = await interruptionOf(intent);
     const decision = nextTurnInterruptions(intent.interruptions, interruption, Date.now());
     const counted = resumed => interruption.crashId ? serverRun.countCrashTurn(interruption.crashId, resumed) : undefined;
     if (!decision.resume) {
-      // A goal Vibe64 continued after an interruption that was interrupted again within the loop window stops here:
-      // it is paused, which also ends its intent, so no later server resumes it and Resume goal continues it when the
-      // person chooses.
+      // A goal the loop rule stops (the third unexpected end in a row, or the planned-stop backstop) is paused, which
+      // also ends its intent, so no later server resumes it and Resume goal continues it when the person chooses.
       const paused = await updateAgentGoal(sessionId, {
         vibe64User: actor,
         action: "pause",
@@ -71,20 +72,20 @@ function createServiceGoalInterruptions({
         objective: native.goal.objective
       });
       if (paused?.ok === false) {
-        throw Object.assign(new Error(paused.error || "The goal could not be paused after a crash loop."), paused);
+        throw Object.assign(new Error(paused.error || "The goal could not be paused after the loop rule stopped it."), paused);
       }
       await writeGoalInterruptionNotice(sessionId, context, interruptionNotice(interruption, "loop", { goal: true }));
       await counted(false);
       return { sessionId, stoppedLoop: true, cause: interruption.cause };
     }
-    await writeGoalInterruptionNotice(sessionId, context, interruptionNotice(interruption, "resumed", { goal: true }));
+    await writeGoalInterruptionNotice(sessionId, context, interruptionNotice(interruption, "resumed", { goal: true, newConnection }));
     const result = await writeAgentGoal(sessionId, {
       action: "resume",
       vibe64User: actor,
       expectedSegmentId: observed.target.segmentId,
       expectedGoalId: observed.goal.id,
       messageId: `goal-restart-${randomUUID()}`
-    }, { canonical: true, restartIntentId: intent.id, interruption: decision.history });
+    }, { canonical: true, restartIntentId: intent.id, interruption: decision.history, followConnection: true });
     if (result?.code === "vibe64_goal_main_ai_changed") return { sessionId, cancelled: true };
     if (result?.ok === false) {
       const error = result.error || "the goal could not continue";
@@ -96,9 +97,24 @@ function createServiceGoalInterruptions({
     return { sessionId, resumed: true, cause: interruption.cause };
   }
 
+  /**
+   * A goal no attempt after this restart could continue (goal recovery's last pass failed), whose intent recovery has
+   * just ended: Main chat's history says why in red, once, and what to do.
+   * @param {string} sessionId
+   * @param {object} context
+   * @param {object} intent the goal's intent as it ran
+   * @param {string} error why it could not continue
+   */
+  async function stopUnrecoverableGoal(sessionId, context, intent, error) {
+    const interruption = await interruptionOf(intent);
+    await writeGoalInterruptionNotice(sessionId, context, interruptionNotice(interruption, "not-resumed", { goal: true, error }));
+    if (interruption.crashId) await serverRun.countCrashTurn(interruption.crashId, false);
+  }
+
   return Object.freeze({
     requirePreviousServerStopped,
-    continueInterruptedGoal
+    continueInterruptedGoal,
+    stopUnrecoverableGoal
   });
 }
 

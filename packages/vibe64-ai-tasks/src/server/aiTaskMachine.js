@@ -15,7 +15,6 @@ const LOG_LIMIT = 50;
 const CONTINUE_MESSAGE = "Continue working on this task from where you stopped.";
 const CONTINUE_DISPLAY = "Continue.";
 const RESUMED_DISPLAY = "Continue after the interruption.";
-const LOOP_MESSAGE = "Stopped: Vibe64 restarted twice while it ran. Choose Continue to try again.";
 const LATE_FINISH_MESSAGE = "This finished before the cancel took effect.";
 const PERSON_FINISHED_MESSAGE = "You finished this task.";
 const ARCHIVED_MESSAGE = "The session was archived before this finished.";
@@ -238,9 +237,9 @@ function fromTurn(task, event) {
 }
 
 /**
- * The turn a previous server left: the AI continues once, its message led by Vibe64's note of what interrupted it,
- * unless the task was continued after an interruption only moments ago (the runner's loop rule, `event.resume`):
- * then the person chooses Continue. A lost turn without a resume decision (an older runner) waits for the person.
+ * The turn a previous server left: the AI continues, its message led by Vibe64's note of what interrupted it, unless
+ * the runner's loop rule stopped it (`event.resume` false, with its `message`): then the person chooses Continue. The
+ * task keeps the interruptions the rule reads next time. A lost turn without a resume decision waits for the person.
  */
 function lostTurn(task, event) {
   if (event.resume === true && event.id) {
@@ -249,13 +248,14 @@ function lostTurn(task, event) {
       reason: "",
       message: "",
       waiting: false,
-      resumedAt: event.at,
+      ...(event.interruptions ? { interruptions: event.interruptions } : {}),
       turnMessageId: event.id,
       pending: { effect: "send", id: event.id, message: [event.note, CONTINUE_MESSAGE].filter(Boolean).join("\n\n"), display: RESUMED_DISPLAY }
     }, event, "Vibe64 restarted while the AI was working; the AI continues.");
   }
   if (event.resume === false) {
-    return needsYou(task, REASONS.INTERRUPTED, event, LOOP_MESSAGE, "Vibe64 restarted twice while the AI was working.");
+    const stopped = needsYou(task, REASONS.INTERRUPTED, event, event.message || "", "Vibe64 kept stopping while the AI was working.");
+    return event.interruptions ? { ...stopped, interruptions: event.interruptions } : stopped;
   }
   return needsYou(task, REASONS.INTERRUPTED, event, "", "Vibe64 restarted while the AI was working.");
 }

@@ -150,8 +150,9 @@ clears in each tab, including tabs that did not send the message.
 A lost connection, a reconnect or a reload never stops the AI. Its turn keeps
 running on the server; when the tab reconnects or reloads, the chat shows that
 same turn still working, with what the AI wrote meanwhile, and then its answer.
-Only **Stop**, **Cancel**, closing the chat or a Vibe64 restart end a turn. A
-turn a restart ended says so in red and Vibe64 resumes it once
+Only **Stop**, **Cancel**, closing the chat or a Vibe64 restart end a turn.
+Vibe64 resumes a turn a restart ended: an update or an orderly restart says so in
+one green line, a crash in red
 ([when a turn is interrupted](coding-agent-recovery.md#when-a-turn-is-interrupted)).
 This works the same on desktop and phone.
 

@@ -1,6 +1,5 @@
-// A turn that ends without finishing and without the person stopping it: what ended it, the permanent red entry in
-// its chat's history, the note its AI gets when Vibe64 resumes it, when Vibe64 resumes it, and the rule that stops a
-// crash loop.
+// A turn that ends without finishing and without the person stopping it: what ended it, the permanent entry in its
+// chat's history, the note its AI gets when Vibe64 resumes it, when Vibe64 resumes it, and the rule that stops a loop.
 //
 // A server run is one editor process's life. Each writes a small record in the system root as it starts and adds its
 // stop as it shuts down; a run whose record has no stop ended without shutting down. A turn's request names the run
@@ -16,24 +15,29 @@ import { crashMessage } from "@local/vibe64-core/shared/crashText";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
   TURN_INTERRUPTION_CAUSES as INTERRUPTION_CAUSE,
+  TURN_RESUME_LOOP_LIMIT,
+  TURN_RESUME_PLANNED_LOOP_LIMIT,
+  turnInterruptionHeadline,
   turnInterruptionLines,
   turnInterruptionLoopError,
+  turnInterruptionPlanned,
   utcClock
 } from "../shared/turnInterruptionText.js";
 
 /**
- * A resumed turn interrupted again within this time after its resume is a crash loop: Vibe64 stops resuming it, says
- * so and offers Continue. systemd restarts a crashed editor within seconds and the editor is ready again well inside a
- * minute, so a turn that brings the server down (or keeps losing its engine) is interrupted again within a minute or
- * two of each resume. Ten minutes catches that with room for a slow start, while a long turn or goal hit by two
- * unrelated restarts (two releases hours apart, say) still resumes each time.
+ * Interruptions in a row: each came within this time of the resume before it. systemd restarts a crashed editor
+ * within seconds and the editor is ready again well inside a minute, so a turn that brings the server down (or keeps
+ * losing its engine) is interrupted again within a minute or two of each resume. Ten minutes catches that with room
+ * for a slow start, while a long turn or goal hit by unrelated ends (two crashes hours apart, say) still resumes each
+ * time.
  */
 const TURN_RESUME_LOOP_WINDOW_MS = 10 * 60_000;
 /** A turn the AI service's overload or a lost connection ended is resumed after this wait, which lets it recover. */
 const TURN_RESUME_BACKOFF_MS = 30_000;
 const SERVER_RUNS_DIR = "server-runs";
 const SERVER_RUNS_KEPT = 20;
-const INTERRUPTIONS_KEPT = 5;
+// Enough for the longest run the loop rule reads: the planned stops before the last one it allows.
+const INTERRUPTIONS_KEPT = TURN_RESUME_PLANNED_LOOP_LIMIT - 1;
 const RUN_ID_PATTERN = /^[0-9a-f-]{36}$/u;
 
 /**
@@ -278,13 +282,15 @@ function neverResumedOutcome(cause) {
 }
 
 /**
- * The red entry's system message. Its id names the interrupted turn, the interruption and the outcome, so each is
- * written once however many processes or passes see it (a conversation never stores a message id twice).
+ * The entry's system message: red, or one informational line for a planned stop what ran carried on through. Its id
+ * names the interrupted turn, the interruption and the outcome, so each is written once however many processes or
+ * passes see it (a conversation never stores a message id twice).
  * @param {{ key: string, cause: string, at: string, detail?: string, crashMessage?: string, unknownRun?: boolean }} interruption
  * @param {string} outcome resumed, resuming, loop, stopped, sign-in, usage-limit, not-resumed, uncertain or failed
- * @param {{ error?: string, goal?: boolean, resumeAt?: string }} [options]
+ * @param {{ error?: string, goal?: boolean, resumeAt?: string, newConnection?: boolean }} [options] newConnection: it
+ *   continued on the AI account connected now, which changed since it ran
  */
-function interruptionNotice(interruption, outcome, { error = "", goal = false, resumeAt = "" } = {}) {
+function interruptionNotice(interruption, outcome, { error = "", goal = false, resumeAt = "", newConnection = false } = {}) {
   const entry = {
     cause: interruption.cause,
     at: interruption.at,
@@ -294,7 +300,8 @@ function interruptionNotice(interruption, outcome, { error = "", goal = false, r
     ...(interruption.unknownRun ? { unknownRun: true } : {}),
     ...(error ? { error: String(error).slice(0, 500) } : {}),
     ...(goal ? { goal: true } : {}),
-    ...(resumeAt ? { resumeAt } : {})
+    ...(resumeAt ? { resumeAt } : {}),
+    ...(newConnection ? { newConnection: true } : {})
   };
   return {
     messageId: `vibe64-turn-interrupted:${interruption.key}:${outcome}`,
@@ -308,14 +315,38 @@ function interruptionNotice(interruption, outcome, { error = "", goal = false, r
  * @param {{ cause: string, at: string, detail?: string, crashMessage?: string, unknownRun?: boolean }} interruption
  */
 function resumeNoteForAi(interruption) {
-  const [headline] = turnInterruptionLines({ ...interruption, outcome: "resumed" }, utcClock);
+  const headline = turnInterruptionHeadline(interruption, utcClock);
   return `[Vibe64 note: your previous turn was interrupted. ${headline} Vibe64 resumed this conversation. Your work ` +
     "so far is kept. Before repeating any step, check the state of what you were doing (files, Git, commands you " +
     "started, anything half-done), then continue.]";
 }
 
 /**
- * The crash-loop rule: an interruption of a turn resumed less than TURN_RESUME_LOOP_WINDOW_MS earlier is not resumed.
+ * How many earlier interruptions like this one came in a row before it: going back from now, each came within
+ * TURN_RESUME_LOOP_WINDOW_MS of the resume before it, and one not resumed (a loop stop, a cause never resumed) or a
+ * longer gap ends the run. Interruptions of the other kind in between neither count nor end it.
+ * @param {Array<{ cause: string, resumedAt?: string | null }>} previous newest last
+ * @param {number} nowMs
+ * @param {boolean} planned
+ */
+function interruptionsInARow(previous, nowMs, planned) {
+  let count = 0;
+  let after = nowMs;
+  for (const entry of [...previous].reverse()) {
+    const resumed = Date.parse(entry?.resumedAt || "");
+    if (!Number.isFinite(resumed) || after - resumed >= TURN_RESUME_LOOP_WINDOW_MS) break;
+    if (turnInterruptionPlanned(entry.cause) === planned) count += 1;
+    after = resumed;
+  }
+  return count;
+}
+
+/**
+ * The loop rule. A planned stop (a release, a rollback, a restart, recorded as the server stopped in order) never
+ * counts toward an unplanned loop: what ran carries on. An unplanned end (a crash, a kill, an engine or a connection
+ * lost) stops what ran the third time in a row (TURN_RESUME_LOOP_LIMIT), for Continue or Resume goal. The one backstop
+ * for planned stops: the tenth in a row (TURN_RESUME_PLANNED_LOOP_LIMIT), each moments after the resume before it, is
+ * work that stops Vibe64 itself, and it stops too.
  * The interruptions to save come back newest last and bounded; an interruption seen before (another pass, another
  * process) is `repeated` and decides nothing again.
  * @param {Array<{ key: string, at: string, cause: string, resumedAt?: string | null }> | undefined} history
@@ -327,8 +358,9 @@ function nextTurnInterruptions(history, interruption, nowMs, { resumes = true } 
   const previous = Array.isArray(history) ? history : [];
   const seen = previous.find(entry => entry?.key === interruption.key);
   if (seen) return { history: previous, resume: Boolean(seen.resumedAt), loop: false, repeated: true, entry: seen };
-  const lastResume = Date.parse(previous.at(-1)?.resumedAt || "");
-  const loop = resumes && Number.isFinite(lastResume) && nowMs - lastResume < TURN_RESUME_LOOP_WINDOW_MS;
+  const planned = turnInterruptionPlanned(interruption.cause);
+  const limit = planned ? TURN_RESUME_PLANNED_LOOP_LIMIT : TURN_RESUME_LOOP_LIMIT;
+  const loop = resumes && interruptionsInARow(previous, nowMs, planned) >= limit - 1;
   const resume = resumes && !loop;
   const entry = {
     key: interruption.key,
@@ -343,7 +375,9 @@ export {
   INTERRUPTION_CAUSE,
   NO_SERVER_RUN,
   TURN_RESUME_BACKOFF_MS,
+  TURN_RESUME_LOOP_LIMIT,
   TURN_RESUME_LOOP_WINDOW_MS,
+  TURN_RESUME_PLANNED_LOOP_LIMIT,
   createServerRun,
   interruptionNotice,
   neverResumedOutcome,

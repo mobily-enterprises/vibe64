@@ -19,6 +19,7 @@ import { createAiTasksService } from "../../packages/vibe64-ai-tasks/src/server/
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { createSessionConversations } from "../../packages/vibe64-terminals/src/server/sessionConversations.js";
+import { createServerRun } from "../../packages/vibe64-terminals/src/server/turnInterruptions.js";
 import { sessionAgentManagerDefaults } from "../fixtures/sessionAgentManagerDefaults.js";
 import { NO_ACTIONS } from "../fixtures/terminalsServiceCollaborators.js";
 import { projectRuntimeRoot, sourceMetadata, withTemporaryRoot } from "./vibe64TestHelpers.js";
@@ -122,7 +123,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
   };
 
   /** A fresh server over the same store and the same AI. `terminalsWrap` injects a crash. */
-  function boot({ terminalsWrap = terminals => terminals } = {}) {
+  function boot({ terminalsWrap = terminals => terminals, serverRun } = {}) {
     let conversations;
     const conversationRuntime = createConversationRuntime({
       authorize: async () => true,
@@ -130,7 +131,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
     });
     let aiTasks;
     conversations = createSessionConversations({
-      systemRoot: root, sessionAgent, conversationRuntime, attachments, actions: NO_ACTIONS, logger: silentLogger,
+      systemRoot: root, serverRun, sessionAgent, conversationRuntime, attachments, actions: NO_ACTIONS, logger: silentLogger,
       prepareAgentSkills: async () => {},
       prepareSelection: async () => {},
       readSessionContext: async (sessionId, options = {}) => ({ ...options, runtime, session: await runtime.getSession(sessionId) }),
@@ -200,7 +201,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
     await quiet(running.aiTasks);
   }
 
-  return { boot, finishTurn, native, published, quiet, runtime, saves, server, setups, signIns, start, store, task, updates };
+  return { boot, finishTurn, native, published, quiet, root, runtime, saves, server, setups, signIns, start, store, task, updates };
 }
 
 function withFixture(run, options) {
@@ -861,38 +862,70 @@ test("crash in working, and the turn finished meanwhile: the restart recovers it
 // After the task's context and role instructions, the note leads the request itself.
 const NOTE = /\n\n\[Vibe64 note: your previous turn was interrupted\. [^\n]*\]\n\nContinue working on this task from where you stopped\.$/u;
 
-test("crash in working, and the turn is lost: the AI continues once with Vibe64's note; lost again at once, it stops at needs_you", () => withFixture(async (f) => {
-  const running = f.boot();
+test("crash in working, and the turn is lost: the AI continues with Vibe64's note; lost a third time in a row, it stops at needs_you", () => withFixture(async (f) => {
+  let running = f.boot();
   const { task } = await f.start(running.aiTasks);
   await f.quiet(running.aiTasks);
-  running.aiTasks.closeRunner();
-  Object.assign(f.native, { status: "interrupted", text: "" });
-  const restarted = f.boot();
-  await f.quiet(restarted.aiTasks);
-  let saved = await f.task(task.id);
-  assert.equal(saved.phase, "working");
-  assert.ok(saved.resumedAt);
-  assert.equal(f.native.turns.length, 2, "the AI continues once, by itself");
-  assert.match(f.native.turns[1].message, NOTE);
   const entries = async () => (await f.store.readConversationLog({ sessionId: SESSION, conversationId: task.id }))
     .filter(turn => turn.metadata?.vibe64TurnInterruption).map(turn => turn.metadata.vibe64TurnInterruption.outcome);
-  assert.deepEqual(await entries(), ["resumed"], "its chat says so in red, once");
-  await f.quiet(restarted.aiTasks);
-  assert.equal(f.native.turns.length, 2, "nothing is sent twice");
-  // Lost again within the crash-loop window: the person chooses Continue.
-  restarted.aiTasks.closeRunner();
+  // The server dies with the turn lost, at once again after each resume (no planned stop is recorded).
+  for (let crash = 1; crash <= 2; crash += 1) {
+    running.aiTasks.closeRunner();
+    Object.assign(f.native, { status: "interrupted", text: "" });
+    running = f.boot();
+    await f.quiet(running.aiTasks);
+    const saved = await f.task(task.id);
+    assert.equal(saved.phase, "working", `crash ${crash}`);
+    assert.equal(saved.interruptions.length, crash);
+    assert.equal(f.native.turns.length, crash + 1, "the AI continues once, by itself");
+    assert.match(f.native.turns.at(-1).message, NOTE);
+    await f.quiet(running.aiTasks);
+    assert.equal(f.native.turns.length, crash + 1, "nothing is sent twice");
+  }
+  assert.deepEqual(await entries(), ["resumed", "resumed"], "its chat says so in red, once each");
+  // Lost a third time in a row: the person chooses Continue.
+  running.aiTasks.closeRunner();
   Object.assign(f.native, { status: "interrupted", text: "" });
   const again = f.boot();
   await f.quiet(again.aiTasks);
-  saved = await f.task(task.id);
+  const saved = await f.task(task.id);
   assert.equal(saved.phase, "needs_you");
   assert.equal(saved.reason, "interrupted");
-  assert.equal(saved.message, "Stopped: Vibe64 restarted twice while it ran. Choose Continue to try again.");
-  assert.equal(f.native.turns.length, 2);
-  assert.deepEqual(await entries(), ["resumed", "loop"]);
+  assert.equal(saved.message, "Stopped: Vibe64 stopped unexpectedly three times in a row while it ran. Choose Continue to try again.");
+  assert.equal(f.native.turns.length, 3);
+  assert.deepEqual(await entries(), ["resumed", "resumed", "loop"]);
   await again.aiTasks.continueTask(SESSION, { taskId: task.id });
   await f.quiet(again.aiTasks);
-  assert.equal(f.native.turns.length, 3);
+  assert.equal(f.native.turns.length, 4);
+}));
+
+test("restarts in order while the AI works: the task carries on through each, however soon, told in one informational line", () => withFixture(async (f) => {
+  const runs = path.join(f.root, "system");
+  const base = Date.now() - 60_000;
+  const runAt = async index => {
+    const run = createServerRun({ systemRoot: runs, now: () => base + index * 1000 });
+    await run.started;
+    return run;
+  };
+  let run = await runAt(0);
+  let running = f.boot({ serverRun: run });
+  const { task } = await f.start(running.aiTasks);
+  await f.quiet(running.aiTasks);
+  // A release, its rollback and a VPS restart, each a stop in order moments after the last.
+  for (let restart = 1; restart <= 3; restart += 1) {
+    running.aiTasks.closeRunner();
+    await run.recordPlannedStop("server-shutdown");
+    Object.assign(f.native, { status: "interrupted", text: "" });
+    run = await runAt(restart);
+    running = f.boot({ serverRun: run });
+    await f.quiet(running.aiTasks);
+    const saved = await f.task(task.id);
+    assert.equal(saved.phase, "working", `restart ${restart}: ${saved.message}`);
+    assert.equal(f.native.turns.length, restart + 1, "the AI continues once, by itself");
+  }
+  const lines = (await f.store.readConversationLog({ sessionId: SESSION, conversationId: task.id }))
+    .filter(turn => turn.metadata?.vibe64TurnInterruption).map(turn => turn.system.text.replace(/\d\d:\d\d/u, "HH:MM"));
+  assert.deepEqual(lines, Array(3).fill("Vibe64 was restarted at HH:MM UTC; this turn carried on."));
 }));
 
 /** Holds the next read of a task's turn until `hold.release`, and resolves `hold.reached` once it is held. */
@@ -924,7 +957,7 @@ test("a restart during a read of the turn: the old server saves nothing, and the
   await f.quiet(restarted.aiTasks);
   const saved = await f.task(task.id);
   assert.equal(saved.phase, "working");
-  assert.ok(saved.resumedAt);
+  assert.ok(saved.interruptions?.at(-1)?.resumedAt, "Vibe64 records that it continued the turn");
   assert.equal(f.native.turns.length, 2);
   assert.match(f.native.turns[1].message, NOTE);
 }));
@@ -951,7 +984,7 @@ test("a restart whose first read of the turn finds the chat busy still reads the
     await f.quiet(restarted.aiTasks);
     const saved = await f.task(task.id);
     assert.equal(saved.phase, "working");
-    assert.ok(saved.resumedAt);
+    assert.ok(saved.interruptions?.at(-1)?.resumedAt, "Vibe64 records that it continued the turn");
     assert.equal(f.native.turns.length, 2);
     assert.match(f.native.turns[1].message, NOTE);
   } finally {

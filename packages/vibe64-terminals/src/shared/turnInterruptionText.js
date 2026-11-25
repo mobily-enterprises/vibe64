@@ -1,6 +1,7 @@
-// The words of a turn interruption's red entry in a chat's history: what ended the turn, then whether Vibe64 resumed
-// it or why not. The server writes them with UTC times as the entry's text; the chat writes them again from the
-// entry's data with the viewer's own clock (Vibe64TurnInterruption.vue), so both read the same.
+// The words of a turn interruption's entry in a chat's history: what ended the turn, then whether Vibe64 resumed it or
+// why not, in red; or, for a planned stop what ran carried on through, one informational line. The server writes them
+// with UTC times as the entry's text; the chat writes them again from the entry's data with the viewer's own clock
+// (Vibe64TurnInterruption.vue), so both read the same.
 
 const TURN_INTERRUPTION_CAUSES = Object.freeze({
   // Vibe64's previous process ended without shutting down.
@@ -23,7 +24,32 @@ const TURN_INTERRUPTION_CAUSES = Object.freeze({
   FAILED: "failed"
 });
 
+// A stop in order (a release, a rollback, a VPS restart): what ran carries on, and the loop rule never counts it.
+const PLANNED_CAUSES = Object.freeze([TURN_INTERRUPTION_CAUSES.RESTART, TURN_INTERRUPTION_CAUSES.UPDATE]);
+
+/**
+ * The loop rule's limits (turnInterruptions.js): an unplanned end (a crash, a kill, an engine or a connection lost)
+ * stops what ran the third time in a row; a planned stop never counts, but a run of them this long, each soon after the
+ * resume before it, is a turn that stops Vibe64 itself, and stops too.
+ */
+const TURN_RESUME_LOOP_LIMIT = 3;
+const TURN_RESUME_PLANNED_LOOP_LIMIT = 10;
+
 const trimEnd = value => String(value || "").trim().replace(/[.\s]+$/u, "");
+const times = count => ({ 2: "twice", 3: "three times" })[count] || `${count} times`;
+
+/** Whether Vibe64 stopped in order: a planned restart or an update. @param {string} cause */
+function turnInterruptionPlanned(cause) {
+  return PLANNED_CAUSES.includes(cause);
+}
+
+/**
+ * Whether the entry is a planned stop that what ran carried on through: one informational line, not a red entry.
+ * @param {{ cause?: string, outcome?: string }} entry
+ */
+function turnInterruptionCarriedOn(entry) {
+  return entry?.outcome === "resumed" && turnInterruptionPlanned(entry.cause);
+}
 
 /** The interruption's short name, as "Resumed after … at 04:18" reads it. */
 function causePhrase(cause) {
@@ -37,14 +63,31 @@ function causePhrase(cause) {
   }
 }
 
-/** What happened twice, for the crash-loop stop. */
-function causeTwicePhrase(cause) {
+/** What happened again and again, for the loop rule's stop. */
+function causeRepeatedPhrase(cause) {
+  const inARow = `${times(TURN_RESUME_LOOP_LIMIT)} in a row while it ran`;
   switch (cause) {
-    case TURN_INTERRUPTION_CAUSES.ENGINE: return "the AI engine stopped twice while it ran";
-    case TURN_INTERRUPTION_CAUSES.CONNECTION: return "the connection to the AI was lost twice while it ran";
-    case TURN_INTERRUPTION_CAUSES.OVERLOADED: return "the AI service was overloaded twice while it ran";
-    default: return "Vibe64 restarted twice while it ran";
+    case TURN_INTERRUPTION_CAUSES.RESTART:
+    case TURN_INTERRUPTION_CAUSES.UPDATE:
+      return `Vibe64 was stopped and started again ${times(TURN_RESUME_PLANNED_LOOP_LIMIT)} in a row while it ran`;
+    case TURN_INTERRUPTION_CAUSES.ENGINE: return `the AI engine stopped ${inARow}`;
+    case TURN_INTERRUPTION_CAUSES.CONNECTION: return `the connection to the AI was lost ${inARow}`;
+    case TURN_INTERRUPTION_CAUSES.OVERLOADED: return `the AI service was overloaded ${inARow}`;
+    default: return `Vibe64 stopped unexpectedly ${inARow}`;
   }
+}
+
+/**
+ * The one line of a planned stop that what ran carried on through, such as "Vibe64 was updated at 04:18; the goal
+ * carried on."
+ * @param {{ cause: string, at: string, goal?: boolean, newConnection?: boolean }} entry
+ * @param {(at: string) => string} clock
+ */
+function turnInterruptionCarriedOnLine(entry, clock) {
+  const at = entry.at ? clock(entry.at) : "";
+  const stop = entry.cause === TURN_INTERRUPTION_CAUSES.UPDATE ? "Vibe64 was updated" : "Vibe64 was restarted";
+  const account = entry.newConnection ? " with the AI account connected now" : "";
+  return `${stop}${at ? ` at ${at}` : ""}; ${entry.goal ? "the goal" : "this turn"} carried on${account}.`;
 }
 
 /**
@@ -77,7 +120,8 @@ function turnInterruptionHeadline(entry, clock) {
 
 /**
  * The red entry's second line: resumed, or why not.
- * @param {{ cause: string, at: string, outcome: string, error?: string, goal?: boolean, resumeAt?: string }} entry
+ * @param {{ cause: string, at: string, outcome: string, error?: string, goal?: boolean, resumeAt?: string,
+ *   newConnection?: boolean }} entry newConnection: resumed on the AI account connected now, which changed since it ran
  *   outcome: resumed, resuming, loop, stopped, sign-in, usage-limit, not-resumed, uncertain or failed (a resume that
  *   could not be sent)
  * @param {(at: string) => string} clock
@@ -86,26 +130,35 @@ function turnInterruptionOutcomeLine(entry, clock) {
   const control = entry.goal ? "Resume goal" : "Continue";
   const at = entry.at ? clock(entry.at) : "";
   switch (entry.outcome) {
-    case "resumed": return `Resumed after ${causePhrase(entry.cause)}${at && entry.cause !== "failed" ? ` at ${at}` : ""}.`;
+    case "resumed": return `Resumed after ${causePhrase(entry.cause)}${at && entry.cause !== "failed" ? ` at ${at}` : ""}` +
+      `${entry.newConnection ? ", with the AI account connected now" : ""}.`;
     case "resuming": {
       const later = entry.resumeAt ? clock(entry.resumeAt) : "";
       return `Vibe64 resumes it${later ? ` at ${later}` : " shortly"}.`;
     }
-    case "loop": return `Not resumed: stopped: ${causeTwicePhrase(entry.cause)}. Choose ${control} to try again.`;
+    case "loop": return `Not resumed: stopped: ${causeRepeatedPhrase(entry.cause)}. Choose ${control} to try again.`;
     case "stopped": return "Not resumed: you stopped this turn.";
     case "sign-in": return `Not resumed: sign in to the AI account again in AI Accounts, then choose ${control}.`;
     case "usage-limit": return entry.goal
       ? "Not resumed now: Vibe64 continues the goal when the limit resets."
       : "Not resumed: choose Continue, or send a message, once the limit resets.";
-    case "not-resumed": return `Not resumed: choose ${control} to try again.`;
+    // With an error: why, such as a goal no attempt after a restart could continue.
+    case "not-resumed": return entry.error ? `Not resumed: ${trimEnd(entry.error)}. Choose ${control} to try again.`
+      : `Not resumed: choose ${control} to try again.`;
     case "uncertain": return "Not resumed: Vibe64 could not confirm whether the AI received the message. Choose Retry to check; it never sends a duplicate.";
     // After "Resumed after …": the resume itself could not be sent.
     default: return `The resume could not be sent${entry.error ? `: ${trimEnd(entry.error)}` : ""}. Choose ${control} to try again.`;
   }
 }
 
-/** Both lines. @param {Parameters<typeof turnInterruptionOutcomeLine>[0]} entry @param {(at: string) => string} clock */
+/**
+ * The entry's lines: what ended the turn and whether Vibe64 resumed it, or the one line of a planned stop it carried on
+ * through.
+ * @param {Parameters<typeof turnInterruptionOutcomeLine>[0]} entry
+ * @param {(at: string) => string} clock
+ */
 function turnInterruptionLines(entry, clock) {
+  if (turnInterruptionCarriedOn(entry)) return [turnInterruptionCarriedOnLine(entry, clock)];
   return [turnInterruptionHeadline(entry, clock), turnInterruptionOutcomeLine(entry, clock)];
 }
 
@@ -115,16 +168,20 @@ function utcClock(at) {
   return Number.isNaN(date.getTime()) ? "" : `${date.toISOString().slice(11, 16)} UTC`;
 }
 
-/** A Stopped request's error after the crash-loop rule stopped resuming it, which its Continue control shows. */
+/** A Stopped request's error after the loop rule stopped resuming it, which its Continue control shows. */
 function turnInterruptionLoopError(cause) {
-  return `Stopped: ${causeTwicePhrase(cause)}. Choose Continue to try again.`;
+  return `Stopped: ${causeRepeatedPhrase(cause)}. Choose Continue to try again.`;
 }
 
 export {
   TURN_INTERRUPTION_CAUSES,
+  TURN_RESUME_LOOP_LIMIT,
+  TURN_RESUME_PLANNED_LOOP_LIMIT,
+  turnInterruptionCarriedOn,
   turnInterruptionHeadline,
   turnInterruptionLines,
   turnInterruptionLoopError,
   turnInterruptionOutcomeLine,
+  turnInterruptionPlanned,
   utcClock
 };

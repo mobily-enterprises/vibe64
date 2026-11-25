@@ -179,7 +179,7 @@ can be done next.
 | Stopped. Tell the AI what to do next. | **Continue**, or **Open chat**. |
 | The AI account can't run this right now | **Open AI setup**, then **Continue**. Nothing is lost. |
 | The AI ran into an error | **Continue**, or **Open chat**. |
-| Vibe64 restarted while the AI was working | **Continue**. Vibe64 continues a task by itself once after a restart, and stops here when it restarted again within 10 minutes. |
+| Vibe64 restarted while the AI was working | **Continue**. Vibe64 continues a task by itself after every update or orderly restart, and after an unexpected one; it stops here the third time Vibe64 stopped unexpectedly in a row (each within 10 minutes). |
 | Vibe64 couldn't confirm the result | **Check now**. |
 | The check failed. Your unsent message is waiting. | **Open chat** and send it or clear it. |
 | What Update said, after three failed checks | **Check now**, **Open chat** or **Review resolved conflicts**. |

@@ -21,7 +21,7 @@ import {
 /**
  * What follows a chat turn that an interruption ended (turnInterruptions.js): what ended it, its red entry in the
  * chat's history, and its resume once in the same conversation, now or after a short wait, or why not. A request an
- * earlier server left before its message reached the AI is sent now under the same crash-loop rule.
+ * earlier server left before its message reached the AI is sent now under the same loop rule.
  * @param {object} dependencies
  * @param {AssistantRoutingState} dependencies.routingState
  * @param {AssistantRoutingRecords} dependencies.records
@@ -114,7 +114,7 @@ function createAssistantRoutingInterruptions({
   }
 
   /**
-   * The crash-loop rule, then the resume: what the interruption decides for a request whose resume is prepared. The
+   * The loop rule, then the resume: what the interruption decides for a request whose resume is prepared. The
    * loop stops it with Continue offered, in red; otherwise it is resumed now or, after a lost connection or an
    * overloaded AI service, after the backoff.
    * @returns {Promise<void>}
