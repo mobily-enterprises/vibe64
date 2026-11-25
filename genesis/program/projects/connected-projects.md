@@ -200,8 +200,8 @@ resolves past it; one that would still resolve wrongly refuses
 (`vibe64_connected_npm_tracked`) and `node_modules` is excluded when the tree
 does not ignore it. The proof compares the copies with the record and the
 record with the connected source. `sync.js` watches the copied package folders
-with chokidar; a content save copies the changed files, and a packlist change
-applies the connection again. The other adapters write their derived files
+with chokidar; a content save copies the changed files, and a packlist change,
+or a save after npm put a published copy back, applies the connection again. The other adapters write their derived files
 through `derivedFiles.js`, in their type's own Git exclude block, and run their
 toolchain through the managed command function. The gradle adapter writes its
 init script into the session's own Gradle user home (`.development/gradle-home`,

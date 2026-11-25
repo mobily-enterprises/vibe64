@@ -120,7 +120,8 @@ deployment, uses the published packages.
   `node_modules` to the local Git exclude when the project does not ignore it,
   and refuses a project that tracks `node_modules`. While the session runs, a
   saved file in the connected copy reaches every installed copy within about a
-  second; adding or removing a file or editing `package.json` puts the
+  second; adding or removing a file, editing `package.json` or a save after
+  an ordinary `npm install` put the published package back puts the
   connection in effect again. A development server that bundles packages ahead
   (Vite) keeps what it bundled until it restarts: Vibe64 clears Vite's
   dependency metadata, so restarting Preview shows client changes. A connected

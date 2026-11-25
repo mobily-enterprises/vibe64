@@ -539,7 +539,8 @@ async function restoreNpm({ keep, trees }) {
 /**
  * Copies the files that changed in a swapped package's source into each of its copies; null when
  * the change needs a new packlist (a file added or removed, or package.json changed), which only a
- * whole apply gives.
+ * whole apply gives, and when npm has put a published copy back since: only a whole apply judges
+ * the dependencies a swap of it would resolve.
  * @param {{ tree: string, repository: string, sourceDir: string }} input
  */
 async function syncNpmCopies({ repository, sourceDir, trees }) {
@@ -553,6 +554,7 @@ async function syncNpmCopies({ repository, sourceDir, trees }) {
     for (const record of records) {
       if (JSON.stringify(sourceFiles) !== JSON.stringify(record.sourceFiles)) return null;
       if (record.files["package.json"] && !(await unchanged(path.join(sourceDir, "package.json"), record.sources["package.json"]))) return null;
+      if (!record.files["package.json"] || !(await unchanged(path.join(tree, record.path, "package.json"), record.files["package.json"]))) return null;
     }
     const updated = [];
     let treeChanged = false;
