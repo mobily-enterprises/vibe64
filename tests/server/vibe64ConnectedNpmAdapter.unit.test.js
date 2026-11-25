@@ -38,9 +38,15 @@ const sharedSource = "module.exports = { instance: Symbol('shared') };\n";
 /**
  * A published @proof/lib (1.0.0 at the top, 0.9.0 nested under @proof/other) installed in an app,
  * and a session copy of its repository: @proof/lib 1.1.0, an npm workspace, needing `extra`, which
- * the app lacks.
+ * the app lacks. `published` adds plain packages to the registry, as [name, version] pairs.
  */
-async function fixture(t, { libDependencies = { shared: "^1.0.0", extra: "^1.0.0" } } = {}) {
+async function fixture(t, {
+  libDependencies = { shared: "^1.0.0", extra: "^1.0.0" },
+  publishedLibDependencies = { shared: "^1.0.0" },
+  otherDependencies = { "@proof/lib": "0.9.0" },
+  appDependencies = { "@proof/lib": "1.0.0", "@proof/other": "1.0.0", shared: "1.0.0" },
+  published: plain = []
+} = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-connected-npm-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const registry = await startFakeNpmRegistry(root);
@@ -50,19 +56,21 @@ async function fixture(t, { libDependencies = { shared: "^1.0.0", extra: "^1.0.0
   await writePackage(path.join(published, "extra"), { name: "extra", version: "1.0.0", main: "index.js" }, { "index.js": "module.exports = 'extra';\n" });
   for (const version of ["0.9.0", "1.0.0"]) {
     await writePackage(path.join(published, `lib-${version}`), {
-      name: "@proof/lib", version, main: "index.js", dependencies: { shared: "^1.0.0" }
+      name: "@proof/lib", version, main: "index.js", dependencies: version === "1.0.0" ? publishedLibDependencies : { shared: "^1.0.0" }
     }, { "index.js": `exports.message = 'published ${version}'; exports.shared = require('shared');\n` });
   }
   await writePackage(path.join(published, "other"), {
-    name: "@proof/other", version: "1.0.0", main: "index.js", dependencies: { "@proof/lib": "0.9.0" }
+    name: "@proof/other", version: "1.0.0", main: "index.js", dependencies: otherDependencies
   }, { "index.js": "module.exports = require('@proof/lib');\n" });
-  for (const dir of ["shared", "extra", "lib-0.9.0", "lib-1.0.0", "other"]) await registry.publish(path.join(published, dir));
+  for (const [name, version] of plain) {
+    await writePackage(path.join(published, `${name}-${version}`), { name, version, main: "index.js" }, { "index.js": `module.exports = '${name} ${version}';\n` });
+  }
+  for (const dir of ["shared", "extra", "lib-0.9.0", "lib-1.0.0", "other", ...plain.map(([name, version]) => `${name}-${version}`)]) {
+    await registry.publish(path.join(published, dir));
+  }
 
   const app = path.join(root, "session", "source");
-  await writePackage(app, {
-    name: "app", version: "1.0.0", private: true,
-    dependencies: { "@proof/lib": "1.0.0", "@proof/other": "1.0.0", shared: "1.0.0" }
-  }, { ".gitignore": "node_modules/\n" });
+  await writePackage(app, { name: "app", version: "1.0.0", private: true, dependencies: appDependencies }, { ".gitignore": "node_modules/\n" });
   await exec("npm", ["install"], { cwd: app, env: registry.env });
   await exec("git", ["init", "-q", "--initial-branch=main"], { cwd: app });
   await exec("git", ["add", "--all"], { cwd: app });
@@ -394,6 +402,122 @@ test("npm: a dependency no registry version satisfies refuses the swap and says 
   assert.equal(await installedVersion(path.join(f.app, "node_modules", "@proof", "lib")), "1.0.0");
   const proof = await f.proof();
   assert.equal(proof.inEffect, false);
+});
+
+/** The version of `name` Node loads for the installed @proof/lib at the top of the app. */
+function versionFromLib(f, name) {
+  return f.node(`console.log(require('node:module').createRequire(require.resolve('@proof/lib'))('${name}/package.json').version)`);
+}
+
+test("npm: what npm nests in the published copy for its own exact pin goes aside with that copy, so the connected package reaches the version it needs", { timeout: 120_000 }, async t => {
+  // As a published JSKIT package pinning json-rest-api 3.3.2 exactly, where the connected one pins
+  // 3.3.3: the install of 1.1.0 at the top makes npm nest 1.0.0 in the published copy. `kept` is
+  // nested for both, and stays.
+  const f = await fixture(t, {
+    published: [["pinned", "1.0.0"], ["pinned", "1.1.0"], ["kept", "1.0.0"], ["kept", "2.0.0"]],
+    publishedLibDependencies: { shared: "^1.0.0", pinned: "1.0.0", kept: "1.0.0" },
+    libDependencies: { shared: "^1.0.0", extra: "^1.0.0", pinned: "1.1.0", kept: "^1.0.0" },
+    appDependencies: { "@proof/lib": "1.0.0", shared: "1.0.0", kept: "2.0.0" }
+  });
+  const top = path.join(f.app, "node_modules", "@proof", "lib");
+  assert.equal(await installedVersion(path.join(f.app, "node_modules", "pinned")), "1.0.0");
+  assert.equal(await installedVersion(path.join(top, "node_modules", "kept")), "1.0.0");
+
+  const applied = await f.step("apply");
+  assert.equal(applied.ok, true, applied.error);
+  assert.match(applied.output, /installed extra@\^1\.0\.0, pinned@1\.1\.0 .* without saving/u);
+  assert.match(applied.output, /@proof\/lib 1\.1\.0 in effect in 1 installed copy\./u);
+  assert.equal(await installedVersion(top), "1.1.0");
+  assert.equal(await installedVersion(path.join(f.app, "node_modules", "pinned")), "1.1.0");
+  assert.equal(await installedVersion(path.join(top, "node_modules", "pinned")).catch(() => null), null);
+  assert.deepEqual([await versionFromLib(f, "pinned"), await versionFromLib(f, "kept")], ["1.1.0", "1.0.0"]);
+  assert.equal((await f.proof()).inEffect, true);
+
+  f.calls.length = 0;
+  assert.equal((await f.step("apply")).ok, true);
+  assert.equal(f.calls.some(call => call[0] === "npm" && call[1] === "install"), false);
+  assert.equal((await f.proof()).inEffect, true);
+
+  // Disconnecting gives the published copy back with both of its own nested dependencies.
+  await restoreDisconnected({ repositories: [], sessionSourceRoot: f.app });
+  assert.equal(await installedVersion(top), "1.0.0");
+  assert.deepEqual([await versionFromLib(f, "pinned"), await versionFromLib(f, "kept")], ["1.0.0", "1.0.0"]);
+});
+
+test("npm: when the connected package stops accepting a version nested in its copy, applying again moves it aside without an install", { timeout: 120_000 }, async t => {
+  // The app's own pinned 1.1.0 is at the top, so npm nested the published copy's 1.0.0 from the start.
+  const f = await fixture(t, {
+    published: [["pinned", "1.0.0"], ["pinned", "1.1.0"]],
+    publishedLibDependencies: { shared: "^1.0.0", pinned: "1.0.0" },
+    libDependencies: { shared: "^1.0.0", pinned: "^1.0.0" },
+    appDependencies: { "@proof/lib": "1.0.0", shared: "1.0.0", pinned: "1.1.0" }
+  });
+  const top = path.join(f.app, "node_modules", "@proof", "lib");
+  assert.equal(await installedVersion(path.join(top, "node_modules", "pinned")), "1.0.0");
+  assert.equal((await f.step("apply")).ok, true);
+  // ^1.0.0 accepts the nested 1.0.0, so it stays where npm put it.
+  assert.equal(await versionFromLib(f, "pinned"), "1.0.0");
+  assert.equal((await f.proof()).inEffect, true);
+
+  const manifestPath = path.join(f.libDir, "package.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  await writeFile(manifestPath, JSON.stringify({ ...manifest, dependencies: { shared: "^1.0.0", pinned: "1.1.0" } }, null, 2));
+  f.calls.length = 0;
+  const applied = await f.step("apply");
+  assert.equal(applied.ok, true, applied.error);
+  assert.equal(f.calls.some(call => call[0] === "npm" && call[1] === "install"), false);
+  assert.equal(await versionFromLib(f, "pinned"), "1.1.0");
+  assert.equal((await f.proof()).inEffect, true);
+
+  await restoreDisconnected({ repositories: [], sessionSourceRoot: f.app });
+  assert.equal(await installedVersion(top), "1.0.0");
+  assert.equal(await versionFromLib(f, "pinned"), "1.0.0");
+});
+
+test("npm: a version another package's own pin keeps beside a copy still refuses the swap after the install, and says to align the versions", { timeout: 120_000 }, async t => {
+  // @proof/other pins pinned 1.0.0 itself: npm keeps that one beside the copy nested in @proof/other,
+  // where the swapped package would still load it.
+  const f = await fixture(t, {
+    published: [["pinned", "1.0.0"], ["pinned", "1.1.0"]],
+    otherDependencies: { "@proof/lib": "0.9.0", pinned: "1.0.0" },
+    libDependencies: { shared: "^1.0.0", extra: "^1.0.0", pinned: "1.1.0" }
+  });
+  const before = await f.tracked();
+  const applied = await f.step("apply");
+  assert.equal(applied.ok, false);
+  assert.equal(applied.code, "vibe64_connected_npm_dependency_incompatible");
+  assert.match(applied.error, /Connected Lib: @proof\/lib needs pinned@1\.1\.0, found 1\.0\.0\. npm installed it without saving, but the copy still cannot reach a compatible version; align the versions in the connected repository or the application\./u);
+  assert.equal(await installedVersion(path.join(f.app, "node_modules", "@proof", "other", "node_modules", "pinned")), "1.0.0");
+  // Nothing is swapped, and nothing Git tracks changes.
+  assert.equal(await installedVersion(path.join(f.app, "node_modules", "@proof", "lib")), "1.0.0");
+  assert.deepEqual(await f.tracked(), before);
+  assert.equal((await f.proof()).inEffect, false);
+});
+
+test("npm: a save after an install put the published copies back puts the connection in effect again, its dependencies included", { timeout: 120_000 }, async t => {
+  const f = await fixture(t);
+  assert.equal((await f.step("apply")).ok, true);
+  // An ordinary install puts the lockfile's published copies back and removes extra, which it never saved.
+  await exec("npm", ["install"], { cwd: f.app, env: f.registry.env });
+  assert.equal(await installedVersion(path.join(f.app, "node_modules", "extra")).catch(() => null), null);
+  const events = [];
+  let notify = () => {};
+  const next = () => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`No sync within 60 s: ${JSON.stringify(events)}`)), 60_000);
+    notify = event => { clearTimeout(timer); resolve(event); };
+  });
+  const sessionId = "sync-after-install";
+  await syncConnectedRepositories({
+    sessionId, repositories: f.repositories, sessionSourceRoot: f.app, runCommand: f.runCommand,
+    onEvent: event => { events.push(event); notify(event); }
+  });
+  t.after(() => stopConnectedSync(sessionId));
+
+  const saved = next();
+  await writeFile(path.join(f.libDir, "lib", "message.js"), "module.exports = 'saved after the install';\n");
+  assert.equal((await saved).kind, "reapplied", JSON.stringify(events));
+  assert.equal(await f.node("const lib = require('@proof/lib'); console.log(lib.message, lib.extra)"), "saved after the install extra");
+  assert.equal((await f.proof()).inEffect, true);
 });
 
 test("npm: a connection no tree installs leaves preparation going, and status says to remove or install it", { timeout: 60_000 }, async t => {
