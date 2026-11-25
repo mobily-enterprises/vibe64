@@ -1,3 +1,5 @@
+import { AFTER_PLAN_PASS_TITLES } from "./assistantFinishing.js";
+
 /**
  * The whole-project checks after a plan: the checks a project runs as a whole,
  * such as one whole run of the test suite. No step of a plan runs them, since
@@ -10,10 +12,22 @@
  * asked, then declined (No), run (the Yes's own request) or offered (another
  * message's request). Every value sits on a request at an existing stage, so a
  * release before this one reads it as an ordinary request.
+ *
+ * Genesis records a pass only after its whole-suite run passed with the
+ * person's OK, so a plan's passes that Genesis records (run over the whole app,
+ * since their last completion or deeply) are not recorded in their own turns:
+ * the question holds their ids (`passes`), and the turn the Yes starts records
+ * them once every check passes. After No, or another message, they stay unrecorded.
  */
 
 // No step of a plan runs the whole-project checks; Vibe64 offers them to the person once the plan is finished.
 const PLAN_NO_WHOLE_CHECKS = "No step of a plan runs the whole-project checks (such as one whole run of the test suite): not an implementation turn, not Senior's review and not a pass. Once the plan is finished and saved, Vibe64 asks the person whether to run them once, so never ask about them yourself.";
+
+// The plan's passes by title, in a sentence: "Deslop", or "Security pass and Deslop".
+function passTitles(passes) {
+  const titles = passes.map((id) => AFTER_PLAN_PASS_TITLES[id] || id);
+  return titles.length < 2 ? titles.join("") : `${titles.slice(0, -1).join(", ")} and ${titles.at(-1)}`;
+}
 
 // The question Vibe64 asks once a plan is finished, above the message box with its Yes and No.
 const WHOLE_CHECKS_QUESTION = "Run the whole-project checks once now?";
@@ -39,10 +53,11 @@ function assistantWholeChecksQuestionNotice(key) {
 }
 
 /** The note No writes: nothing runs, and Vibe64 never asks again for this plan. */
-function assistantWholeChecksDeclinedNotice(key) {
+function assistantWholeChecksDeclinedNotice(key, { passes = [] } = {}) {
   return {
     messageId: `assistant-whole-checks-declined:${key}`,
-    text: "Whole-project checks not run. Vibe64 won't ask again for this plan."
+    text: "Whole-project checks not run. Vibe64 won't ask again for this plan." +
+      (passes.length ? ` ${passTitles(passes)} ${passes.length === 1 ? "stays" : "stay"} unrecorded as completed, since the whole-project checks didn't run.` : "")
   };
 }
 
@@ -51,20 +66,24 @@ function assistantWholeChecksDeclinedNotice(key) {
  * checks once, on the finished plan's work, and fix what they find as new work.
  */
 const ASSISTANT_WHOLE_CHECKS_INSTRUCTION = [
-  "Run the project's whole-project checks once: the checks it states for the whole project, such as one whole run of the test suite, through its own verification command.",
+  "Run the project's whole-project checks once: the checks it states for the whole project, such as one whole run of the test suite, through its own verification command, in this session, never detached to outlive it.",
   "The person chose to run them now, after a finished plan, on the work as it is. Never run them a second time in this request: after a fix, run the focused tests for what you changed.",
-  "Fix what they find as new work: a failing or flaky test is a defect to fix, each fix proven by a test that failed first. The plan is completed and archived: make no plan and change none.",
+  "Fix what they find as new work: a failing or flaky test is a defect to fix, each fix proven by a test that failed first. Explain every failure; never call one pre-existing or environmental: a missing tool or an environment's refusal is a defect to fix, reported with what is missing. The plan is completed and archived: make no plan and change none.",
   "Preserve unrelated work and staged changes. Do not commit, push or deploy."
 ].join(" ");
 
 /**
- * How that turn ends and what it reports.
- * @param {{ autoSave: boolean }} options autoSave: the chat's Automatically save changes switch
+ * How that turn ends and what it reports, and the plan's passes it records once every check passes.
+ * @param {{ autoSave: boolean, passes?: string[] }} options autoSave: the chat's Automatically save changes switch;
+ *   passes: the ids of the plan's passes Genesis records, which waited for this run
  */
-function assistantWholeChecksInstructions({ autoSave }) {
+function assistantWholeChecksInstructions({ autoSave, passes = [] }) {
+  const record = passes.length
+    ? `Once every check passes, record the plan's ${passes.length === 1 ? "pass" : "passes"} ${passTitles(passes)}, which waited for this run: take the Genesis \`passes done\` operation for ${passes.map((id) => `\`${id}\``).join(", ")}, one pass each, invoked as each pass's skill says, and leave the records with your other changes. Record none while a check fails. `
+    : "";
   return [
     "Use vibe64-helper plan read to obtain workflow.messageId, workflow.turnId and workflow.stage, then report one outcome before your final response through vibe64-helper plan outcome with JSON on stdin: {messageId, turnId, stage, decision, explanation, progress}.",
-    `handoff: you fixed what the checks found (files changed); ${autoSave ? "Vibe64 then saves the fixes" : "the person saves the fixes with Save"}. complete: every check passed and you changed no files. continue: you ran out of room, and your next turn carries on without running the checks again. wait: a check can't run here or a failure needs the person: numbered questions, each with a recommended answer, in your final reply.`,
+    `${record}handoff: you fixed what the checks found${passes.length ? " or recorded the plan's passes" : ""} (files changed); ${autoSave ? "Vibe64 then saves the fixes" : "the person saves the fixes with Save"}. complete: every check passed and you changed no files. continue: you ran out of room, and your next turn carries on without running the checks again. wait: a check can't run here or a failure needs the person: numbered questions, each with a recommended answer, in your final reply.`,
     "Your final reply records the result: each check you ran, with its command, whether it passed and its counts, then what you fixed and the test that proves each fix."
   ].join(" ");
 }

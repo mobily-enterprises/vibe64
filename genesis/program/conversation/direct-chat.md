@@ -2603,7 +2603,11 @@ A finished plan then asks the person about the whole-project checks. The shared
 `assistantWholeChecks.js` holds the question's words, notes, turn instructions
 and predicates, and the server's `assistantWholeChecks.js` routing's side of it:
 `finishPlan` sets `state.wholeChecks` to `{ status: "asked", plan: <title> }` on
-the request that finished it (`askWholeChecks`), and after the lock, once the
+the request that finished it (`askWholeChecks`), with `passes`, the ids of the
+plan's finished Passes items over the whole app, since last completed or deep
+(`planPassesToRecord`), when it has any: Genesis records a pass only after its
+whole-suite run passed with the person's OK, so a plan's pass turn never takes
+its `PASS RECORD` step and those passes wait for the answer. After the lock, once the
 save notes are written, routing writes `assistantWholeChecksQuestionNotice` (**The plan is finished. Run the
 whole-project checks once now, on the finished plan's work?**). While `assistantAsksWholeChecks` holds (complete, asked, not
 stopped), `assistantRoutingNotice` gives the composer notice the label **Run the
@@ -2616,11 +2620,15 @@ chat's own agent) with no Router, review, plan or after-plan record, and
 (`ASSISTANT_WHOLE_CHECKS_INSTRUCTION`) and `assistantWholeChecksInstructions` in
 place of the workflow's, labels its follow-ups **Whole-project checks**, and
 `prepareFollowup` continues it as **Continue the whole-project checks.** without
-running them again. Its handoff ends the work and saves like any finished
+running them again. `answerWholeChecks` carries `passes` to the Yes's request
+only, and `assistantWholeChecksInstructions` then has the turn take Genesis's
+`passes done` for each once every check passes, never while one fails. The
+instruction runs them in the session, never detached, and has every failure
+explained, never called pre-existing or environmental. Its handoff ends the work and saves like any finished
 implementation; complete saves nothing. No is the Continue route's direct POST
 with `reviewAction: "skip-checks"` and the finished request's messageId: it sets
 `declined`, writes **Whole-project checks not run. Vibe64 won't ask again for
-this plan.** and starts no turn. Any other new message ends the question as
+this plan.**, naming any `passes` that stay unrecorded, and starts no turn. Any other new message ends the question as
 `offered`, with `WHOLE_CHECKS_OFFERED_NOTE` before the person's words, so a
 typed yes runs them. Admission reads the No through `declineWholeChecks` and a new message through
 `answerWholeChecks`; a Yes or No once nothing is asked is refused
@@ -5679,7 +5687,8 @@ its last completed run in the project, `runs`, the runs Genesis offers for it
 now, `sinceBase`, the request for the changes since a base commit and its deep
 form (null when the pass can't run), and `unavailable` (`listGenesisPasses`, Genesis's `inspectPasses` for that
 source, contract `genesis.passes.v1`). A pass's own last
-step records its run with `genesis passes done <id>`; Vibe64 never writes that
+step records its run with `genesis passes done <id>`, in a plan the turn the
+person's Yes to the whole-project checks starts; Vibe64 never writes that
 record and reads it only through Genesis's list;
 a malformed record fails the list (`PASS_RECORD_INVALID`), and the Passes list
 shows that error with Retry instead of an empty list.

@@ -35,7 +35,8 @@ asking in chat), it runs to the end on its own; only a question for you or
   to Junior.
 - **Passes**: each item in the plan's Passes section runs in its own Senior
   turn, in order; see [A plan's passes](passes.md#a-plans-passes). A pass runs
-  no whole-project checks either.
+  no whole-project checks either, and a pass Genesis records waits for your
+  answer about them before it is recorded as completed.
 - **Completed**: once every item and every pass is ticked and no question is
   open, Vibe64 completes the plan and archives it, and saves it when
   **Automatically save changes** is on. Then it asks you once whether to run

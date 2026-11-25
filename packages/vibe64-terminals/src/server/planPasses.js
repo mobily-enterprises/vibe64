@@ -13,7 +13,7 @@ import { failure } from "./assistantRoutingRequests.js";
 // After a plan: the changes since the session's after-plan base, read when the pass runs.
 const PLAN_CHANGES = "the plan's changes";
 const DEEPLY = ", deeply";
-// The runs Genesis offers for every pass, by their run id.
+// The runs Genesis offers for every pass, by their run id: the pass's own runs, which Genesis records.
 const RUN_SCOPES = Object.freeze({ whole: "whole app", "since-last": "since last completed", deep: "deep" });
 const SINCE_COMMIT = /^the changes since ([a-f0-9]{7,64})$/u;
 const SECTION = /^this section of the app: (.+)$/u;
@@ -350,6 +350,7 @@ function planPassesView(plan, request, listing) {
 }
 
 export {
+  RUN_SCOPES,
   applyPlanPasses,
   nextPlanPass,
   passesInMessage,
