@@ -1492,6 +1492,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantRoutingCancellation.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingOutcomes.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingInterruptions.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingOwedSteps.js`
 - `packages/vibe64-terminals/src/server/assistantPlanHandoff.js`
 - `packages/vibe64-terminals/src/server/assistantPlanCheck.js`
 - `packages/vibe64-terminals/src/server/planSourceChanges.js`
@@ -2810,7 +2811,8 @@ account admission, native questions/goals, identity checks, delivery inspection 
 helper cleanup remain authoritative. Delivery has routing/pending/sending/uncertain/
 accepted/failed states; workflow stage is never encoded into delivery. Saved receipts
 win over interrupted transport errors. Retry only inspects the same receipt.
-Restart never auto-sends a recovered follow-up. Continue planning, Continue
+Restart never auto-sends a recovered follow-up whose scheduling it interrupted; a step left owed (Owed automatic
+steps, below) is decided again at recovery. Continue planning, Continue
 implementation and Continue review name the retained stage and use the existing
 retry/Stop actions; uncertain delivery keeps Check delivery. Explanations remain
 persisted Status messages. Existing and projected outcome messages render collapsed under Workflow details,
@@ -4905,6 +4907,43 @@ The composer uses the same shared eligibility predicate; output speech is not
 an admission condition. Router's existing request-routing workload allows 8,192
 output characters, accommodating its bounded review schema including JSON
 escaping. The original lifecycle tests now use the actual shared schema validator.
+
+## Owed automatic steps
+
+A follow-up's delivery refuses a step decided before something else reached the chat: a turn still running
+(`vibe64_assistant_routing_turn_active`), a pending question or approval (`_question_pending`), or a conversation or
+plan changed since the step was prepared (`_continuation_changed`, which compares the five latest visible messages
+the follow-up recorded). That protection stays: a step is never delivered over something newer. What changed is what
+a refusal of an automatic step means. Each automatic caller (the turn end's next step, Senior's plan handoff, a plan's
+passes, and through `oweRefusedStep` an interrupted turn's resume) hands its refusal to `settleRefusedStep`
+([assistantRoutingOwedSteps.js](../../../packages/vibe64-terminals/src/server/assistantRoutingOwedSteps.js)), and for
+these three the request waits with its step unsent and marked `followup.owed`, and its notice says the step starts by itself once the
+current turn ends. Any other refusal (Stop, a changed orchestrator or connection, admission, helper cleanup, an engine
+refusing delivery, which is no proof that another turn came first) still waits for the person, as before; an attempted
+step (`attemptedMessageId`) is never owed, so nothing is sent twice.
+
+`continueOwed` decides an owed step again, under the session's lock: at once for a changed conversation (the turn
+that changed it has ended), at the end of any later Main chat turn (`afterTurn` checks for an owed step before its
+own-turn guards), and at the recovery of a server that started after the one that left it (`reconcile`; within one
+run a turn's end decides it, so opening a session never does). With a turn running, a question or approval pending,
+or a goal active, the step stays owed. Otherwise it reads the user turns after `followup.lastUserMessageId`, the
+latest user message when the step was prepared: a message of the person's own among them (anything but another
+session's received message and Vibe64's own notes and follow-ups), or not knowing what came after, holds the step for
+the person's Continue; so does an answer since that asks something. A plan the step no longer fits (Senior's review
+fits any active plan whose every item outside Passes is built; other steps need the plan unchanged) waits for a new
+request. A step that goes ahead records the conversation and plan as they are now (`refreshFollowup`) and is
+delivered through the same checks, so anything newer still refuses it, which leaves it owed again.
+
+The person's Continue of a waiting follow-up also records the conversation as it is now before delivering: their
+Continue is newer than anything the chat holds; it still refuses a plan the step no longer fits, letting an
+implementation go on from the active plan as it now is. Stop and Cancel end an owed step; a new request the person
+sends replaces it like any unsent handoff, and nothing starts the step afterwards.
+
+The turn end itself is never lost to a busy lock: in Main chat, `exclusiveAtTurnEnd` queues again for the session's
+lock after the usual wait, until it runs or routing closes, as `exclusiveAfterWrites` already did behind a Save or
+Update, so no page has to reconcile the session for the request's next step to start. The chat's plan line reads
+"Plan: Senior review starts when this answer ends" (or the item or pass) for an owed step that is not stopped.
+Focused evidence: `assistantPlanReviewOvertaken.test.js`, `planStatusLine.unit.test.js`.
 
 ## Source-less learning uses the same native Main owners
 

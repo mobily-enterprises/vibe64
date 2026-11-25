@@ -821,7 +821,13 @@ A native turn ending or a fully checked checklist does not complete the workflow
 
 Explanations appear as Status messages in chat. Real blockers and explicit pauses
 leave Waiting at the retained stage; clarifications and status questions do not
-abandon ongoing review. Two turns without reported progress or eight automatic
+abandon ongoing review. An automatic step another turn came before (another
+session's message and its answer, a turn still running, a pending question) is
+owed, never dropped: once that turn ends the server decides it again from the
+conversation and plan as they are then, with no page open, and a server that
+restarted first does so at its recovery. A message of the person's own since the
+step was decided, an answer that asks something, or a plan the step no longer
+fits waits for the person; another session's message never stands for them. Two turns without reported progress or eight automatic
 steps wait for inspection and Resume workflow. Stop suppresses late automatic
 work. Recovery never replays a sent message: Retry checks its original
 receipt, and interrupted scheduling after restart requires Resume workflow.

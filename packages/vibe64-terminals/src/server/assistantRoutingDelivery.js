@@ -35,6 +35,15 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { PLAN_CHECK_LABEL, planCheckStart, rememberPlanCheckStart } from "./assistantPlanCheck.js";
 import { MAIN_CHAT_NOTE_TURN_METADATA_KEY } from "./mainChatNote.js";
 
+// The refusals of an automatic step that mean only that another turn or message came first: a turn still running, a
+// question or approval pending, or the conversation changed since the step was decided. The step is owed, not dropped
+// (assistantRoutingOutcomes.js).
+const FOLLOWUP_OVERTAKEN_CODES = Object.freeze([
+  "vibe64_assistant_routing_turn_active",
+  "vibe64_assistant_routing_question_pending",
+  "vibe64_assistant_routing_continuation_changed"
+]);
+
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
 /** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
@@ -341,5 +350,6 @@ function createAssistantRoutingDelivery({
 }
 
 export {
+  FOLLOWUP_OVERTAKEN_CODES,
   createAssistantRoutingDelivery
 };

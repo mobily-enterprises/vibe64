@@ -29,6 +29,8 @@ import {
  * @param {AssistantRoutingAdmission} dependencies.admission
  * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>) => Promise<object>}
  *   dependencies.exclusiveAfterWrites The lock for what a turn leaves behind, which waits out a Save or Update.
+ * @param {(context: object, state: object, error: any) => Promise<boolean>} dependencies.oweRefusedStep Leaves a
+ *   resume another turn came before owed until a turn ends, instead of failed (assistantRoutingOwedSteps.js).
  * @param {import("./types.js").ServerRun} dependencies.serverRun This editor process's run, against which a turn an
  *   earlier run sent is told apart, with how that run ended.
  * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} dependencies.logger Where each interrupted turn's
@@ -40,6 +42,7 @@ function createAssistantRoutingInterruptions({
   delivery,
   admission,
   exclusiveAfterWrites,
+  oweRefusedStep,
   serverRun,
   logger
 }) {
@@ -81,7 +84,7 @@ function createAssistantRoutingInterruptions({
 
   /**
    * Sends the request's prepared resume now, as the person it ran for; a failure leaves it waiting for Continue and
-   * says so in red.
+   * says so in red. Another turn that came first leaves it owed, to go ahead once a turn ends.
    */
   async function resumeNow(sessionId, context, state, interruption) {
     state.status = "working";
@@ -94,6 +97,12 @@ function createAssistantRoutingInterruptions({
       logOutcome(sessionId, context, interruption, "resumed");
       await countCrashTurn(interruption, true);
     } catch (error) {
+      if (await oweRefusedStep(context, state, error)) {
+        // Not resumed yet: it goes ahead once the turn that came first ends.
+        logOutcome(sessionId, context, interruption, "resume_owed", { code: error.code });
+        await countCrashTurn(interruption, false);
+        return;
+      }
       state.status = "waiting";
       state.delivery = state.attemptedMessageId ? "uncertain" : state.followup ? "pending" : "failed";
       state.error = error.message;

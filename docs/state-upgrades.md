@@ -2289,6 +2289,27 @@ planning turn. A stopped turn leaves it unused, the next turn of the same
 request drops it, and a new request replaces the whole record. Focused
 evidence: `assistantWorkflow.test.js`.
 
+## Owed automatic steps (no upgrade)
+
+A saved routing request's prepared follow-up (`assistant_routing_request`,
+schema version 7, its `followup`) may hold two optional fields, both written
+only by new writes. `lastUserMessageId` is the conversation's latest user
+message when the step was prepared, after which any message is one the
+conversation gained since. `owed: true` marks a step whose delivery another turn
+or message came before (refused with `vibe64_assistant_routing_turn_active`,
+`vibe64_assistant_routing_question_pending` or
+`vibe64_assistant_routing_continuation_changed`): the request waits with its
+step unsent, and the server decides it again when a turn ends, or at its
+recovery when an earlier server left it (`assistantRoutingOwedSteps.js`).
+
+Absence keeps the earlier behavior: a follow-up without `owed` is never started
+by itself, and one without `lastUserMessageId` is held for the person's Continue
+rather than decided automatically, since what came after it is not known. No
+existing record is transformed or backfilled, so no numbered upgrade was
+needed. A step that was attempted (`attemptedMessageId`) is never owed, so
+nothing is sent twice. Focused evidence:
+`assistantPlanReviewOvertaken.test.js`.
+
 ## Held Main chat messages (no upgrade)
 
 Session metadata `held_agent_messages` (`heldMessageRecords.js`) is
