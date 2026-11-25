@@ -9,16 +9,29 @@
   >
     <p class="text-body-medium font-weight-medium">{{ lines[0] }}</p>
     <p class="text-body-medium">{{ lines[1] }}</p>
+    <v-btn
+      v-if="problemReport.available"
+      class="mt-1"
+      density="compact"
+      size="small"
+      variant="text"
+      data-vibe64-report-problem
+      @click="problemReport.open({ includeChat: true })"
+    >
+      Report a problem
+    </v-btn>
   </v-alert>
 </template>
 
 <script setup>
 import { computed } from "vue";
 import { turnInterruptionLines } from "@local/vibe64-terminals/shared/turnInterruptionText";
+import { useProblemReport } from "@/composables/useProblemReport.js";
 
 // A turn interruption's permanent red entry in a chat's history (turnInterruptions.js writes it): what ended the
 // turn, then whether Vibe64 resumed it or why not, with times on the viewer's own clock.
 const props = defineProps({ entry: { type: Object, required: true } });
+const problemReport = useProblemReport();
 
 const localClock = at => {
   const date = new Date(at);

@@ -17,6 +17,7 @@ import { registerRoutes as registerSourceEditorRoutes } from "../../packages/vib
 import { registerRoutes as registerSystemGraphRoutes } from "../../packages/vibe64-system-graph/src/server/registerRoutes.js";
 import { registerUsageRoutes } from "../../packages/vibe64-system-graph/src/server/usageRoutes.js";
 import { registerRoutes as registerTerminalRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
+import { registerProblemReportRoutes } from "../../packages/vibe64-terminals/src/server/problemReport/registerProblemReportRoutes.js";
 import { registerTrainingRoutes } from "../../packages/vibe64-training/src/server/registerRoutes.js";
 import { registerTrainingVisualResourceRoutes } from "../../packages/vibe64-training/src/server/visualResourceRoutes.js";
 import { registerRoutes as registerUsageRecordingRoutes } from "../../packages/vibe64-usage-recording/src/server/registerRoutes.js";
@@ -214,6 +215,7 @@ POST /api/app/:slug/vibe64/pages/:pageId/restore public app 16384 vibe64.pages.r
 POST /api/app/:slug/vibe64/pages/:pageId/star public app 16384 vibe64.pages.star.set
 POST /api/app/:slug/vibe64/pages/:pageId/versions/:version/restore public app 16384 vibe64.pages.version.restore
 POST /api/app/:slug/vibe64/pages/:pageId/view public app 16384 vibe64.pages.view.open
+POST /api/app/:slug/vibe64/problem-report public app 262144 vibe64.problem-report.collect
 POST /api/app/:slug/vibe64/project-files/:area/conflicts public app 2097152 vibe64.source-editor.file-area.conflicts
 POST /api/app/:slug/vibe64/project-files/:area/directory public app 2097152 vibe64.source-editor.file-area.mkdir
 POST /api/app/:slug/vibe64/project-files/:area/file public app 2097152 vibe64.source-editor.file-area.create
@@ -319,6 +321,8 @@ POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/dis
 POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/interactions public app 16384 vibe64.usage-recording.interaction.record
 POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/stop public app 16384 vibe64.usage-recording.stop
 POST /api/studio/health/crashes/acknowledge public app 1024 vibe64.studio-health.crashes.acknowledge
+POST /api/studio/problem-report public app 262144 vibe64.problem-report.collect-workspace
+POST /api/studio/problem-report/send public app 32768 vibe64.problem-report.send
 POST /api/vibe64/accounts/auth public app - vibe64.accounts.auth.start
 POST /api/vibe64/accounts/codex-providers/remove public app - vibe64.accounts.codex-providers.remove
 POST /api/vibe64/accounts/git-identity public app - vibe64.accounts.git-identity.save
@@ -387,6 +391,7 @@ function routeTable(projectContext) {
   registerSystemGraphRoutes(http, { localhostCheckBypassed, projectContext });
   registerUsageRoutes(http, { localhostCheckBypassed, projectContext });
   registerTerminalRoutes(http, { fastify, localhostCheckBypassed, projectContext, terminals: {}, uploads: { readSingleMultipartFile() {} } });
+  registerProblemReportRoutes(http, { localhostCheckBypassed, projectContext });
   registerTrainingRoutes(http, { localhostCheckBypassed });
   registerTrainingVisualResourceRoutes(http, { localhostCheckBypassed });
   registerUsageRecordingRoutes(http, { localhostCheckBypassed, projectContext });
