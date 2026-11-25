@@ -21,6 +21,7 @@ import {
   removeClonedDefaultBranch,
   runGit
 } from "./sessionSource.js";
+import { newerSavedFromCheck, newerSavedRefusal } from "./sessionNewerSaved.js";
 import { saveError } from "./sessionWorkCommands.js";
 import {
   inspectSessionWork,
@@ -399,11 +400,16 @@ async function checkConnectedCopies({ copies = [], executionFor, operationId, pr
   return checks;
 }
 
-function updateFirstError(name) {
-  return saveError(
-    `${name} has newer saved work. Update this session before saving its work.`,
-    "vibe64_session_save_update_required",
-    { connectedRepository: name, updateRequired: true },
+/**
+ * Save's refusal while a copy's main has newer saved versions: what its check or Save's own refusal read of them,
+ * named for the copy.
+ * @param {string} name
+ * @param {object} [newerSaved]
+ */
+function updateFirstError(name, newerSaved = {}) {
+  return newerSavedRefusal(
+    { ...newerSaved, repository: name },
+    { connectedRepository: name },
     { messageCode: "vibe64_session_save_branch_changed" }
   );
 }
@@ -459,7 +465,7 @@ async function saveConnectedCopies({
         session: work.session
       };
       const check = await checkSessionUpdates({ ...options, operationId, runProjectSourceExclusive });
-      if (check.updateAvailable === true) throw updateFirstError(copy.name);
+      if (check.updateAvailable === true) throw updateFirstError(copy.name, newerSavedFromCheck(check));
       unsaved = (await inspectSessionWork(options)).unsaved === true;
     } catch (error) {
       if (error?.code === "vibe64_session_save_update_required") throw error;
@@ -484,7 +490,7 @@ async function saveConnectedCopies({
         runProjectSourceExclusive
       });
     } catch (error) {
-      if (error?.code === "vibe64_session_save_update_required") throw updateFirstError(copy.name);
+      if (error?.code === "vibe64_session_save_update_required") throw updateFirstError(copy.name, error.details?.newerSaved);
       throw connectedCopyError(copy.name, error);
     }
     await recordCommits({

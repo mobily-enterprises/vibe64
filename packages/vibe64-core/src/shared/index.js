@@ -11,6 +11,13 @@ export {
   repositoryUpdateStrategy
 } from "./repositoryUpdateStatus.js";
 export {
+  newerSavedFacts,
+  newerSavedMessage,
+  newerSavedSource,
+  normalizeSavedBy,
+  savedAgoText
+} from "./newerSavedVersions.js";
+export {
   SESSION_SAVE_TASK_ID,
   SESSION_UPDATE_TASK_ID,
   readSessionUpdateFirst,

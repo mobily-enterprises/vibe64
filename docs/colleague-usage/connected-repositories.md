@@ -159,8 +159,10 @@ it pushes anything.
    session's own repository too when it has work or this Save will pin a
    Composition copy (step 3). If any of them is behind, even
    a copy with nothing to save, Save stops with an **Update first** refusal, for
-   example `library has newer saved work. Update this session before saving its
-   work.`, and pushes nothing. Choose **Update this session (rebase)**, then Save.
+   example `In connected repository library, main has 1 newer saved version
+   (8:11 AM, 1 file). Update this session to take it in (your unsaved work
+   stays), then Save.`, and pushes nothing. Choose **Update this session
+   (rebase)**, then Save.
 2. It then saves each copy that has work, in the order the list names them:
    one commit, named like any Save, pushed straight to that repository's main.
    Each copy's new commit is recorded before the next copy is saved, and the
@@ -204,8 +206,9 @@ copy of a repository that requires pull requests cannot be saved from here.
 If Save stops after it pushed a copy (step 3 or 4 failed, or the session's own
 main moved meanwhile), the copy stays saved and the refusal says so, for example
 `Saved library at 6e0b7a2c91d4 to its main, but this project's own source is not
-saved, so its main still pins the earlier commit of library. The saved branch
-has changed. Update this session before saving its work. Save again to finish.`
+saved, so its main still pins the earlier commit of library. Main has 1 newer
+saved version (2 minutes ago, 1 file). Update this session to take it in (your
+unsaved work stays), then Save. Save again to finish.`
 Do what the reason asks, then Save again: the copy has nothing left to push, and
 this Save records its pin.
 

@@ -16,6 +16,7 @@ import {
   saveCommand,
   saveError
 } from "./sessionWorkGit.js";
+import { newerSavedRefusal } from "./sessionNewerSaved.js";
 import { switchSessionKeepingWrites } from "./sessionWorktreeSwitch.js";
 import { assertLocalAuthority } from "./sessionWorkAuthority.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
@@ -108,14 +109,10 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, saveCom
   }
   if (pushed?.ok !== true) {
     if (verified && verified !== canonicalCommit) {
-      throw saveError(
-        "The saved branch changed while Save was pushing your changes. Update this session, then save again.",
-        "vibe64_session_save_update_required",
-        {
-          canonicalCommit: verified,
-          reconciledCommit: canonicalCommit,
-          updateRequired: true
-        },
+      // Main moved on while Save pushed: its newer saved versions are not fetched here, so the message names only that.
+      throw newerSavedRefusal(
+        { branch: context.branch },
+        { canonicalCommit: verified, reconciledCommit: canonicalCommit },
         { messageCode: "vibe64_session_save_branch_changed_during_push" }
       );
     }

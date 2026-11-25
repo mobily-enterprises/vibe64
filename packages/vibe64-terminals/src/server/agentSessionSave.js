@@ -187,7 +187,9 @@ function agentSessionSaveAnswer(result) {
       code,
       message: `Not saved: ${normalizeText(result?.error) || "Save did not finish."}`,
       next: code === SAVE_UPDATE_REQUIRED
-        ? `Run ${UPDATE_COMMAND} first, deal with anything it reports, then run ${SAVE_COMMAND} again.`
+        ? `Run ${UPDATE_COMMAND}, which keeps this session's unsaved work, deal with anything it reports, ` +
+          `then run ${SAVE_COMMAND} again. Never merge, pull or rebase yourself, and never offer the person a merge: ` +
+          "Update is how newer saved versions come in. Tell the person what the message says, naming only the session it names."
         : FAILED_NEXT
     };
   }
