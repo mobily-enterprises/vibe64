@@ -354,8 +354,10 @@ is cut off before the next one and each event is kept once. Opening or reloading
 a session therefore reads, parses and returns two turns of each run, at one
 stored turn as at a thousand, and a run event rewrites two turns, not the whole
 history; the pages' session (`publicSession`) and Claude's turn updates carry
-the runs' fields without their events, which no page reads. Evidence:
-`tests/server/agentRunHistory.unit.test.js`.
+the runs' fields without their events, which no page reads. The
+`20261125-agent-run-history` upgrade moved the earlier turns of runs that
+earlier releases grew. Evidence: `tests/server/agentRunHistory.unit.test.js`
+and `tests/server/agentRunHistoryUpgrade.unit.test.js`.
 
 Session listing projects saved agent-run activity and its session revision into
 `agentActivity`; unreadable activity remains unknown. The store remembers each

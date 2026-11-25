@@ -27,6 +27,7 @@ import { retireArchivedClosingChats } from "@local/vibe64-terminals/server/archi
 import { removeConnectedSessionLinks } from "@local/vibe64-runtime/server/connectedRepositoryCopiesUpgrade";
 import { removeOldSessionTempFolders } from "@local/vibe64-runtime/server/sessionTempFolderUpgrade";
 import { upgradeChatTranscriptLogs } from "@local/vibe64-runtime/server/chatTranscriptLogUpgrade";
+import { upgradeAgentRunHistory } from "@local/vibe64-runtime/server/agentRunHistoryUpgrade";
 import { upgradeChatFinishingSteps } from "@local/vibe64-terminals/server/chatFinishingStepsUpgrade";
 import { upgradeAfterPlanPasses } from "@local/vibe64-terminals/server/afterPlanPassesUpgrade";
 import { upgradePassesInPlans } from "@local/vibe64-terminals/server/passesInPlansUpgrade";
@@ -98,6 +99,7 @@ try {
     upgradePassesInPlans,
     removeOldSessionTempFolders,
     upgradeChatTranscriptLogs,
+    upgradeAgentRunHistory,
     retireArchivedClosingChats,
     report
   });

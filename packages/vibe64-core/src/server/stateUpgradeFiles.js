@@ -66,6 +66,28 @@ async function atomicCopy(source, destination) {
 }
 
 /**
+ * This run's backup folder and the earlier runs' ones, for an upgrade that prepares again from what the state holds
+ * whenever it runs: backupRoot the first time, and after a run that stopped part way a new retry-N folder inside it,
+ * rather than resuming the stopped run's prepared files, which the previous release (put back by a rollout's
+ * rollback while nothing is recorded) may have made stale by writing since. Earlier backups are kept.
+ * @param {string} backupRoot
+ * @returns {Promise<{ current: string, earlier: string[] }>}
+ */
+export async function stateUpgradeRunBackupRoots(backupRoot) {
+  const earlier = [];
+  for (let attempt = 1; ; attempt += 1) {
+    const candidate = attempt === 1 ? backupRoot : path.join(backupRoot, `retry-${attempt}`);
+    try {
+      await lstat(candidate);
+    } catch (error) {
+      if (error.code === "ENOENT") return { current: candidate, earlier };
+      throw error;
+    }
+    earlier.push(candidate);
+  }
+}
+
+/**
  * A single upgrade-owned manifest retains both sides of every file replacement.
  * This is intentionally separate from the general runner's lock and ledger.
  */

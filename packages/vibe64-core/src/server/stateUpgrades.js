@@ -75,6 +75,7 @@ import stagingFolders from "./stateUpgrades/20261119-staging-folders.js";
 import passesInPlans from "./stateUpgrades/20261123-passes-in-plans.js";
 import sessionTempFolders from "./stateUpgrades/20261124-session-temp-folders.js";
 import chatTranscriptLog from "./stateUpgrades/20261124-chat-transcript-log.js";
+import agentRunHistory from "./stateUpgrades/20261125-agent-run-history.js";
 
 const upgrades = [
   codexLoginId,
@@ -136,7 +137,8 @@ const upgrades = [
   stagingFolders,
   passesInPlans,
   sessionTempFolders,
-  chatTranscriptLog
+  chatTranscriptLog,
+  agentRunHistory
 ];
 
 async function readLedger(ledgerPath) {
