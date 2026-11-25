@@ -7,6 +7,9 @@
   "exports": {
     "./server/actionContext": "./src/server/actionContext.js",
     "./server/Vibe64ActionPolicyProvider": "./src/server/Vibe64ActionPolicyProvider.js",
+    "./server/Vibe64PlannedRestartProvider": "./src/server/Vibe64PlannedRestartProvider.js",
+    "./server/plannedRestart": "./src/server/plannedRestart.js",
+    "./server/plannedRestartNotice": "./src/server/plannedRestartNotice.js",
     "./server/stateUpgradeFiles": "./src/server/stateUpgradeFiles.js",
     "./server/stateUpgrades": "./src/server/stateUpgrades.js",
     "./server/types": "./src/server/types.js",
@@ -81,7 +84,8 @@
     "kind": "runtime",
     "capabilities": {
       "provides": [
-        "runtime.actions.policy"
+        "runtime.actions.policy",
+        "vibe64.planned-restart"
       ],
       "requires": [
         "runtime.env"
@@ -93,6 +97,10 @@
           {
             "entrypoint": "src/server/Vibe64ActionPolicyProvider.js",
             "export": "Vibe64ActionPolicyProvider"
+          },
+          {
+            "entrypoint": "src/server/Vibe64PlannedRestartProvider.js",
+            "export": "Vibe64PlannedRestartProvider"
           }
         ]
       },

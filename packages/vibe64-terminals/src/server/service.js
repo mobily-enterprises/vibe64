@@ -42,6 +42,7 @@ import { sessionAssistantWorking } from "./serviceSessionRecords.js";
 import { createProjectPasses } from "./projectPasses.js";
 import { createHeldAgentSessionPreparation } from "./heldAgentSessionPreparation.js";
 import { createHeldProjectRuntimeOpen } from "./heldProjectRuntimeOpen.js";
+import { createServicePlannedRestart } from "./servicePlannedRestart.js";
 
 /** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {import("./types.js").ServiceAssistant} ServiceAssistant */
@@ -486,6 +487,20 @@ function createService({
     sessionNaming
   });
   const hostSlots = createServiceHostSlots({ state });
+  const noteMainChat = createMainChatNote({ assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent });
+  // The host's planned restart notice: every running AI turn is told, and the restart's record keeps what it stopped.
+  const plannedRestart = createServicePlannedRestart({
+    env,
+    logger,
+    systemRoot: codexProviderOptions.systemRoot,
+    state,
+    project,
+    sessionAccess,
+    assistantContext,
+    sessionAgent,
+    noteMainChat,
+    startTemporaryConversationTurn: assistant.startTemporaryConversationTurn
+  });
 
   const terminalControls = createTerminalControls({
     readAgentScreen: (sessionId, terminalSessionId, options) => terminals.readAgentTerminal(sessionId, terminalSessionId, options),
@@ -535,8 +550,16 @@ function createService({
     workspaceSetupIsRunning: workspacePreparation.workspaceSetupIsRunning,
     workspaceSetupIsPrepared: workspacePreparation.workspaceSetupIsPrepared,
     waitForWorkspaceSetup: workspacePreparation.waitForWorkspaceSetup,
-    beginShutdown: shutdown.beginShutdown,
-    close: shutdown.close,
+    beginShutdown() {
+      // First, while nothing has stopped yet: a planned restart's record names what this stop cuts.
+      plannedRestart.recordStop();
+      return shutdown.beginShutdown();
+    },
+    async close() {
+      plannedRestart.recordStop();
+      plannedRestart.close();
+      return shutdown.close();
+    },
     openProjectRuntime: projectRuntime.openProjectRuntime,
     openProjectRuntimeForPage: createHeldProjectRuntimeOpen({ openProjectRuntime: projectRuntime.openProjectRuntime, logger }),
     noteProjectRuntimeActivity: projectRuntime.noteProjectRuntimeActivity,
@@ -643,9 +666,7 @@ function createService({
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,
     sessionAssistantWorking,
-    noteMainChat: createMainChatNote({
-      assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent
-    }),
+    noteMainChat,
     prepareAssistantChangeover: assistantPreparation.prepareAssistantChangeover,
     prepareRoutingSelection: assistantPreparation.prepareRoutingSelection,
     applyGoalSelection: goals.applyGoalSelection,
