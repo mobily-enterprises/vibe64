@@ -321,7 +321,9 @@ function createAiTaskRunner({
     const { resume } = decision;
     const sendId = randomUUID();
     const saved = (await applyFound(sessionId, conversationId, {
-      ...event, resume, interruptions: decision.history,
+      ...event,
+      resume,
+      interruptions: decision.history,
       ...(resume ? { id: sendId, note: resumeNoteForAi(interruption) } : { message: interruptionLoopError(interruption.cause) })
     }))?.task;
     // Only this event's own move is told: a task cancelled meanwhile just ends.
