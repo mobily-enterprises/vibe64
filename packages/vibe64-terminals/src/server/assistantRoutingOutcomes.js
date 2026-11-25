@@ -90,7 +90,7 @@ function createAssistantRoutingOutcomes({
   const owed = createAssistantRoutingOwedSteps({ routingState, records, delivery, admission, agent, exclusiveAfterWrites });
   const { exclusiveAtTurnEnd, oweRefusedStep, settleRefusedStep, owesStep, continueOwed, continueRecovered } = owed;
   // What follows a turn an interruption ended: its red entry, and its resume once (assistantRoutingInterruptions.js).
-  const { interruptionOf, afterInterruption, resumeUnsent, scheduleResume } = createAssistantRoutingInterruptions({
+  const { interruptionOf, afterInterruption, resumeUnsent, scheduleResume, stopUnrecovered } = createAssistantRoutingInterruptions({
     routingState,
     records,
     delivery,
@@ -656,7 +656,8 @@ function createAssistantRoutingOutcomes({
     recordOutcome,
     handPlanToSenior,
     afterTurn,
-    reconcile
+    reconcile,
+    stopUnrecovered
   });
 }
 

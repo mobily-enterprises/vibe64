@@ -201,6 +201,16 @@ function createTemporaryConversationLifecycle({
     await routing.reconcile(sessionId, { ...options, conversationId });
   }
 
+  /**
+   * Restart recovery's stop of a temporary chat's turn it could not settle (serviceTurnRecovery.js).
+   * @param {string} sessionId
+   * @param {{ conversationId: string }} options
+   * @param {{ messageId: string, error: string }} input
+   */
+  function stopUnrecoveredTemporaryTurn(sessionId, options, input) {
+    return routing.stopUnrecovered(sessionId, options, input);
+  }
+
   async function stopTemporaryConversation(sessionId, input, options = {}) {
     await routing.cancel(sessionId, { ...options, conversationId: input.conversationId });
     const stopped = await chatTurns.write(sessionId, options, async (ctx) => {
@@ -394,6 +404,7 @@ function createTemporaryConversationLifecycle({
     listTemporaryConversations,
     readTemporaryConversation,
     reconcileTemporaryConversation,
+    stopUnrecoveredTemporaryTurn,
     stopTemporaryConversation,
     readConversationTurn,
     deleteTemporaryConversation,

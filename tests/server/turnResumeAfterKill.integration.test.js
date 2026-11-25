@@ -84,3 +84,46 @@ test("a Main chat turn whose server was killed mid-turn resumes once on the next
     assert.equal((await notices()).length, 2, "each interruption is told once");
   });
 });
+
+test("a Main chat turn no attempt after a restart could recover stops once, saying why in red, and no later restart tries it again", { timeout: 60_000 }, async t => {
+  const h = await goalHarness(t);
+  const request = async () => assistantRoutingRequestForDisplay((await h.store.readSession("test")).metadata);
+  const notices = async () => (await h.store.readConversationLog("test"))
+    .filter(turn => turn.system?.messageId?.startsWith("vibe64-turn-interrupted:"));
+  const events = name => h.warnings.filter(record => record?.event === name).length;
+  await h.inProject(async () => {
+    await h.routeAsSenior();
+    const sent = await h.sendAsPerson({ messageId: "long-request", message: "Keep working on the report" });
+    assert.notEqual(sent.ok, false, JSON.stringify(sent));
+    await h.waitFor(async () => await h.turnActive() && (await request())?.delivery === "accepted", "Claude works on the delivered turn");
+    // The person who sent it is removed from the project while Vibe64 restarts: no attempt can resume it as them.
+    h.removeSender();
+    await h.restart();
+    // The last attempt (here the only one) fails.
+    const recovery = await h.service.recoverInterruptedTurns({ retryDelaysMs: [] });
+    assert.equal(recovery.ok, false, JSON.stringify(recovery));
+    assert.equal(recovery.results.find(result => result.chat === "main")?.stopped, true, JSON.stringify({ recovery, warnings: h.warnings }));
+    const stopped = await request();
+    assert.equal(stopped.status, "waiting", "it no longer reads as the AI at work");
+    assert.equal(stopped.error,
+      "Vibe64 could not resume this turn after the restart: goal-owner can no longer use this project. Choose Continue to try again.");
+    assert.ok(stopped.followup, "Continue resumes it");
+    const entries = await notices();
+    assert.equal(entries.length, 1, JSON.stringify(entries));
+    assert.match(entries[0].system.text,
+      /^Vibe64 restarted at \d\d:\d\d UTC \(it was stopped and started again\)\.\nNot resumed: goal-owner can no longer use this project\. Choose Continue to try again\.$/u);
+    assert.equal(entries[0].metadata.vibe64TurnInterruption.outcome, "not-resumed");
+    assert.equal(events("vibe64.turn_resume.recovery_stopped"), 1, JSON.stringify(h.warnings));
+    const failures = events("vibe64.turn_resume.recovery_failed");
+    // Later restarts leave it alone: no attempt, no entry and no log line of its own.
+    for (let restart = 0; restart < 2; restart += 1) {
+      await h.restart();
+      const later = await h.service.recoverInterruptedTurns({ retryDelaysMs: [] });
+      assert.equal(later.ok, true, JSON.stringify({ later, warnings: h.warnings }));
+      assert.equal(later.results.find(result => result.sessionId === "test")?.reason, "nothing-working", JSON.stringify(later));
+    }
+    assert.equal((await notices()).length, 1, "it is told once");
+    assert.equal(events("vibe64.turn_resume.recovery_failed"), failures);
+    assert.equal(events("vibe64.turn_resume.recovery_stopped"), 1);
+  });
+});
