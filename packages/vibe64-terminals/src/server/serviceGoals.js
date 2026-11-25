@@ -686,9 +686,9 @@ function createServiceGoals({
     }
   }
 
+  const { stopUnrecoverableGoal } = goalInterruptions;
   const recoverActiveGoals = createServiceGoalRecovery({
-    state, logger, project, sessionAccess, assistantContext, recoverSessionGoal, readGoalIntent, changeGoalIntent,
-    stopUnrecoverableGoal: goalInterruptions.stopUnrecoverableGoal
+    state, logger, project, sessionAccess, assistantContext, recoverSessionGoal, readGoalIntent, changeGoalIntent, stopUnrecoverableGoal
   });
 
   async function applyGoalSelection(sessionId, selection, preferences, context) {
