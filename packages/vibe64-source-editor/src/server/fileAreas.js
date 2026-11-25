@@ -101,7 +101,7 @@ function createFileArea(project, { repoChanged }) {
       maxTreeDepth: Infinity,
       maxTreeEntries: Infinity
     };
-    const context = (sourceRoot, extra = {}) => ({ area, policy, sourceRoot, sourceEditorTempRoot: sourceRoot, ...extra });
+    const context = (sourceRoot, extra = {}) => ({ area, policy, sourceRoot, ...extra });
 
     if (definition.scope === "project") {
       const { stateRoot, projectBackupsRoot, projectDropZoneRoot } = runtime.store.paths();

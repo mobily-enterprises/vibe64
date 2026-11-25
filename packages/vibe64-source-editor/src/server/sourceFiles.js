@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { constants } from "node:fs";
-import { copyFile, lstat, mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, link, lstat, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isMissingPathError } from "@local/vibe64-core/server/core";
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
@@ -486,10 +486,7 @@ async function createSourceEditorFile(context = {}, input = {}) {
     ? ""
     : path.posix.dirname(relativePath));
   try {
-    await writeFile(absolutePath, content, {
-      encoding: "utf8",
-      flag: "wx"
-    });
+    await writeSourceEditorTextFile(absolutePath, content);
   } catch (error) {
     if (error?.code === "EEXIST") {
       throw sourceEditorError("A source file already exists at that path.", "vibe64_source_editor_file_exists", {
@@ -577,7 +574,7 @@ async function saveSourceEditorFile(context = {}, input = {}) {
     });
   }
   assertTextBuffer(nextBuffer, file.relativePath);
-  await writeSourceEditorTextFile(context, file.absolutePath, nextText);
+  await writeSourceEditorTextFile(file.absolutePath, nextBuffer, file.stats.mode);
   const savedBuffer = await readFile(file.absolutePath);
   const savedStats = await lstat(file.absolutePath);
   return sourceEditorFilePayload(file.relativePath, savedBuffer, savedStats, {
@@ -620,18 +617,27 @@ function sourceEditorTempRoot(temporaryRoot = "", sessionId = "") {
   return path.join(root, "vibe64-source-editor", sessionKey);
 }
 
-async function writeSourceEditorTextFile(context = {}, absolutePath = "", text = "") {
-  const tempRoot = toText(context.sourceEditorTempRoot);
-  if (!tempRoot) {
-    throw sourceEditorError("Source editor save requires runtime temp storage.", "vibe64_source_editor_temp_storage_missing", {}, 500);
-  }
-  await mkdir(tempRoot, {
-    recursive: true
-  });
-  const temporaryPath = path.join(tempRoot, `${process.pid}-${Date.now()}-${crypto.randomUUID()}-${path.basename(absolutePath)}`);
+/**
+ * Writes the whole text beside the file and then puts it in place, so a reader
+ * (the preview, the app, the AI or Vibe64 itself) opens the old file or the new
+ * one, never an empty or half-written one. The temporary file is made in the
+ * file's own folder by the same writer, so it takes that folder's group and
+ * inherited permissions (docs/managed-session-filesystem-contract.md) before it
+ * becomes the file. A save renames it over the file, keeping the file's
+ * permission bits; a create links it, which fails if a file exists there.
+ */
+async function writeSourceEditorTextFile(absolutePath = "", content = Buffer.alloc(0), mode = undefined) {
+  const temporaryPath = path.join(path.dirname(absolutePath), `.vibe64-editor-${crypto.randomUUID()}.tmp`);
   try {
-    await writeFile(temporaryPath, text, "utf8");
-    await copyFile(temporaryPath, absolutePath);
+    await writeFile(temporaryPath, content, {
+      flag: "wx"
+    });
+    if (mode === undefined) {
+      await link(temporaryPath, absolutePath);
+    } else {
+      await chmod(temporaryPath, mode & 0o777);
+      await rename(temporaryPath, absolutePath);
+    }
   } finally {
     await rm(temporaryPath, {
       force: true
