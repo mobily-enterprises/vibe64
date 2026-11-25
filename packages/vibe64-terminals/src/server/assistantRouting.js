@@ -171,6 +171,7 @@ function createAssistantRouting({
     prepareGoal: goals.prepareGoal,
     applyGoalSelection: goals.applyGoalSelection,
     reconcile: outcomes.reconcile,
+    stopUnrecovered: outcomes.stopUnrecovered,
     close: admission.close
   });
 }

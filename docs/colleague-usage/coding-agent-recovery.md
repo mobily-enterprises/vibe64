@@ -59,7 +59,12 @@ service) and **Continue** tries again. Only a turn that Vibe64 is stopped and
 started again 10 times in a row, each within 10 minutes, stops too. A turn you
 stopped, or one that had finished, is never resumed. When the AI account needs
 signing in again, the entry says so: sign in in **AI Accounts**, then choose
-**Continue**. At a usage limit, choose **Continue** or send a message once the
+**Continue**. When Vibe64 cannot resume a chat's turn at all after a restart
+(for example because the person who sent it can no longer use the project), it
+tries again a few times over about 12 minutes and then stops: the entry reads
+**Not resumed:** with the reason, then **Choose Continue to try again.**, and
+later restarts leave it alone until someone chooses **Continue** or sends a new
+message. At a usage limit, choose **Continue** or send a message once the
 limit resets. A goal resumes the same way, under the same rule (see
 [Coding agent goals](coding-agent-goals.md)). In Main chat a Codex turn may also
 read **Codex was interrupted by a Vibe64 restart before it could finish**; the
@@ -75,8 +80,9 @@ warnings, which production keeps: `vibe64.turn_resume.recovery_started` and
 stopped because no attempt could continue it, or skipped and why), `vibe64.turn_resume.resumed`,
 `vibe64.turn_resume.stopped_by_loop_rule` or `vibe64.turn_resume.skipped` for
 each Main and temporary chat turn, and `recovery_finished` with the totals. A
-crash's record counts the turns it interrupted that Vibe64 resumed. A goal that
-no attempt after a restart could continue logs `vibe64.agent_goal.recovery_stopped`
+crash's record counts the turns it interrupted that Vibe64 resumed. A chat turn
+or a goal that no attempt after a restart could continue logs
+`vibe64.turn_resume.recovery_stopped` or `vibe64.agent_goal.recovery_stopped`
 once.
 
 ## Other recovery

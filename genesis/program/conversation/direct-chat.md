@@ -5371,7 +5371,15 @@ After every feature has booted, `recoverInterruptedTurns`
 ([serviceTurnRecovery.js](../../../packages/vibe64-terminals/src/server/serviceTurnRecovery.js))
 reconciles each open project's Main chat and temporary chat whose request was
 at work (or owed a step another turn came before), as its sender, without waiting for anyone to open it, and retries after
-30 s, 2 min and 10 min while one could not be checked. Reconciliation ends the
+30 s, 2 min and 10 min while one could not be checked. Each chat is settled on
+its own. The last pass stops a chat's turn it still could not settle (its
+sender no longer authorized, its AI not reconciled), unless the run before
+still runs it: routing's `stopUnrecovered` leaves the request waiting with its
+resume prepared and "Vibe64 could not resume this turn after the restart:
+<reason>. Choose Continue to try again.", writes the red `not-resumed` entry
+once, logs `vibe64.turn_resume.recovery_stopped`, and records the run that sent
+it (`recoveryStopped`), so later restarts skip that request, and a Main chat
+agent run it left marked active, until it is sent again. Reconciliation ends the
 old turn; routing's outcomes
 ([assistantRoutingOutcomes.js](../../../packages/vibe64-terminals/src/server/assistantRoutingOutcomes.js))
 then decide through its interruptions

@@ -155,6 +155,7 @@ function createSessionConversations({
     listTemporaryConversations: chatLifecycle.listTemporaryConversations,
     readTemporaryConversation: chatLifecycle.readTemporaryConversation,
     reconcileTemporaryConversation: chatLifecycle.reconcileTemporaryConversation,
+    stopUnrecoveredTemporaryTurn: chatLifecycle.stopUnrecoveredTemporaryTurn,
     updateTemporaryConversation: chatInteraction.updateTemporaryConversation,
     startTemporaryConversationTurn: chatInteraction.startTemporaryConversationTurn,
     cancelTemporaryConversationMessage: chatInteraction.cancelTemporaryConversationMessage,

@@ -248,11 +248,56 @@ function createAssistantRoutingInterruptions({
     return true;
   }
 
+  /**
+   * A turn an earlier run left that restart recovery could not settle on its last attempt (serviceTurnRecovery.js),
+   * such as one whose sender the project no longer authorizes: unless its request has since been replaced or has
+   * ended, it stops reading as at work and waits for Continue, with its resume prepared, and its red entry says why,
+   * once. It names the run that sent it, so a later restart leaves it alone until it is sent again. A Main chat
+   * goal's turn is its goal recovery's.
+   * @param {{ messageId: string, error: string }} input the request recovery saw, and why it could not settle it
+   * @returns {Promise<boolean>} whether it was stopped
+   */
+  async function stopUnrecovered(sessionId, options, { messageId, error }) {
+    let stopped = false;
+    await exclusiveAfterWrites(sessionId, options, async context => {
+      const state = await read(context.runtime.store, sessionId);
+      if (!state || state.messageId !== messageId || state.status === "complete") return;
+      if (!context.routingConversationId &&
+          assistantGoalIsActive((await records.currentGoal(sessionId, context).catch(() => null))?.goal)) return;
+      await stopRequest(sessionId, context, state, error);
+      stopped = true;
+    });
+    return stopped;
+  }
+
+  async function stopRequest(sessionId, context, state, error) {
+    const ended = await serverRun.endOf(state.serverRunId || "");
+    const interruption = {
+      key: `${activeMessage(state).messageId || state.messageId}:${state.turnId || ""}`,
+      ...(ended || { cause: INTERRUPTION_CAUSE.RESTART, at: new Date().toISOString() })
+    };
+    if (["routing", "sending"].includes(state.delivery)) {
+      state.delivery = state.attemptedMessageId ? "uncertain" : state.followup ? "pending" : "failed";
+    } else if (state.delivery === "accepted" && !state.followup) {
+      await records.prepareFollowup(context, state, state.stage ?? null, { resumeNote: resumeNoteForAi(interruption) });
+    }
+    if (state.followup) delete state.followup.owed;
+    state.status = "waiting";
+    delete state.resumeAt;
+    state.error = `Vibe64 could not resume this turn after the restart: ${error.replace(/[.\s]+$/u, "")}. Choose Continue to try again.`;
+    state.recoveryStopped = state.serverRunId || "";
+    await records.save(context, state);
+    await records.writeNotice(context, state, interruptionNotice(interruption, "not-resumed", { error }));
+    logOutcome(sessionId, context, interruption, "recovery_stopped", { error });
+    await countCrashTurn(interruption, false);
+  }
+
   return Object.freeze({
     interruptionOf,
     afterInterruption,
     resumeUnsent,
-    scheduleResume
+    scheduleResume,
+    stopUnrecovered
   });
 }
 

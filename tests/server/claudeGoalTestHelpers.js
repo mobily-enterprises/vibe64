@@ -266,6 +266,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
   const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
   const actor = { username: "goal-owner", uid: 71, role: "owner" };
   let accessRevoked = false;
+  let senderRemoved = false;
   const warnings = [];
   const createService = () => {
     const value = createTerminalService(terminalsServiceCollaborators({ project, actions,
@@ -281,7 +282,10 @@ createInterface({ input: process.stdin }).on('line', async line => {
         if (accessRevoked) throw new AppError(403, "The user who requested this AI task no longer has workspace access.", { code: "vibe64_assistant_actor_unavailable" });
         return actor;
       } }),
-      authorizeProjectMessage: async user => user?.username === actor.username ? actor : user
+      authorizeProjectMessage: async user => {
+        if (senderRemoved) throw new AppError(403, "goal-owner can no longer use this project.", { code: "vibe64_project_member_missing" });
+        return user?.username === actor.username ? actor : user;
+      }
     });
     return value;
   };
@@ -332,6 +336,8 @@ createInterface({ input: process.stdin }).on('line', async line => {
       context: { channel: "internal", surface: "app", requestMeta: { request: { headers: {} } } } }),
     /** The assistant host no longer resolves the person, as once their account has been disabled. */
     revokeAccess() { accessRevoked = true; },
+    /** The project no longer authorizes the person's messages, as once they have been removed from it. */
+    removeSender() { senderRemoved = true; },
     options, store, warnings, actor, goalCommands, intent, turnActive, waitFor, trace,
     failNextStart: () => writeFile(failStartPath, ""),
     /** Claude's account from now on, as `claude auth status` reports it: another account, or signed out. */

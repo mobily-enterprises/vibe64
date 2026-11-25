@@ -66,10 +66,13 @@ function requestWasWorking(metadata) {
 
 /**
  * Whether a session's Main chat was at work when an earlier server ended: its request, or an agent run that still
- * says it is working.
+ * says it is working, unless restart recovery stopped that request and it has not been sent again since
+ * (assistantRoutingInterruptions.js stopUnrecovered).
  * @param {{ metadata?: Record<string, string>, agentRuns?: object[] }} session
  */
 function sessionWasWorking(session) {
+  const request = assistantRoutingRequestForDisplay(session.metadata || {});
+  if (request?.serverRunId && request.recoveryStopped === request.serverRunId) return false;
   return requestWasWorking(session.metadata) || sessionHasActiveAgentRun(session);
 }
 
@@ -79,7 +82,9 @@ function sessionWasWorking(session) {
  * request's sender). Reconciliation stops what is left of the old turn and ends it; routing then writes the red entry
  * and resumes the turn once, or says why not (assistantRoutingOutcomes.js). Its stale "working" state, which Save,
  * Update and the session list read, ends with it. A temporary chat that holds an AI task is its task's to continue
- * (vibe64-ai-tasks), and a goal's turn its goal recovery's.
+ * (vibe64-ai-tasks), and a goal's turn its goal recovery's. The last pass stops a turn it could not settle, such as
+ * one whose sender the project no longer authorizes: it waits for Continue with its red entry saying why, once, so no
+ * later restart tries it again unseen. A turn the server before still runs is left to it.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
  * @param {RuntimeLogger} dependencies.logger
@@ -88,6 +93,8 @@ function sessionWasWorking(session) {
  * @param {ServiceAssistantContext} dependencies.assistantContext
  * @param {(sessionId: string, options: object) => Promise<object>} dependencies.ensureAgentSession
  * @param {(sessionId: string, options: object) => Promise<unknown>} dependencies.reconcileTemporaryConversation
+ * @param {(sessionId: string, conversationId: string, input: { messageId: string, error: string }) => Promise<boolean>}
+ *   dependencies.stopUnrecoveredTurn Stops a chat's turn the last pass could not settle ("" is Main chat).
  * @param {import("./types.js").ServerRun} dependencies.serverRun
  */
 function createServiceTurnRecovery({
@@ -98,6 +105,7 @@ function createServiceTurnRecovery({
   assistantContext,
   ensureAgentSession,
   reconcileTemporaryConversation,
+  stopUnrecoveredTurn,
   serverRun
 }) {
   async function actorFor(request) {
@@ -117,7 +125,13 @@ function createServiceTurnRecovery({
     }
   }
 
-  async function recoverSessionTurns(sessionId) {
+  /**
+   * Settles each chat of a session whose turn was at work, as the person it ran for. A chat that cannot be settled is
+   * reported, and on the last pass stopped, while the session's other chats go on.
+   * @param {string} sessionId
+   * @param {boolean} last whether no pass follows this one
+   */
+  async function recoverSessionTurns(sessionId, last) {
     const context = await assistantContext.assistantSessionOptions(sessionId);
     const session = context.session;
     if (sessionIsClosing(session) || session.status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED ||
@@ -125,35 +139,41 @@ function createServiceTurnRecovery({
       return [{ sessionId, skipped: true, reason: "session-not-open" }];
     }
     const results = [];
-    if (sessionWasWorking(session)) {
-      const request = assistantRoutingRequestForDisplay(session.metadata);
-      await stillRunning(request);
-      const actor = await actorFor(request);
-      const result = await ensureAgentSession(sessionId, actor ? { vibe64User: actor } : {});
-      if (result?.ok === false) {
-        throw Object.assign(new Error(result.error || "The session's AI could not be reconciled."), { code: result.code });
+    const recover = async (chat, request, reconcile) => {
+      try {
+        await stillRunning(request);
+        await reconcile(await actorFor(request));
+        results.push({ sessionId, chat, reconciled: true });
+      } catch (error) {
+        const stops = last && error?.code !== "vibe64_turn_previous_server_running";
+        const stopped = stops && await stopUnrecoveredTurn(sessionId, chat === "main" ? "" : chat, {
+          messageId: request?.messageId || "",
+          error: String(error?.message || "The turn could not be recovered.").slice(0, 500)
+        }).catch(() => false);
+        results.push({ sessionId, chat, ok: false, code: error?.code, error: error?.message, ...(stopped ? { stopped: true } : {}) });
       }
-      results.push({ sessionId, chat: "main", reconciled: true });
+    };
+    if (sessionWasWorking(session)) {
+      await recover("main", assistantRoutingRequestForDisplay(session.metadata), async actor => {
+        const result = await ensureAgentSession(sessionId, actor ? { vibe64User: actor } : {});
+        if (result?.ok === false) {
+          throw Object.assign(new Error(result.error || "The session's AI could not be reconciled."), { code: result.code });
+        }
+      });
     }
     const conversations = await context.runtime.store.listSessionConversations(sessionId);
     for (const record of conversations) {
       if (record.state === "closing" || record.task || !requestWasWorking(record.routingMetadata)) continue;
-      const request = assistantRoutingRequestForDisplay(record.routingMetadata);
-      await stillRunning(request);
-      const actor = await actorFor(request);
-      await reconcileTemporaryConversation(sessionId, {
-        conversationId: record.conversationId,
-        ...(actor ? { vibe64User: actor } : {})
-      });
-      results.push({ sessionId, chat: record.conversationId, reconciled: true });
+      await recover(record.conversationId, assistantRoutingRequestForDisplay(record.routingMetadata), actor =>
+        reconcileTemporaryConversation(sessionId, { conversationId: record.conversationId, ...(actor ? { vibe64User: actor } : {}) }));
     }
     return results.length ? results : [{ sessionId, skipped: true, reason: "nothing-working" }];
   }
 
+  /** @param {boolean} retrying whether another pass follows this one */
   async function recoverTurnsPass(retrying) {
     const results = [];
-    const reportFailure = (error, target) => {
-      const result = { ...target, ok: false, code: error?.code, error: error?.message };
+    const reportFailure = result => {
       results.push(result);
       logOperationalEvent(logger, "warn", {
         ...result,
@@ -161,6 +181,7 @@ function createServiceTurnRecovery({
         component: "vibe64.turn_resume"
       }, "A turn interrupted by the previous server needs attention after restart.");
     };
+    const failure = (error, target) => ({ ...target, ok: false, code: error?.code, error: error?.message });
     const listed = await project.listProjects();
     if (listed?.ok === false) throw new Error(listed.error || "Turn recovery could not list projects.");
     const openProjects = openProjectRuntimeRecords(listed);
@@ -174,15 +195,18 @@ function createServiceTurnRecovery({
           for (const session of await sessionAccess.listOpenProjectRuntimeSessions()) {
             if (state.lifecycle.closing) break;
             try {
-              const sessionResults = await recoverSessionTurns(session.sessionId);
-              for (const result of sessionResults) results.push({ projectSlug: projectRecord.slug, ...result });
+              for (const result of await recoverSessionTurns(session.sessionId, !retrying)) {
+                const row = { projectSlug: projectRecord.slug, ...result };
+                if (row.ok === false) reportFailure(row);
+                else results.push(row);
+              }
             } catch (error) {
-              reportFailure(error, { projectSlug: projectRecord.slug, sessionId: session.sessionId });
+              reportFailure(failure(error, { projectSlug: projectRecord.slug, sessionId: session.sessionId }));
             }
           }
         });
       } catch (error) {
-        reportFailure(error, { projectSlug: projectRecord.slug });
+        reportFailure(failure(error, { projectSlug: projectRecord.slug }));
       }
     }
     logRecoveryResults(logger, "vibe64.turn_resume", results, result => result.reason === "nothing-working");
@@ -191,8 +215,8 @@ function createServiceTurnRecovery({
 
   /**
    * Run once per server after every feature has booted, beside goal recovery. A session it could not reconcile is
-   * tried again after each retry delay; one already reconciled is no longer working and is skipped, so no turn is
-   * resumed twice. Shutdown cancels the next pass.
+   * tried again after each retry delay, and the last pass stops a turn it still cannot settle; one already reconciled
+   * is no longer working and is skipped, so no turn is resumed twice. Shutdown cancels the next pass.
    */
   function recoverInterruptedTurns({ retryDelaysMs = TURN_RECOVERY_RETRY_DELAYS_MS } = {}) {
     if (state.lifecycle.turnRecovery) return state.lifecycle.turnRecovery;
@@ -201,7 +225,7 @@ function createServiceTurnRecovery({
       const [delay, ...later] = delays;
       state.lifecycle.turnRecoveryTimer = setTimeout(() => {
         if (state.lifecycle.closing) return;
-        state.lifecycle.turnRecoveryRetry = recoverTurnsPass(true).then(result => retryAfter(!result.ok, later), error => {
+        state.lifecycle.turnRecoveryRetry = recoverTurnsPass(later.length > 0).then(result => retryAfter(!result.ok, later), error => {
           logOperationalEvent(logger, "warn", {
             component: "vibe64.turn_resume",
             event: "vibe64.turn_resume.recovery_failed",
@@ -213,7 +237,7 @@ function createServiceTurnRecovery({
       }, delay);
       state.lifecycle.turnRecoveryTimer.unref();
     };
-    state.lifecycle.turnRecovery = recoverTurnsPass(false);
+    state.lifecycle.turnRecovery = recoverTurnsPass(retryDelaysMs.length > 0);
     state.lifecycle.turnRecovery.then(result => retryAfter(!result.ok, retryDelaysMs), () => retryAfter(true, retryDelaysMs));
     return state.lifecycle.turnRecovery;
   }
