@@ -1,10 +1,11 @@
 import crypto from "node:crypto";
 import { constants } from "node:fs";
-import { chmod, link, lstat, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, link, lstat, mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isMissingPathError } from "@local/vibe64-core/server/core";
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { writeManagedGitExcludes } from "@local/vibe64-project/server/projectEnvironmentFiles";
 import { normalizePolicyPath, sourceEditorPathExcluded } from "./filePolicy.js";
 import {
   VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
@@ -486,7 +487,7 @@ async function createSourceEditorFile(context = {}, input = {}) {
     ? ""
     : path.posix.dirname(relativePath));
   try {
-    await writeSourceEditorTextFile(absolutePath, content);
+    await writeSourceEditorTextFile(context, absolutePath, content);
   } catch (error) {
     if (error?.code === "EEXIST") {
       throw sourceEditorError("A source file already exists at that path.", "vibe64_source_editor_file_exists", {
@@ -574,7 +575,7 @@ async function saveSourceEditorFile(context = {}, input = {}) {
     });
   }
   assertTextBuffer(nextBuffer, file.relativePath);
-  await writeSourceEditorTextFile(file.absolutePath, nextBuffer, file.stats.mode);
+  await writeSourceEditorTextFile(context, file.absolutePath, nextBuffer, file.stats.mode);
   const savedBuffer = await readFile(file.absolutePath);
   const savedStats = await lstat(file.absolutePath);
   return sourceEditorFilePayload(file.relativePath, savedBuffer, savedStats, {
@@ -617,6 +618,13 @@ function sourceEditorTempRoot(temporaryRoot = "", sessionId = "") {
   return path.join(root, "vibe64-source-editor", sessionKey);
 }
 
+// The editor's temporary files: one name Git ignores in a session source and the next write in a folder recognizes.
+const SOURCE_EDITOR_TEMPORARY_PREFIX = ".vibe64-editor-";
+const SOURCE_EDITOR_TEMPORARY_SUFFIX = ".tmp";
+// A write's temporary file lasts the moments between its write and its rename, so one a minute old was left by a
+// write that was killed (a crash, an out-of-memory kill).
+const STALE_SOURCE_EDITOR_TEMPORARY_MS = 60_000;
+
 /**
  * Writes the whole text beside the file and then puts it in place, so a reader
  * (the preview, the app, the AI or Vibe64 itself) opens the old file or the new
@@ -624,10 +632,15 @@ function sourceEditorTempRoot(temporaryRoot = "", sessionId = "") {
  * file's own folder by the same writer, so it takes that folder's group and
  * inherited permissions (docs/managed-session-filesystem-contract.md) before it
  * becomes the file. A save renames it over the file, keeping the file's
- * permission bits; a create links it, which fails if a file exists there.
+ * permission bits; a create links it, which fails if a file exists there. One a
+ * killed write leaves is never committed (the session clone's Git ignores the
+ * name) and the next write in its folder removes it.
  */
-async function writeSourceEditorTextFile(absolutePath = "", content = Buffer.alloc(0), mode = undefined) {
-  const temporaryPath = path.join(path.dirname(absolutePath), `.vibe64-editor-${crypto.randomUUID()}.tmp`);
+async function writeSourceEditorTextFile(context = {}, absolutePath = "", content = Buffer.alloc(0), mode = undefined) {
+  const directory = path.dirname(absolutePath);
+  await excludeSourceEditorTemporaryFiles(context.sourceRoot);
+  await removeStaleSourceEditorTemporaryFiles(directory);
+  const temporaryPath = path.join(directory, `${SOURCE_EDITOR_TEMPORARY_PREFIX}${crypto.randomUUID()}${SOURCE_EDITOR_TEMPORARY_SUFFIX}`);
   try {
     await writeFile(temporaryPath, content, {
       flag: "wx"
@@ -643,6 +656,35 @@ async function writeSourceEditorTextFile(absolutePath = "", content = Buffer.all
       force: true
     }).catch(() => null);
   }
+}
+
+/**
+ * Save commits what Git does not ignore, so a session clone's own exclude file ignores the editor's temporary files
+ * in every folder, through Vibe64's managed exclude block. A source without its own Git folder (a file area) has
+ * nothing to commit them to.
+ */
+async function excludeSourceEditorTemporaryFiles(sourceRoot = "") {
+  if (!path.isAbsolute(sourceRoot)) return;
+  const gitFolder = await lstat(path.join(sourceRoot, ".git")).catch(() => null);
+  if (!gitFolder?.isDirectory()) return;
+  await writeManagedGitExcludes(sourceRoot, [], {
+    section: "source editor temporary",
+    patterns: [`${SOURCE_EDITOR_TEMPORARY_PREFIX}*${SOURCE_EDITOR_TEMPORARY_SUFFIX}`]
+  });
+}
+
+/** The folder's editor temporary files (their exact prefix and suffix, plain files) a killed write left. */
+async function removeStaleSourceEditorTemporaryFiles(directory = "") {
+  const now = Date.now();
+  const entries = await readdir(directory, { withFileTypes: true });
+  await Promise.all(entries
+    .filter((entry) => entry.isFile() && entry.name.startsWith(SOURCE_EDITOR_TEMPORARY_PREFIX) &&
+      entry.name.endsWith(SOURCE_EDITOR_TEMPORARY_SUFFIX))
+    .map(async (entry) => {
+      const file = path.join(directory, entry.name);
+      const stats = await lstat(file).catch(() => null);
+      if (stats?.isFile() && now - stats.mtimeMs > STALE_SOURCE_EDITOR_TEMPORARY_MS) await rm(file, { force: true });
+    }));
 }
 
 function sourceEditorHash(buffer) {

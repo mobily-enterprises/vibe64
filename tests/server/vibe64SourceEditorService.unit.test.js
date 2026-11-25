@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import { watch } from "node:fs";
-import { chmod, lstat, mkdtemp, mkdir, open, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, mkdir, open, readFile, readdir, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -990,6 +990,43 @@ test("source editor creates and saves a file whole, so a reader never sees it em
   } finally {
     watcher.close();
     await earlierReader.close();
+    await rm(fixture.root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("a temporary file a killed editor write leaves is never committed, and the next write in its folder removes it once stale", async () => {
+  const fixture = await createSourceEditorFixture();
+  const directory = path.join(fixture.sourceRoot, "src");
+  const git = (...args) => spawnSync("git", ["-C", fixture.sourceRoot, ...args], { encoding: "utf8" });
+  try {
+    assert.equal(git("init", "-q").status, 0);
+    const stale = path.join(directory, ".vibe64-editor-11111111-1111-4111-8111-111111111111.tmp");
+    const live = path.join(directory, ".vibe64-editor-22222222-2222-4222-8222-222222222222.tmp");
+    const nested = path.join(fixture.sourceRoot, "docs", ".vibe64-editor-33333333-3333-4333-8333-333333333333.tmp");
+    const unrelated = path.join(directory, ".vibe64-editor-notes.txt");
+    await mkdir(path.dirname(nested), { recursive: true });
+    for (const file of [stale, live, nested, unrelated]) await writeFile(file, "partial");
+    const minutesAgo = new Date(Date.now() - 2 * 60_000);
+    await utimes(stale, minutesAgo, minutesAgo);
+    await utimes(nested, minutesAgo, minutesAgo);
+
+    const read = await fixture.service.readFile({ path: "src/app.js", sessionId: "session-1" });
+    const saved = await fixture.service.saveFile({ baseHash: read.file.hash, path: "src/app.js", sessionId: "session-1", text: "console.log('two');\n" });
+    assert.equal(saved.ok, true, JSON.stringify(saved));
+
+    // Save stages with Git, which ignores the editor's temporary files anywhere in the source, and nothing else.
+    const staged = git("add", "-A", "--dry-run", "--", ".").stdout;
+    assert.doesNotMatch(staged, /\.vibe64-editor-[^\n]*\.tmp/u, staged);
+    assert.match(staged, /src\/\.vibe64-editor-notes\.txt/u, staged);
+    assert.match(staged, /src\/app\.js/u, staged);
+    // The write removed the stale one in its own folder; one a live write may still hold, another folder's and an
+    // unrelated name stay.
+    await assert.rejects(lstat(stale), { code: "ENOENT" });
+    for (const file of [live, nested, unrelated]) assert.ok(await lstat(file));
+  } finally {
     await rm(fixture.root, {
       force: true,
       recursive: true
