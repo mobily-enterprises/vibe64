@@ -476,10 +476,28 @@ function beginCrucialOperation(operation, options) {
   return processPlannedRestart.beginCrucial(operation, options);
 }
 
+/**
+ * Runs a crucial operation: refused while a notice is in force, otherwise tracked while it runs.
+ * @template T
+ * @param {string} operation
+ * @param {{ sessionId?: string, label?: string }} options
+ * @param {() => Promise<T>} run
+ * @returns {Promise<T>}
+ */
+async function withCrucialOperation(operation, options, run) {
+  const crucial = processPlannedRestart.beginCrucial(operation, options);
+  try {
+    return await run();
+  } finally {
+    crucial.end();
+  }
+}
+
 export {
   beginCrucialOperation,
   configurePlannedRestart,
   createPlannedRestart,
   plannedRestart,
-  refuseDuringPlannedRestart
+  refuseDuringPlannedRestart,
+  withCrucialOperation
 };

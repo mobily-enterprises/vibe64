@@ -33,6 +33,7 @@ import { createProjectSessionEnvironment } from "./projectSessionEnvironment.js"
 import { createProjectSessionWork } from "./projectSessionWork.js";
 import { createProjectSettings } from "./projectSettings.js";
 import { createStackServices } from "./stackServices.js";
+import { refuseDuringPlannedRestart, withCrucialOperation } from "@local/vibe64-core/server/plannedRestart";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -181,7 +182,7 @@ function createService({
     if (projectContext.runtimeProfile?.projectCatalogEnabled === false) {
       return catalogUnavailable();
     }
-    return projectResult(() => projectContext.createWorkspaceProject(input));
+    return projectResult(() => withCrucialOperation("project-import", {}, () => projectContext.createWorkspaceProject(input)));
   }
 
   /**
@@ -371,11 +372,10 @@ function createService({
   }
 
   async function saveEnvUserValues(input = {}) {
-    return projectResult(() => sessionWork.runSessionSourceWorkExclusive(
-      input,
-      () => environment.saveEnvState(input),
-      "save-project-environment"
-    ));
+    return projectResult(() => {
+      refuseDuringPlannedRestart("env-save");
+      return sessionWork.runSessionSourceWorkExclusive(input, () => environment.saveEnvState(input), "save-project-environment");
+    });
   }
 
   async function saveDevelopmentDatabaseScope(input) {

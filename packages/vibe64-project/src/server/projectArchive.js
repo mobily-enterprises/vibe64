@@ -39,6 +39,7 @@ import {
   writeJsonAtomic
 } from "./projectArchiveBundle.js";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
+import { withCrucialOperation } from "@local/vibe64-core/server/plannedRestart";
 
 /** @typedef {import("@local/vibe64-core/server/types").StudioProjectContext} StudioProjectContext */
 
@@ -221,7 +222,8 @@ function createProjectArchiveService({
   async function archiveProject(input = {}) {
     const slug = normalizeProjectSlug(input.slug || input.projectSlug || "");
     const archiveRoot = input.archiveRoot ? path.resolve(input.archiveRoot) : defaultArchiveRoot;
-    return withProjectDeletionLock(`${systemRoot}\0${slug}`, async () => {
+    // Refused while a planned restart is near; a resumed archive goes on after it.
+    return withCrucialOperation("project-archive", {}, () => withProjectDeletionLock(`${systemRoot}\0${slug}`, async () => {
       const namespace = await projectNamespace(slug, { archiveRoot });
       const { projectContextRoot } = namespace;
       const existingState = await projectContext.readWorkspaceProjectState({
@@ -436,7 +438,7 @@ function createProjectArchiveService({
         manifest,
         slug
       });
-    });
+    }));
   }
 
   /**
@@ -518,7 +520,7 @@ function createProjectArchiveService({
    */
   async function removeProject(input = {}) {
     const slug = normalizeProjectSlug(input.slug || input.projectSlug || "");
-    return withProjectDeletionLock(`${systemRoot}\0${slug}`, async () => {
+    return withCrucialOperation("project-archive", { label: "Removing a project" }, () => withProjectDeletionLock(`${systemRoot}\0${slug}`, async () => {
       const checked = await removalPreflight({ slug });
       if (checked.removed === false) return { ok: true, slug, removed: false };
       // readable-check: allow method-probe - input validation: a caller's optional step before removal
@@ -566,7 +568,7 @@ function createProjectArchiveService({
 
       await removeProjectNamespaceAndState({ completed, markComplete, namespace, projectRuntimeRoot, slug, metadata });
       return { ok: true, slug, removed: true };
-    });
+    }));
   }
 
   return Object.freeze({
