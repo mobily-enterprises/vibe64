@@ -23,6 +23,7 @@ const chatKey = chat => `${chat.sessionId}\n${chat.conversationId || ""}`;
  * @property {boolean} running whether its turn is running
  * @property {(message: string) => Promise<"delivered" | "uncertain" | "not-sent">} steer the chat's steer
  * @property {(message: string) => Promise<unknown>} tell steers a running turn, or leaves the note for the next one
+ * @property {() => Promise<void>} reopen starts the chat's automatic step the notice paused
  */
 function createPlannedRestartSteering({ reader, forEachChat, logger }) {
   const log = (level, fields, message) => logOperationalEvent(logger, level, {
@@ -52,20 +53,19 @@ function createPlannedRestartSteering({ reader, forEachChat, logger }) {
     return steered;
   }
 
-  /** Tells every chat that heard about the notice that the restart did not happen. */
+  /** Tells every chat that heard about the notice that the restart did not happen, and starts the steps it paused. */
   async function tellNotHappened(record) {
     const told = new Set((record?.chats || []).map(chatKey));
-    if (!told.size) return 0;
     let reached = 0;
     await forEachChat(async (chat) => {
-      if (!told.has(chatKey(chat))) return;
-      reached += 1;
-      await chat.tell(PLANNED_RESTART_CANCELLED_NOTE).catch(error => log("warn", {
-        event: "cancel_note_failed",
-        sessionId: chat.sessionId,
-        conversationId: chat.conversationId,
-        error: error?.message
-      }, "A chat could not be told that the planned restart didn't happen."));
+      const fields = { sessionId: chat.sessionId, conversationId: chat.conversationId };
+      if (told.has(chatKey(chat))) {
+        reached += 1;
+        await chat.tell(PLANNED_RESTART_CANCELLED_NOTE).catch(error => log("warn", { event: "cancel_note_failed", ...fields,
+          error: error?.message }, "A chat could not be told that the planned restart didn't happen."));
+      }
+      await chat.reopen().catch(error => log("warn", { event: "reopen_failed", ...fields, error: error?.message },
+        "A step the planned restart paused could not start; Continue starts it."));
     });
     return reached;
   }

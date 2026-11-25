@@ -169,6 +169,7 @@ function createAssistantRouting({
     recordOutcome: outcomes.recordOutcome,
     handPlanToSenior: outcomes.handPlanToSenior,
     afterTurn: outcomes.afterTurn,
+    decideOwed: outcomes.decideOwed,
     prepareGoal: goals.prepareGoal,
     applyGoalSelection: goals.applyGoalSelection,
     reconcile: outcomes.reconcile,

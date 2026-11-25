@@ -364,6 +364,18 @@ function createAssistantRoutingOutcomes({
     return { context, state, save: savesAutomatically(context.session.metadata), ask: true };
   }
 
+  /**
+   * Main chat's owed step decided again outside a turn's end: when the planned restart that paused it did not happen.
+   * @param {string} sessionId
+   */
+  async function decideOwed(sessionId) {
+    await exclusiveAtTurnEnd(sessionId, {}, async context => {
+      if (admission.isClosing() || routingState.running.has(records.keyFor(sessionId, context))) return;
+      const state = await read(context.runtime.store, sessionId);
+      if (owesStep(state)) await continueOwed(context, state);
+    });
+  }
+
   async function afterTurn(sessionId, payload, routingOptions, options = {}) {
     const { recovered = false } = options;
     const run = payload?.payload?.agentRun;
@@ -656,6 +668,7 @@ function createAssistantRoutingOutcomes({
     recordOutcome,
     handPlanToSenior,
     afterTurn,
+    decideOwed,
     reconcile,
     stopUnrecovered
   });

@@ -11,7 +11,7 @@ import { assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/
 import { MAIN_CHAT_NOTE_TURN_METADATA_KEY } from "./mainChatNote.js";
 import { createPlannedRestartSteering } from "./plannedRestartSteering.js";
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
-import { requestWasWorking } from "./serviceTurnRecovery.js";
+import { requestWasWorking, sessionWasWorking } from "./serviceTurnRecovery.js";
 
 const PLANNED_RESTART_RECORDS_DIR = "planned-restarts";
 
@@ -35,6 +35,8 @@ function steerOutcome(promise) {
  * @param {object} dependencies.sessionAgent
  * @param {Function} dependencies.noteMainChat
  * @param {Function} dependencies.startTemporaryConversationTurn
+ * @param {(sessionId: string) => Promise<void>} dependencies.decideOwed Main chat's step a planned restart paused,
+ *   decided again
  */
 function createServicePlannedRestart({
   env,
@@ -46,7 +48,8 @@ function createServicePlannedRestart({
   assistantContext,
   sessionAgent,
   noteMainChat,
-  startTemporaryConversationTurn
+  startTemporaryConversationTurn,
+  decideOwed
 }) {
   const reader = configurePlannedRestart({
     noticeFile: String(env?.[PLANNED_RESTART_NOTICE_FILE_SETTING] || "").trim(),
@@ -80,9 +83,13 @@ function createServicePlannedRestart({
       sessionId,
       conversationId: "",
       sessionName,
-      running: Boolean((await sessionAgent.sessionState(sessionId, context).catch(() => null))?.turn?.active),
+      // The saved records rule most sessions out; the agent itself says whether a turn runs now.
+      running: sessionWasWorking(context.session) &&
+        Boolean((await sessionAgent.sessionState(sessionId, context).catch(() => null))?.turn?.active),
       steer: message => steerOutcome(noteMainChat(sessionId, { message }, mainOptions)),
-      tell: message => noteMainChat(sessionId, { message, nextTurn: true }, mainOptions)
+      // The restart did not happen: Main chat hears so, and a step it paused starts now.
+      tell: message => noteMainChat(sessionId, { message, nextTurn: true }, mainOptions),
+      reopen: () => decideOwed(sessionId)
     });
     for (const record of await context.runtime.store.listSessionConversations(sessionId)) {
       if (record.state === "closing") continue;
@@ -102,13 +109,18 @@ function createServicePlannedRestart({
         sessionName,
         running: requestWasWorking(record.routingMetadata),
         steer,
-        tell: steer
+        tell: steer,
+        reopen: async () => {}
       });
     }
   }
 
+  // The chats are reached once the server is ready: its recovery of the turns it found starts first.
+  const serverReady = Promise.withResolvers();
+
   /** Visits every chat of every open session of every open project, inside its project. */
   async function forEachChat(visit) {
+    await serverReady.promise;
     const listed = await project.listProjects();
     if (listed?.ok === false) throw new Error(listed.error || "The projects could not be listed.");
     for (const projectRecord of openProjectRuntimeRecords(listed)) {
@@ -127,6 +139,15 @@ function createServicePlannedRestart({
 
   return Object.freeze({
     reader,
+    /**
+     * The server's recovery of the turns it found, which starts before any chat is told about a notice.
+     * @param {() => Promise<unknown>} recover
+     */
+    afterRecoveryStarts: recover => () => {
+      const recovering = recover();
+      serverReady.resolve();
+      return recovering;
+    },
     /** As the editor stops: what it stops, in the notice's record. */
     recordStop: () => reader.recordStop(),
     close() {

@@ -12,6 +12,7 @@ import {
   userTurnsSince,
   usesWorkPlan
 } from "./assistantRoutingRequests.js";
+import { PLANNED_RESTART_REFUSAL_CODE } from "@local/vibe64-core/server/plannedRestartNotice";
 import { FOLLOWUP_OVERTAKEN_CODES } from "./assistantRoutingDelivery.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -79,9 +80,12 @@ function createAssistantRoutingOwedSteps({ routingState, records, delivery, admi
    * @returns {Promise<boolean>} whether the refusal left the step owed
    */
   async function oweRefusedStep(context, state, error, { decideNow = true } = {}) {
+    // A step a planned restart paused is owed as well: it is decided again at the next turn's end, when the window
+    // ends, and at the restarted server's recovery.
+    const paused = error?.code === PLANNED_RESTART_REFUSAL_CODE;
     if (!routingState.allowAuto || !state.followup || state.attemptedMessageId || state.stopped || state.cancelled ||
-        !FOLLOWUP_OVERTAKEN_CODES.includes(error?.code)) return false;
-    Object.assign(state, { status: "waiting", delivery: "pending", error: owedStep(state) });
+        !(paused || FOLLOWUP_OVERTAKEN_CODES.includes(error?.code))) return false;
+    Object.assign(state, { status: "waiting", delivery: "pending", error: paused ? error.message : owedStep(state) });
     state.followup.owed = true;
     await records.save(context, state);
     if (decideNow && error.code === "vibe64_assistant_routing_continuation_changed") await continueOwed(context, state);

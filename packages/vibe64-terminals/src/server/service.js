@@ -499,7 +499,8 @@ function createService({
     assistantContext,
     sessionAgent,
     noteMainChat,
-    startTemporaryConversationTurn: assistant.startTemporaryConversationTurn
+    startTemporaryConversationTurn: assistant.startTemporaryConversationTurn,
+    decideOwed: sessionId => assistantRouting.decideOwed(sessionId)
   });
 
   const terminalControls = createTerminalControls({
@@ -650,7 +651,7 @@ function createService({
     invalidateAgentRuntimes: shutdown.invalidateAgentRuntimes,
     continueGoalAfterAccountChange: goals.continueGoalAfterAccountChange,
     recoverActiveGoals: goals.recoverActiveGoals,
-    recoverInterruptedTurns: createServiceTurnRecovery({
+    recoverInterruptedTurns: plannedRestart.afterRecoveryStarts(createServiceTurnRecovery({
       state,
       logger,
       project,
@@ -661,7 +662,7 @@ function createService({
       reconcileTemporaryConversation: (sessionId, options) => sessionConversations.reconcileTemporaryConversation(sessionId, options),
       stopUnrecoveredTurn: (sessionId, conversationId, input) => (conversationId ? sessionConversations.stopUnrecoveredTemporaryTurn
         : assistantRouting.stopUnrecovered)(sessionId, conversationId ? { conversationId } : {}, input)
-    }),
+    })),
     openBrowserConversation: assistant.openBrowserConversation,
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,
