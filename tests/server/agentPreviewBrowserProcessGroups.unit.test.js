@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { drainRegisteredProcessGroup } from "../../packages/vibe64-terminals/src/server/agentPreviewBrowserWorker.js";
+import { drainRegisteredProcessGroup } from "../../packages/vibe64-terminals/src/server/agentPreviewBrowserProcessGroups.js";
 import { WORKER_STATE_SOURCE } from "../../packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerState.js";
 
 const GROUP = { groupId: 4242, startTimeTicks: "777" };
