@@ -686,14 +686,13 @@ describe("Vibe64 Repository workspace", () => {
 
     expect(repositoryWorkspace).toContain("repositoryUpdateTitle");
     expect(repositoryWorkspace).toContain('behind === 1 ? "update" : "updates"');
-    expect(repositoryWorkspace).toContain("saved ${behind === 1 ? \"version\" : \"versions\"} behind");
+    // A session behind main says the one message (vibe64NewerSavedText.vitest.js), never a count alone.
+    expect(repositoryWorkspace).toContain("newerSavedText(");
     expect(repositoryWorkspace).toContain("This session and the saved project have both changed");
     expect(repositoryWorkspace).toContain("Someone saved new project work after this session started");
     expect(repositoryWorkspace).toContain("Saved versions this session needs");
     expect(repositoryWorkspace).toContain("repositoryIncomingVersions");
     expect(repositoryComposable).toContain('return branch ? `Update session from ${branch}` : "Update session"');
-    expect(repositoryWorkspace).toContain("replay its unsaved work on the latest saved version");
-    expect(repositoryWorkspace).toContain("will move it to the latest saved version");
     expect(repositoryWorkspace).toContain('changes.payload?.unsaved === true');
     expect(repositoryWorkspace).not.toContain("Your current work is preserved when you update");
     expect(repositoryWorkspace).toContain("Last checked");

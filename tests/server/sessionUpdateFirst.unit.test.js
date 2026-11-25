@@ -30,6 +30,7 @@ test("Update owns a session while its Update failed, runs or is pending, and not
   assert.deepEqual({ ...failed, message: undefined }, {
     reason: "failed",
     behind: 7,
+    branch: "main",
     canonicalCommit: saved,
     incomingVersions: [
       { shortCommit: "bbbbbbbb", message: "Upgrade every JSKIT package to 0.3.0\n\nWith the lockfile." },
@@ -46,7 +47,7 @@ test("a repair brief names the incoming versions, takes superseded local work fr
   assert.equal(sessionUpdateFirstRepairBrief(null), "");
   const state = sessionUpdateFirst({ updateCheck: behindCheck });
   const setup = sessionUpdateFirstRepairBrief(state);
-  assert.match(setup, /^\[Vibe64 saved version\]\nThis session is 7 versions behind its saved version \(aaaaaaaa\)\.\n/);
+  assert.match(setup, /^\[Vibe64 saved version\]\nThis session is 7 versions behind main \(aaaaaaaa\)\.\n/);
   assert.match(setup, /\n- bbbbbbbb Upgrade every JSKIT package to 0\.3\.0\n- cccccccc Port the racing pages to typed features\n- …and 5 more\n/);
   assert.match(setup, /check read-only whether the saved version already contains that change \(`git log HEAD\.\.aaaaaaaaaaaa`/);
   assert.match(setup, /stale or partial dependency bump it completes, is resolved by taking the saved version/);
@@ -59,4 +60,27 @@ test("a repair brief names the incoming versions, takes superseded local work fr
   assert.match(update, /^\[Vibe64 saved version\]\nThis session's Update failed on: package\.json\. 1 file needs review\.\n/);
   assert.match(update, /Update is this repair\. Prepare it so Update succeeds; Vibe64 will check Update after the repair\./);
   assert.doesNotMatch(update, /do not repair it in this chat now/);
+});
+
+test("a session behind main is told how many newer saved versions, when, from which session and how many files, and that Update keeps its work", () => {
+  const savedAt = new Date(Date.now() - 12.5 * 60_000).toISOString();
+  const state = sessionUpdateFirst({ updateCheck: {
+    behind: 1,
+    canonicalCommit: saved,
+    checkedAt: new Date().toISOString(),
+    incomingFileCount: 2,
+    incomingVersions: [{ commit: "d".repeat(40), committedAt: savedAt, message: "Filter the list",
+      savedBy: { savedAt, sessionId: "2026-1125-0811-passes", sessionName: "Passes" } }]
+  } });
+  assert.equal(state.reason, "behind");
+  assert.equal(state.message, "Main has 1 newer saved version (12 minutes ago, from the Passes session, 2 files). " +
+    "Update this session to take it in (any unsaved work stays) before saving. Setup is checked again against the updated session.");
+  // Which session saved each version is Save's own record, so the AI answers from it instead of guessing.
+  assert.deepEqual(state.incomingVersions, [{ shortCommit: "dddddddd", message: "Filter the list", savedAt, savedBy: "Passes" }]);
+  assert.doesNotMatch(state.message, /merge/iu);
+  // A version no Save of this workspace recorded names nobody.
+  const unknown = sessionUpdateFirst({ updateCheck: { ...behindCheck, incomingFileCount: 9 } });
+  assert.equal(unknown.message, "Main has 7 newer saved versions (9 files). " +
+    "Update this session to take them in (any unsaved work stays) before saving. Setup is checked again against the updated session.");
+  assert.equal(unknown.incomingVersions.some(entry => Object.hasOwn(entry, "savedBy")), false);
 });

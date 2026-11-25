@@ -425,6 +425,9 @@ test("Genesis accepts fully enabled main and temporary instructions with maximum
       assert.match(output, /Update can take several minutes, so give the command a long time limit \(up to 30 minutes\); if your tool stops it early, Update carries on: read `vibe64-helper session status --json` until `repository\.updateFirst\.reason` is no longer `running`\./u);
       assert.match(output, /If it does, stop your other work and resolve them first, as it explains, or, if you can't now, leave them \(Update leaves a repository with clashing files unchanged\) and tell the person\./u);
       assert.match(output, /run `vibe64-helper preview restart --wait` when it says Preview still runs the old code\. Update never saves\./u);
+      // Newer saved versions on main come in only through Update, which keeps unsaved work; the AI offers no merge of
+      // its own and names a session only as Vibe64 names it.
+      assert.match(output, /Newer saved versions on main come in only through Update, which keeps unsaved work: never merge, pull or rebase them in yourself, or offer the person a merge\. Name the session that saved one only as Vibe64 names it, never from the commits\./u);
       if (conversationKind === "main") {
         assert.match(output, /While your turn's instructions say Vibe64 saves the work automatically, save each finished and checked stage of a plan, or a finished piece of work, with `vibe64-helper session save` \(never mid-edit; a long time limit, as for Update\), after `vibe64-helper session update` when `repository\.updateFirst` says this session is behind\./u);
         assert.match(output, /Once it saves, tell the sessions you are working with \(`vibe64-helper session message-project`\) to run `vibe64-helper session update`\. With automatic save off it refuses: leave Save to the person\./u);

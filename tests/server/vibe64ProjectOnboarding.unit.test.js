@@ -161,7 +161,7 @@ test("setup that needs attention waits for Update while it failed or the session
     assert.equal(opening.inspection.state, "attention");
     assert.deepEqual([opening.updateFirst.reason, opening.updateFirst.behind, opening.updateFirst.incomingVersions[0].shortCommit],
       ["behind", 2, "ffffffff"]);
-    assert.match(opening.updateFirst.message, /behind its saved version\. Update it first/);
+    assert.match(opening.updateFirst.message, /^Main has 2 newer saved versions\. Update this session to take them in \(any unsaved work stays\) before saving\./);
     await store.writeBackgroundTaskEvent(sessionId, "update-session", { patch: { status: "failed", code: "vibe64_session_update_conflict",
       conflictPaths: ["package.json"], error: "1 file needs review before this session can update." } });
     opening = await service.readOnboarding({ sessionId });

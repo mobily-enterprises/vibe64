@@ -57,3 +57,22 @@ test("the work tool says which pins Save would record, as the session's answer n
   assert.deepEqual(tools.sessionWork.transformResult({ ok: true, changedPaths: [], pinsToRecord: [pin], unsaved: true }).pinsToRecord, [pin]);
   assert.equal(Object.hasOwn(tools.sessionWork.transformResult({ ok: true, pinsToRecord: [], unsaved: false }), "pinsToRecord"), false);
 });
+
+test("the work tools give Colleague the plain message for a session behind main, from its work or Save's refusal, and name Update, never a merge", () => {
+  const savedAt = new Date(Date.now() - 12.5 * 60_000).toISOString();
+  const newerSaved = { behind: 1, incomingFileCount: 2, incomingVersions: [{ commit: "d".repeat(40), committedAt: savedAt,
+    savedBy: { savedAt, sessionId: "2026-1125-0811-passes", sessionName: "Passes" } }] };
+  const message = "Main has 1 newer saved version (12 minutes ago, from the Passes session, 2 files). " +
+    "Update this session to take it in (your unsaved work stays), then Save.";
+  assert.equal(tools.sessionWork.transformResult({ ok: true, newerSaved, unsaved: true, updateAvailable: true }).newerSavedMessage, message);
+  assert.equal(tools.sessionWork.transformResult({ ok: false, code: "vibe64_session_save_update_required", error: message,
+    details: { newerSaved } }).newerSavedMessage, message);
+  // A session with nothing unsaved is told to Update only.
+  assert.match(tools.sessionWork.transformResult({ ok: true, newerSaved, unsaved: false, updateAvailable: true }).newerSavedMessage,
+    /\. Update this session to take it in\.$/u);
+  assert.equal(Object.hasOwn(tools.sessionWork.transformResult({ ok: true, unsaved: true, updateAvailable: false }), "newerSavedMessage"), false);
+  for (const name of ["inspectSessionWork", "saveSessionWork"]) {
+    assert.match(contracts.ASSISTANT_TOOL_DESCRIPTIONS[name], /newerSavedMessage/u, name);
+    assert.match(contracts.ASSISTANT_TOOL_DESCRIPTIONS[name], /never offer a merge/u, name);
+  }
+});

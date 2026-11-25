@@ -251,7 +251,9 @@ test("Save's own refusals come back with their next step: nothing to save, Updat
     {
       code: "vibe64_session_save_update_required",
       message: "Not saved: Update this session before saving.",
-      next: "Run vibe64-helper session update first, deal with anything it reports, then run vibe64-helper session save again.",
+      next: "Run vibe64-helper session update, which keeps this session's unsaved work, deal with anything it reports, " +
+        "then run vibe64-helper session save again. Never merge, pull or rebase yourself, and never offer the person a merge: " +
+        "Update is how newer saved versions come in. Tell the person what the message says, naming only the session it names.",
       status: "update_first"
     },
     {

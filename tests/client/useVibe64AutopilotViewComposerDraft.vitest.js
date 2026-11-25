@@ -2552,6 +2552,49 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkCanResolveWithAi.value).toBe(false);
   });
 
+  it("names Update, then Save, in the header when main has newer saved versions, from the session's own answer", async () => {
+    const savedAt = new Date().toISOString();
+    const newerSaved = { behind: 1, branch: "main", incomingFileCount: 2, incomingVersions: [{ commit: "d".repeat(40),
+      committedAt: savedAt, savedBy: { savedAt, sessionId: "2026-1125-0811-passes", sessionName: "Passes" } }] };
+    const clock = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(savedAt));
+    const message = `Main has 1 newer saved version (${clock}, from the Passes session, 2 files).`;
+    const unsaved = await createView({ workState: { newerSaved, unsaved: true, updateAvailable: true, updateStatusPending: false } });
+    expect(unsaved.saveWorkRequiresUpdate.value).toBe(true);
+    expect(unsaved.saveWorkTitle.value).toBe(`${message} Update this session to take it in (your unsaved work stays), then Save.`);
+    expect(unsaved.saveWorkTitle.value).not.toMatch(/merge/iu);
+    const saved = await createView({ workState: { newerSaved, unsaved: false, updateAvailable: true, updateStatusPending: false } });
+    expect(saved.saveWorkTitle.value).toBe(`${message} Update this session to take it in.`);
+  });
+
+  it("shows Save's answer when main moved on as a note naming Update, then Save, in the person's own clock", async () => {
+    const savedAt = new Date().toISOString();
+    const newerSaved = { behind: 1, branch: "main", incomingFileCount: 2, incomingVersions: [{ commit: "d".repeat(40),
+      committedAt: savedAt, savedBy: { savedAt, sessionId: "2026-1125-0811-passes", sessionName: "Passes" } }] };
+    const clock = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(savedAt));
+    const saveSessionWork = vi.fn(async () => ({
+      code: "vibe64_session_save_update_required",
+      details: { newerSaved, updateRequired: true },
+      error: "Main has 1 newer saved version (just now, from the Passes session, 2 files). Update this session to take it in (your unsaved work stays), then Save.",
+      ok: false
+    }));
+    const view = await createView({ saveSessionWork, workState: { unsaved: true, updateAvailable: false, updateStatusPending: false } });
+    view.requestSaveWork();
+    await view.confirmSaveWork();
+    expect(view.saveWorkNote.value).toBe(
+      `Main has 1 newer saved version (${clock}, from the Passes session, 2 files). Update this session to take it in (your unsaved work stays), then Save.`
+    );
+    expect([view.saveWorkError.value, view.saveWorkFailure.value]).toEqual(["", null]);
+    // A Save that ran as a task refuses by throwing; one without its facts gives Save's own words.
+    saveSessionWork.mockRejectedValueOnce(Object.assign(
+      new Error("Main has newer saved work. Update this session to take it in (your unsaved work stays), then Save."),
+      { code: "vibe64_session_save_update_required", details: { updateRequired: true } }
+    ));
+    view.requestSaveWork();
+    await view.confirmSaveWork();
+    expect(view.saveWorkNote.value).toBe("Main has newer saved work. Update this session to take it in (your unsaved work stays), then Save.");
+    expect([view.saveWorkError.value, view.saveWorkFailure.value]).toEqual(["", null]);
+  });
+
   it("lets members save source without access to the personal AI connection", async () => {
     const view = await createView({
       workState: { unsaved: true, updateAvailable: false, updateStatusPending: false }
@@ -2604,7 +2647,10 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
     expect(updatePending.saveWorkDisabled.value).toBe(false);
     expect(updatePending.saveWorkHeaderAriaLabel.value).toBe("Update session");
-    expect(updatePending.saveWorkTitle.value).toContain("preserving its unsaved work");
+    // Newer saved work Vibe64 has not read yet still names the one fix.
+    expect(updatePending.saveWorkTitle.value).toBe(
+      "Main has newer saved work. Update this session to take it in (your unsaved work stays), then Save."
+    );
     await expect(updatePending.requestSaveWork()).resolves.toEqual({
       ok: true,
       status: "updated"
@@ -3170,7 +3216,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkDisabled.value).toBe(false);
     expect(view.saveWorkHeaderAriaLabel.value).toBe("Update session");
     expect(view.saveWorkTitle.value).toBe(
-      "Update session to load its latest saved changes."
+      "Main has newer saved work. Update this session to take it in."
     );
     await expect(view.requestSaveWork()).resolves.toEqual({ ok: true, status: "updated" });
     expect(updateSessionWork).toHaveBeenCalledOnce();

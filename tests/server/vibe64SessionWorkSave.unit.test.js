@@ -1971,6 +1971,48 @@ test("Save refuses canonical advances until explicit Update rebases the session"
   }
 });
 
+test("an update check counts the files the newer saved versions change and names the branch they are on", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-files-"));
+  try {
+    const { fixture, session } = await sessionBehindSavedWork(root);
+    const check = await checkSessionUpdates({
+      operationId: "check-files",
+      project: githubProject(root, fixture.remote),
+      runCommand: commandRunner,
+      session
+    });
+    assert.equal(check.behind, 1);
+    // shared.txt and remote.txt: what the newer version changes, not the session's own local.txt.
+    assert.equal(check.incomingFileCount, 2);
+    assert.equal(check.branch, "main");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("Save behind main refuses with how many newer saved versions, when and how many files, and names Update then Save", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-behind-"));
+  try {
+    const { canonicalCommit, fixture, session } = await sessionBehindSavedWork(root);
+    const error = await saveSessionWork({
+      operationId: "save-behind",
+      project: githubProject(root, fixture.remote),
+      runCommand: commandRunner,
+      session
+    }).then(() => assert.fail("Save went ahead behind main"), (failure) => failure);
+    assert.equal(error.code, "vibe64_session_save_update_required");
+    assert.match(error.message, /^Main has 1 newer saved version \((just now|1 minute ago), 2 files\)\. Update this session to take it in \(your unsaved work stays\), then Save\.$/u);
+    assert.doesNotMatch(error.message, /merge/iu);
+    // The facts travel with the refusal, so each reader says them in its own clock and names the sessions Save recorded.
+    assert.equal(error.details.newerSaved.behind, 1);
+    assert.equal(error.details.newerSaved.branch, "main");
+    assert.equal(error.details.newerSaved.incomingFileCount, 2);
+    assert.deepEqual(error.details.newerSaved.incomingVersions.map(version => version.commit), [canonicalCommit]);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("verified GitHub Saves refresh cold, warm, and stale mirrors only after remote verification", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-mirror-"));
   try {
