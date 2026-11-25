@@ -62,7 +62,9 @@ const HEADLINES = Object.freeze({
   "connection.disconnected": "Browser tab disconnected",
   "connection.left": "Browser tab left the session",
   "request.failed": "Request failed",
-  "server.stopping": "Vibe64 server stopping"
+  "server.stopping": "Vibe64 server stopping",
+  "routing.delivery-failed": "Routed request not delivered to the AI",
+  "routing.followup-refused": "Automatic next step not started"
 });
 
 const CHAT_NAMES = Object.freeze({
