@@ -237,7 +237,7 @@ function handleManagedExecutionOperation(payload = {}) {
     ...(stagingAccount ? [] : [`--property=${editorPrivateStateLine(owner)}`]),
     `--property=WorkingDirectory=${cwd}`,
     "--property=KillMode=control-group",
-    "--property=ExitType=cgroup",
+    `--property=ExitType=${managedExecutionExitType(kind, mode)}`,
     "--property=OOMPolicy=stop",
     "--property=MemoryAccounting=yes",
     "--property=IOAccounting=yes",
@@ -270,6 +270,17 @@ function handleManagedExecutionOperation(payload = {}) {
     throw started.error;
   }
   process.exit(typeof started.status === "number" ? started.status : 1);
+}
+
+// When an execution's unit ends. An agent's command is a detached job, and a job is a task: its unit ends when its
+// runner ends, which is when its command ends, so systemd stops whatever the command left running (`&`, nohup, setsid,
+// disown, a double fork, screen -dm), where the unit once kept it until the session closed: a test suite a session's AI
+// started "fully detached" outlived its command, the turn, Stop and editor restarts. Work the AI's own tool keeps in its
+// background mode is untouched, since that command is still running. Every other execution's unit runs while any of its
+// processes does: a service's (Preview, the assistant, a browser), whose first process may leave the rest running, and
+// a finite capture's or an interactive terminal's, whose caller waits for its descendants.
+function managedExecutionExitType(kind = "", mode = "") {
+  return kind === "job" && mode === "detached" ? "main" : "cgroup";
 }
 
 async function runManagedExecutionPayload(payloadPath = "") {
@@ -545,5 +556,6 @@ export {
   awaitManagedExecutionGroupExit,
   handleManagedExecutionOperation,
   managedExecutionControllerLeaseName,
+  managedExecutionExitType,
   runManagedExecutionPayload
 };
