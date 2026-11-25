@@ -486,7 +486,19 @@ protect an administrator: the command could still change the account's own
 files, such as its SSH keys, shell start-up files or user services, which run
 with all of its rights at its next sign-in. A managed execution's runner gets
 no new privileges from `setpriv --no-new-privs`, because a container's systemd
-drop-in can switch a unit's `NoNewPrivileges=` off. The daemon's private state
+drop-in can switch a unit's `NoNewPrivileges=` off. Every execution's runner
+starts so (`NO_NEW_PRIVILEGES_COMMAND` in `systemdUnits.js`), the daemon's own
+included. The daemon's sudo rule names this helper, and the helper takes the
+daemon's word for every request, so an agent's command, its assistant, a
+Preview, a browser or a capture running as the daemon once could reach the
+helper through `sudo -n` and start work outside its own unit (an execution no
+Stop or command end reached, a managed service), act as another person or
+change Staging. Only the daemon's processes outside every execution, the
+editor's own service above all, still reach the helper. A managed service's
+start script, in the workspace's own folders, starts under the same prefix:
+the daemon's executions may change that script and end its process into a
+restart. A managed service unit installed before takes it when the editor next
+installs it. The daemon's private state
 (`editor-private` below its state root, `editorPrivateState.js`: Production's
 Env and the key that seals it, which the editor's own service alone reads) is
 hidden from every execution and managed service the helper starts for the

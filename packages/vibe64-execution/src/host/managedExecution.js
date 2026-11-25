@@ -58,7 +58,7 @@ import {
 } from "./managedWorkflows.js";
 import { editorPrivateStateLine } from "./editorPrivateState.js";
 import { linuxProcessStat, processEnded } from "../server/runtime/processEnded.js";
-import { accountUnitLines } from "./systemdUnits.js";
+import { accountUnitLines, NO_NEW_PRIVILEGES_COMMAND } from "./systemdUnits.js";
 
 const CONTROLLER_LEASE_NAME = "resource-controller.sock";
 // A stopped service's process group gets SIGTERM, then SIGKILL after this grace,
@@ -250,11 +250,9 @@ function handleManagedExecutionOperation(payload = {}) {
     // journal, not routine Starting/Started/Deactivated lines.
     ...(mode === "capture" ? ["--property=LogLevelMax=notice", "--wait", "--pipe"] : []),
     ...(mode === "pty" ? ["--wait", "--pty"] : []),
-    // A person's execution can never gain privileges above that person. The
-    // runner starts under setpriv, as runUserCommand's commands do, because a
-    // unit's NoNewPrivileges= can be switched off by a systemd drop-in (Incus
-    // containers ship one). setpriv execs the runner, which stays the MainPID.
-    ...(targetUser.username !== owner.username ? ["/usr/bin/setpriv", "--no-new-privs", "--"] : []),
+    // No execution ever gains privileges: a person's never rises above that person, and the daemon's own (an agent's
+    // commands among them) can never reach this helper through the daemon's sudo rule to start work outside its unit.
+    ...NO_NEW_PRIVILEGES_COMMAND,
     helperPath,
     "run-managed",
     runnerPayloadPath

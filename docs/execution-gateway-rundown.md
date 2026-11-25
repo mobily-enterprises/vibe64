@@ -69,7 +69,8 @@ Then it chooses:
 - real-user mismatch: run through the host's privileged helper via sudo. The
   helper acts only as a person root registered for the calling daemon's
   workspace, never as an administrator or system account, and runs that
-  person's command with no new privileges. A
+  person's command with no new privileges, as it runs every managed execution,
+  the daemon's own included. A
   person's own computer has no helper and never builds such an actor.
 
 ## Main Request Shape

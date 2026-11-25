@@ -450,7 +450,7 @@ test("execution helper gives staging services the host's command PATH", async ()
   assert.equal(source.match(/servicePath: helperCommandPath\(\)/gu)?.length, 2, "release and managed services");
   assert.equal(source.match(/runtimePackRoot: helperRuntimePackRoot\(\),/gu)?.length, 2,
     "release and managed services name the runtime pack folder the host's settings name");
-  assert.match(source, /`ExecStart=\$\{systemdUnitSafeValue\(startScript\)\}`/u);
+  assert.match(source, /`ExecStart=\$\{NO_NEW_PRIVILEGES_COMMAND\.join\(" "\)\} \$\{systemdUnitSafeValue\(startScript\)\}`/u);
   assert.match(source, /StartLimitIntervalSec=60/u);
   assert.match(source, /StartLimitBurst=5/u);
   assert.match(source, /runRootCommandAllowFailure\("systemctl", \[\s*"reset-failed",\s*unitName/u);
