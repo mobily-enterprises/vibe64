@@ -36,7 +36,7 @@ const STACK_FIX = "Declare it in genesis/stack.md (the coding agent can do this)
 
 /**
  * Why `needs` is not Production's needs shape, or "": `{ services: [{ id, exposure, reached, instances: { min, max,
- * start }, atLeast, reaches: [{ service, setting }], settings, sandbox }], resources: [{ id, kind, bindings }],
+ * start }, atLeast, reaches: [{ service, setting }], settings, sandbox, builtWith? }], resources: [{ id, kind, bindings }],
  * supplied: [{ id, kind, settings, allowEmpty }], generatedSecrets, setupCode }`, each binding a semantic of its kind
  * naming a setting, no setting bound twice. `supplied` are the resources Production does not make, whose settings the
  * person enters in the Production Env (`allowEmpty` those that may stay empty).
@@ -101,8 +101,11 @@ function servicesProblem(services, bound, given) {
   if (services.filter((service) => service.exposure === "public").length !== 1) return "needs.services has exactly one public service.";
   for (const service of services) {
     const at = `needs.services ${service.id}`;
-    const unknown = Object.keys(service).find((key) => !["id", "exposure", "reached", "instances", "atLeast", "reaches", "settings", "sandbox"].includes(key));
+    const unknown = Object.keys(service).find((key) => !["id", "exposure", "reached", "instances", "atLeast", "reaches", "settings", "sandbox", "builtWith"].includes(key));
     if (unknown) return `${at} has no field "${unknown}".`;
+    // The service whose build it shares (builds.js), which leads its own; none from before shared builds: its own.
+    const lead = services.find((one) => one.id === (service.builtWith ?? service.id));
+    if (!lead || (lead.builtWith ?? lead.id) !== lead.id) return `${at} is built with itself or with a service built with itself.`;
     if (!["public", "internal"].includes(service.exposure)) return `${at} is public or internal.`;
     if (!["any", "each"].includes(service.reached) || (service.reached === "each" && service.exposure !== "internal")) {
       return `${at} is reached at any instance, or at each instance when it is internal.`;

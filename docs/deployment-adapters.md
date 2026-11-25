@@ -1,6 +1,6 @@
 # Deployment adapters: what is left to build
 
-Updated 24 Nov 2026. The deploy engine, `@local/vibe64-deploy`, is built:
+Updated 25 Nov 2026. The deploy engine, `@local/vibe64-deploy`, is built:
 [its Program](../genesis/program/deploy/deploy-engine.md) explains it, with its
 mobilynet, Google Cloud and AWS adapters, and
 [the Deployment Program](../genesis/program/projects/application-deployment.md)
@@ -29,6 +29,11 @@ again.
   Deploy; deleting a disconnected resource is its own action.
 - Adapters are a closed set, each added with its implementation and its proof
   against the real provider. The engine names no provider.
+- Services built from one source build once: one app and one upload per build
+  at the provider, each service its own App Service, differing by its settings
+  (`builds.js`, the deploy-engine Program's The package). A Production made
+  with one app per service moves on its next Deploy, the Plan saying which App
+  Service is made again; the old one serves until the new one does.
 
 ## Left to build, in order
 
@@ -99,7 +104,27 @@ again.
    `production_resource_missing`). One thing never serves two environments; it
    may serve a second project only by reference, and Delete refuses while a
    reference remains.
-8. **Google Cloud and AWS for real**. Both adapters exist and are proven
+8. **One image per build on container providers.** mobilynet builds a
+   two-service app once since 25 Nov; Google Cloud and AWS still upload and
+   build one image per service. Left: `imagePackages` grouping a build's
+   services as `servicePackages` does (one declaration name, the union of
+   packages, one Containerfile whose entry point runs the service its
+   `V64_SERVICE` names); the per-service fields the adapters read from the
+   declaration today (health path, reach, machine features, the service's id
+   in refusals) read from the service instead; and their `releaseService`
+   taking a version another service of the build already has, as mobilynet's
+   does, so the second service builds nothing. Proof against both stand-ins:
+   one image build for a two-service app.
+9. **The move to one app, as the host shows it.** The Plan item of a service
+   made again carries `changes` (`app`) and a `note` in words; a host's
+   Production card shows the verb and changes but not the note yet. A host
+   that counts settings against mobilynet's limit itself counts `V64_SERVICE`
+   for each service of a shared build, as `servicePackagesProblem` does.
+   `rebuildFromLabels` refuses two things labelled as one item, which the old
+   and the new App Service are while a move waits to delete the old one; a
+   record rebuilt on another machine (4) in that window needs the old one
+   taken by its `replaces`.
+10. **Google Cloud and AWS for real**. Both adapters exist and are proven
    against their stand-ins only. Left: a first deploy of a two-service app with
    a database and a bucket at each real provider; connecting a person's own
    account with no pasted long-lived key (Google's sign-in for installed apps
@@ -110,7 +135,7 @@ again.
    checked by the engine; Redis on both (Valkey). Then moves between providers
    (plan and build at the new one, copy the data while the old one serves, a
    switch the owner presses, the old one kept stopped for 7 days).
-9. **Grammar for later**, once every adapter can make it: `- Uses:` per
+11. **Grammar for later**, once every adapter can make it: `- Uses:` per
    service (today every service uses every resource), `### Resource` sizing
    (`- Needs at least` with storage, a standby copy, backup days) and more
    resource kinds (a queue, search, email).
@@ -124,7 +149,7 @@ unless they say otherwise.
 |---|---|---|
 | P1 services in `## Deployment` (v2) | DONE | `packages/vibe64-genesis/src/server/deploymentServices.js:31-74` and `applicationDeployment.js:52` there |
 | P2 the engine and its needs | DONE | `needs.js:44`, `needsOfStack.js:29` |
-| P3 the package, a declaration per service, instance facts | DONE | `package.js:66`, `adapters/mobilynet/declaration.js:219,558` |
+| P3 the package, a declaration per service, instance facts | DONE, one declaration per build since 25 Nov | `package.js:66`, `builds.js`, `adapters/mobilynet/declaration.js` (`servicePackages`) |
 | P3's work folder as a `work: true` data path | OUT OF DATE | `V64_WORK_DIR` is the login's own work area, `/srv/<login>` (`declaration.js:209`), decided 18 Nov |
 | Every service runs Migrate as it starts, the migration tool's lock picking one | OUT OF DATE | Migrations run once per Deploy as the provider's release task, before any instance starts; no serve script migrates (`migrations.js:23`, `steps.js`) |
 | P4 the mobilynet client and stand-in | DONE | `adapters/mobilynet/client.js:172`, `standIn.js:132` |
@@ -136,7 +161,7 @@ unless they say otherwise.
 | The lease | DONE in the engine | `steps.js:543`; mobilynet's adapter takes none (`adapters/mobilynet/index.js:92-94`) until mobilynet has leases |
 | The domain as one of the Plan's choices | OUT OF DATE | The domain is the caller's own configuration, read by every Deploy and changed by Set domain (`moveDomain`, `domain.js:20`); a mobilynet route keeps its DNS target |
 | The settings limit, 50 per service | OUT OF DATE | mobilynet's region says it (`serviceSettingsMax`, 199, or 49 beside an older host; `adapters/mobilynet/declaration.js:34-43`) |
-| P8 to P11, P13's development side, P14 to P16 | STILL HOLDS | Above, 1 to 7 |
+| P8 to P11, P13's development side, P14 to P16 | STILL HOLDS | Above, 1 to 7 and 9 |
 | P10 by OAuth connected apps (PKCE, loopback, device flow, refresh tokens) | OUT OF DATE | mobilynet built device logins instead (`POST /v1/logins`); above, 2 |
 | P12 the grammar's guide | DONE | `packages/vibe64-genesis/src/server/agentSpecs.js:268-274`, `docs/colleague-usage/add-a-service.md` |
 | P13 `- Development:` in the grammar | DONE | `packages/vibe64-genesis/src/server/deploymentServices.js:51,252`; its effect in development is above, 6 |

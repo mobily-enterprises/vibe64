@@ -158,7 +158,8 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
 
   /**
    * Every App Service and hosted service of the project, as the plan, the steps and the record read them: `{ id, name,
-   * kind, labels, size, instances, ... }` (`labels` its mobilynet tags), a service with its exposure, version, refresh,
+   * kind, labels, size, instances, ... }` (`labels` its mobilynet tags), a service with its exposure, the app it runs
+   * (fixed at its create: a service of another app is made again, steps.js 4), its version, refresh,
    * healthy count, internal name, connections, last error and the names its routes send it (`hosts`), a resource with
    * its kind, state and the links mobilynet holds of it (`links`, null for a hosted service Vibe64 didn't make).
    */
@@ -176,6 +177,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
         instances: one.instances?.wanted ?? null,
         exposure: one.exposure,
         state: one.state,
+        app: one.app ?? null,
         version: one.version,
         refresh: one.refresh ?? null,
         healthy: one.instances?.healthy ?? 0,
@@ -311,10 +313,12 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
      * that version with `values`, its own settings and secrets in place of those it holds, and `remove`, the names
      * given before and no longer (a need's are its links'). Its new instances and release task start with them while
      * the version it runs keeps serving with its own, and the service takes them only once that refresh succeeded
-     * (mobilynet main c3575399); without `values` it keeps its settings. `{ version, refreshId }`.
+     * (mobilynet main c3575399); without `values` it keeps its settings. Given `version`, a release of its app another
+     * service of its build was handed in this Deploy, it uploads nothing: mobilynet takes that release, built once
+     * (`releases.existing`). `{ version, refreshId }`.
      */
-    async releaseService(id, upload, { app, task = null, values = null, remove = [], idempotencyKey }) {
-      const { version } = (await calls.createRelease(app, { archive: upload.bytes, sha256: upload.sha256 })).release;
+    async releaseService(id, upload, { app, version: shared = null, task = null, values = null, remove = [], idempotencyKey }) {
+      const version = shared ?? (await calls.createRelease(app, { archive: upload.bytes, sha256: upload.sha256 })).release.version;
       const brought = values ? { settings: values.settings, secrets: values.secrets, remove } : {};
       const answer = await client.releaseServiceVersion(id, { version, ...brought, task }, { idempotencyKey });
       return { version: answer.release.version, refreshId: answer.refresh?.id ?? null };

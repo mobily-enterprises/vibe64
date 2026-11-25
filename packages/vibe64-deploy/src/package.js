@@ -258,14 +258,16 @@ function settingsPerService(needs, envRecords = []) {
  * the reached service's private address, and the Production Env's values (generated secrets and the setup code
  * among them) for the names it declares. A declared name without a value is left out, never blanked. The domain's
  * other names (`aliases`, the public service's alone) are given as APP_REDIRECT_HOSTS, comma-separated, which no
- * release declares; with none there is no such setting.
+ * release declares; with none there is no such setting. The engine's own (`own`: a shared build's service's
+ * V64_SERVICE, builds.js) are given as they are, which no release declares either.
  * @param {object} options
  * @param {Record<string, { secret: boolean, required: boolean }>} options.declared the service's settings (settingsPerService)
  * @param {Record<string, string>} options.env the Production Env's values by name
  * @param {string} options.domain @param {string[]} [options.aliases] @param {string} options.trustedProxies @param {number} options.port
  * @param {Record<string, string>} [options.reached] each of the service's Reaches settings with the reached service's address
+ * @param {Record<string, string>} [options.own] the engine's own settings for the service, V64_ names
  */
-function settingValues({ declared, env, domain, aliases = [], trustedProxies, port, reached = {} }) {
+function settingValues({ declared, env, domain, aliases = [], trustedProxies, port, reached = {}, own: given = {} }) {
   const own = { APP_ENV: "production", HOST: "0.0.0.0", PORT: String(port), APP_PUBLIC_URL: `https://${domain}`, TRUSTED_PROXIES: trustedProxies };
   const all = { ...env, ...reached, ...own };
   const settings = {};
@@ -274,6 +276,7 @@ function settingValues({ declared, env, domain, aliases = [], trustedProxies, po
     if (typeof all[name] === "string") (secret ? secrets : settings)[name] = all[name];
   }
   if (aliases.length > 0) settings[REDIRECT_SETTING] = aliases.join(",");
+  Object.assign(settings, given);
   return { settings, secrets, hash: `sha256:${sha256Of(Buffer.from(JSON.stringify([sortedObject(settings), sortedObject(secrets)])))}` };
 }
 

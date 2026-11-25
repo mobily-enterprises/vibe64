@@ -74,7 +74,7 @@ by its path from the project's root:
 
 | Where | What happens |
 | --- | --- |
-| Production on mobilynet | Each service's build runs the script once on its own setup layer, before Prepare. A service whose packages change gets a new layer. |
+| Production on mobilynet | Each build runs the script once on its own setup layer, before Prepare. Services built from one source share one build, so the script runs once for them; a build whose packages change gets a new layer. |
 | Production on a container provider | The image's build runs it as root, after its packages and before the app's release. The image's system is Nix's, so `apt-get` isn't there. |
 | A host's staging | It doesn't run there. A host's staging runs the app on the host's own machine, which nothing builds for the app, and runs none of the app's code as root, so publishing to staging is refused before anything starts and the release on staging keeps serving. A project with a machine setup script is deployed to production only. |
 | Development and Preview | It never runs. Workspace setup or Prepare provides the same tools in development, in the session's own folder. |
@@ -100,5 +100,5 @@ Fix it in a session with the coding agent, **Save**, then deploy to production
 again. Nothing changed in Production meanwhile.
 
 A script that fails while it runs, a download whose SHA-256 doesn't match say,
-fails that service's build. The build's log at the host shows the script's
+fails that build (every service built from it). The build's log at the host shows the script's
 output. Production keeps serving the version it served before.

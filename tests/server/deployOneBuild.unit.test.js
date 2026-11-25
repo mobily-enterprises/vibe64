@@ -14,7 +14,7 @@ import { createMobilynetAdapter } from "../../packages/vibe64-deploy/src/adapter
 import { needsOfStack } from "../../packages/vibe64-deploy/src/needsOfStack.js";
 import { settingsPerService, withRootFile } from "../../packages/vibe64-deploy/src/package.js";
 import { planOf } from "../../packages/vibe64-deploy/src/plan.js";
-import { newRecord } from "../../packages/vibe64-deploy/src/record.js";
+import { LABEL, newRecord } from "../../packages/vibe64-deploy/src/record.js";
 import { deploy } from "../../packages/vibe64-deploy/src/steps.js";
 import { MEMOBOT_COMPUTERS_PACKAGES, MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES } from "../fixtures/deploymentServices.js";
 import { world } from "./vibe64DeployStandInHelpers.js";
@@ -67,9 +67,9 @@ function setup() {
   parts.standIn.setQuota(parts.projectId, { vcpus: 192, memoryGib: 384 });
   const adapter = createMobilynetAdapter({ client: parts.client, project: parts.projectId, leases: true });
   const planFor = async (stack, record) => planOf({ needs: stack.needs, record, observed: await adapter.inventory(), offer: await adapter.offer() });
-  const run = async ({ stack, record, commit, pause = () => parts.standIn.advance() }) => {
+  const run = async ({ stack, record, commit, pause = () => parts.standIn.advance(), save }) => {
     const plan = await planFor(stack, record);
-    const result = await deploy({ adapter, needs: stack.needs, record, planHash: plan.hash, release: releaseOf(commit, stack), holder: HOLDER, pause });
+    const result = await deploy({ adapter, needs: stack.needs, record, planHash: plan.hash, release: releaseOf(commit, stack), holder: HOLDER, pause, ...(save ? { save } : {}) });
     return { ...result, plan };
   };
   return { ...parts, adapter, run, planFor, record: newRecord({ app: "memobot", environment: "production", provider: { id: "mobilynet", project: parts.projectId } }) };
@@ -221,4 +221,37 @@ test("a Production made with one app per service moves to one app on its next De
   // The Deploy after it changes nothing.
   const after = await planFor(stackOf(), moved.record);
   assert.deepEqual(after.items.map((item) => item.verb), ["kept", "kept", "kept", "kept"]);
+});
+
+test("a move to one app cut short once the new App Service is made, before its record kept it, is finished by the next Deploy: it adopts that one, makes none twice, and the old one goes once the new one serves", async () => {
+  const { standIn, run, record } = setup();
+  const old = await run({ stack: perServiceStackOf(), record, commit: "c1" });
+  assert.equal(old.outcome, "live", old.message);
+  const oldComputers = old.record.items["service.computers"].id;
+  // The Deploy stops, as a crash would, as it would keep the record naming the new computers.
+  let kept = old.record;
+  const cut = (next) => {
+    if (next.items["service.computers"]?.replaces) throw new Error("cut short");
+    kept = next;
+    return next;
+  };
+  const at = standIn.requests().length;
+  await assert.rejects(run({ stack: stackOf(), record: old.record, commit: "c2", save: cut }), /^Error: cut short$/u);
+  assert.equal(kept.items["service.computers"].id, oldComputers, "the record still names the old computers");
+  const orphan = standIn.services.all().find((one) => one.state !== "deleted" && one.id !== oldComputers && one.app === "memobot-web" && one.name !== "memobot-web");
+  assert.ok(orphan, "the new computers was made");
+
+  const finished = await run({ stack: stackOf(), record: kept, commit: "c2" });
+  assert.equal(finished.outcome, "live", finished.message);
+  assert.equal(finished.record.items["service.computers"].id, orphan.id, "the new computers adopted");
+  assert.equal(finished.record.items["service.computers"].replaces, undefined);
+  assert.equal(madeOf(standIn.requests().slice(at)).length, 1, "one App Service made in both Deploys");
+  assert.equal(standIn.services.service(oldComputers).state, "deleted");
+  const computers = standIn.services.all().filter((one) => one.state !== "deleted" && one.tags?.[LABEL.item] === "service.computers");
+  assert.deepEqual(computers.map((one) => one.id), [orphan.id], "one computers runs");
+  for (const id of [finished.record.items["resource.database"].id, finished.record.items["resource.files"].id]) {
+    assert.ok(standIn.hosted.service(id).links.some((link) => link.state === "active" && link.consumer.id === orphan.id), id);
+  }
+  const after = await run({ stack: stackOf(), record: finished.record, commit: "c2" });
+  assert.deepEqual(after.plan.items.map((item) => item.verb), ["kept", "kept", "kept", "kept"]);
 });

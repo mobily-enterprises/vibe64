@@ -13,8 +13,9 @@ import { needsOfStack } from "../../packages/vibe64-deploy/src/needsOfStack.js";
 import { envEntryProblem, settingValues, settingsPerService, stackSettingsPerService } from "../../packages/vibe64-deploy/src/package.js";
 import { MEMOBOT_COMPUTERS_PACKAGES, MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES } from "../fixtures/deploymentServices.js";
 
-// The package of a two-service app: one declaration per service at mobilynet, the settings each service is given, and
-// the serve scripts run in bash as each instance runs them, with the instance facts mobilynet's `_mobilynet` gives.
+// The package of a two-service app: one declaration for both at mobilynet (one build), or one per service where the needs
+// build each alone, the settings each service is given, and the serve scripts run in bash as each instance runs them,
+// with the instance facts mobilynet's `_mobilynet` gives.
 const exec = promisify(execFile);
 
 const DEPLOYMENT = vibe64DeploymentInspection({
@@ -22,6 +23,8 @@ const DEPLOYMENT = vibe64DeploymentInspection({
   section: { status: "ready", stackHash: "sha256:stack", lines: MEMOBOT_DEPLOYMENT_LINES, components: [], source: "project" }
 });
 const { needs: NEEDS } = needsOfStack(DEPLOYMENT, { preferredAlternative, resourceKindIsDatabase });
+// The same needs with each service built alone, as the engine packed every Deployment before one build per source.
+const APART = { ...NEEDS, services: NEEDS.services.map((service) => ({ ...service, builtWith: service.id })) };
 // The Production Env's entries: most go to web (an entry naming no service does), two to computers.
 const ENV = Object.freeze([
   { key: "OPENAI_API_KEY", secret: true, services: ["web"] },
@@ -38,7 +41,7 @@ function declared(entries) {
   return Object.fromEntries(Object.entries(entries).map(([name, [secret, required]]) => [name, { type: "string", secret, required }]));
 }
 
-test("each service is its own declaration: its name, its serve script, its packages and machine features, every resource's need and the settings its Stack names", () => {
+test("services built together are one declaration, named after the public service, with every service's packages and settings and one service script; built apart, each service is its own declaration, as before", () => {
   const settings = settingsPerService(NEEDS, ENV);
   const own = Object.fromEntries(Object.keys(PRODUCTION_OWN).map((name) => [name, [false, true]]));
   const generated = Object.fromEntries(GENERATED.map((name) => [name, [true, true]]));
@@ -51,7 +54,7 @@ test("each service is its own declaration: its name, its serve script, its packa
   // What each release declares: the Stack's alone, with no Production Env entry.
   assert.deepEqual(stackSettingsPerService(NEEDS), { web: flags(webStack), computers: flags({ ...own, ...generated }) });
 
-  const { declarations, scripts } = servicePackages({ app: "memobot", deployment: DEPLOYMENT, needs: NEEDS, settings });
+  const { declarations, scripts } = servicePackages({ app: "memobot", deployment: DEPLOYMENT, needs: APART, settings });
   const shared = DEPLOYMENT.packages;
   const base = ["bash", "coreutils", "curl", "jq", "nodejs_26", "corepack"];
   const common = (name) => ({
@@ -80,38 +83,63 @@ test("each service is its own declaration: its name, its serve script, its packa
     settings: declared({ ...own, ...generated })
   });
   // The Production Env is no part of a release: without its entries, or with others, the declarations are the same.
-  assert.deepEqual(servicePackages({ app: "memobot", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS) }).declarations, declarations);
+  assert.deepEqual(servicePackages({ app: "memobot", deployment: DEPLOYMENT, needs: APART, settings: settingsPerService(NEEDS) }).declarations, declarations);
   // The shared packages once: jq is the base's and the Stack's.
   assert.equal(declarations.computers.requiredPackages.filter((name) => name === "jq").length, 1);
   assert.equal(declarations.computers.requiredPackages.length, 4 + 2 + shared.length - 1 + MEMOBOT_COMPUTERS_PACKAGES.length);
   assert.deepEqual(Object.keys(scripts), ["vibe64-app/build.sh", "vibe64-app/serve-web.sh", "vibe64-app/migrate-web.sh", "vibe64-app/serve-computers.sh", "vibe64-app/migrate-computers.sh"]);
   assert.match(scripts["vibe64-app/build.sh"], /^npm run deploy:prepare\nprintf '%s\\n' 'Build: Build'\nnpm --prefix \.memobot-server-generated\/app run build$/mu);
   // A long app name is shortened so that each service's name fits mobilynet's 32 characters.
-  const long = servicePackages({ app: "a-very-long-project-name-for-it", deployment: DEPLOYMENT, needs: NEEDS, settings });
+  const long = servicePackages({ app: "a-very-long-project-name-for-it", deployment: DEPLOYMENT, needs: APART, settings });
   assert.deepEqual([long.declarations.web.name, long.declarations.computers.name], ["a-very-long-project-name-for-web", "a-very-long-project-na-computers"]);
+
+  // Built together (the needs' builtWith, the same health path and sandbox): one declaration for both, named after web,
+  // with computers' packages beside the shared ones, one service whose script runs the instance's own (V64_SERVICE),
+  // one migrate task alike, and the settings of both, required only where both require them.
+  const together = servicePackages({ app: "memobot", deployment: DEPLOYMENT, needs: NEEDS, settings });
+  assert.equal(together.declarations.web, together.declarations.computers);
+  assert.deepEqual(together.declarations.web, {
+    ...common("memobot-web"),
+    requiredPackages: [...new Set([...base, ...shared, ...MEMOBOT_COMPUTERS_PACKAGES])],
+    services: [{ name: "app", command: "bash vibe64-app/serve.sh", user: "memobot-web", port: 3000, healthPath: "/api/health" }],
+    settings: declared({ ...own, ...generated, AUTH_LOCAL_SETUP_CODE: [true, false], MEMOBOT_COMPUTERS_URL: [false, false] }),
+    tasks: { migrate: { command: "systemd-run --pipe --wait --collect --service-type=exec --same-dir --uid=memobot-web "
+      + "--property=EnvironmentFile=/etc/mobilynet/service.env --property=LoadCredential=settings.json:/run/mobilynet/apps/memobot-web/settings.json "
+      + "bash vibe64-app/migrate.sh" } }
+  });
+  assert.deepEqual(Object.keys(together.scripts), ["vibe64-app/build.sh", "vibe64-app/serve-web.sh", "vibe64-app/migrate-web.sh", "vibe64-app/serve-computers.sh",
+    "vibe64-app/migrate-computers.sh", "vibe64-app/serve.sh", "vibe64-app/migrate.sh"]);
+  assert.equal(together.scripts["vibe64-app/build.sh"], scripts["vibe64-app/build.sh"]);
+  assert.deepEqual([...new Set(Object.values(servicePackages({ app: "a-very-long-project-name-for-it", deployment: DEPLOYMENT, needs: NEEDS, settings }).declarations)
+    .map((one) => one.name))], ["a-very-long-project-name-for-web"]);
 });
 
 test("a service given more settings than mobilynet takes, or one by a name its runtime sets, packages it can't take, or an Env entry Production sets itself is refused, naming the service and the fix", () => {
   // mobilynet gives an App Service at most 49 settings and secrets in all, its links' among them: computers has 10 of
-  // the Stack's and 11 from its links (database, PostgreSQL: 6; files, S3: 5), so 28 Env entries of its own fit (49,
-  // packaged, its declaration the Stack's 10) and 29 don't, naming the count.
+  // the Stack's, its V64_SERVICE (it shares web's build) and 11 from its links (database, PostgreSQL: 6; files, S3: 5),
+  // so 27 Env entries of its own fit (49, packaged, its declaration the Stack's settings of both) and 28 don't, naming
+  // the count.
   const extra = (count) => Array.from({ length: count }, (_, at) => ({ key: `COMPUTERS_${at}`, secret: false, services: ["computers"] }));
-  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(28))), null);
-  const full = servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(28)) });
-  assert.equal(Object.keys(full.declarations.computers.settings).length, 10);
-  const over = servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(29)));
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(27))), null);
+  const full = servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(27)) });
+  assert.equal(Object.keys(full.declarations.computers.settings).length, 12);
+  const over = servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, extra(28)));
   assert.deepEqual(over, {
     code: "vibe64_production_too_many_settings",
     message: "mobilynet gives an App Service at most 49 settings and secrets in all, its links' among them, and service computers would "
       + "have 50: 39 of its own and 11 from its links. Remove Production Env entries it doesn't use, or give them only to the services that "
       + "use them, then deploy to production."
   });
-  assert.throws(() => servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(29)) }),
+  assert.throws(() => servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, extra(28)) }),
     { code: "vibe64_production_too_many_settings", status: 422 });
-  // Without the database, its 6 link settings are free for Env entries: 34 fit.
+  // Without the database, its 6 link settings are free for Env entries: 33 fit.
   const bucketOnly = { ...DEPLOYMENT, resources: DEPLOYMENT.resources.filter((one) => one.resource.id === "files") };
-  assert.equal(servicePackagesProblem(bucketOnly, settingsPerService(NEEDS, extra(34))), null);
-  assert.equal(servicePackagesProblem(bucketOnly, settingsPerService(NEEDS, extra(35))).code, "vibe64_production_too_many_settings");
+  assert.equal(servicePackagesProblem(bucketOnly, settingsPerService(NEEDS, extra(33))), null);
+  assert.equal(servicePackagesProblem(bucketOnly, settingsPerService(NEEDS, extra(34))).code, "vibe64_production_too_many_settings");
+  // A service built alone has no V64_SERVICE: with computers' health path its own, 28 fit.
+  const alone = { ...DEPLOYMENT, services: DEPLOYMENT.services.map((one) => (one.id === "computers" ? { ...one, readyWhen: { ...one.readyWhen, path: "/api/agent" } } : one)) };
+  assert.equal(servicePackagesProblem(alone, settingsPerService(NEEDS, extra(28))), null);
+  assert.equal(servicePackagesProblem(alone, settingsPerService(NEEDS, extra(29))).code, "vibe64_production_too_many_settings");
 
   // A name mobilynet's runtime sets on every instance, given by the Production Env or named by the Stack, each fix its own.
   const reserved = (key, services = ["web"]) => servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, [{ key, secret: true, services }]));
@@ -156,7 +184,7 @@ test("a service given more settings than mobilynet takes, or one by a name its r
   });
 });
 
-test("mobilynet's count is the names a service is sent with its links' fields, each once: a production web holding 48 is taken, and the 50 its next Deploy would send are taken where its region holds 199, refused where it holds 49", () => {
+test("mobilynet's count is the names a service is sent with its links' fields, each once: a production web holding 48 is taken with its V64_SERVICE, and the 51 its next Deploy would send are taken where its region holds 199, refused where it holds 49", () => {
   // A production app's web on 19 Nov, by name only: the Production Env holds 33 entries for it, the Stack's generated
   // secrets and setup code among them (Vibe64 makes those into the Env), and its service at mobilynet holds 48 settings
   // and secrets in all, its links' 11 among them, from a Deploy before the last two entries were saved.
@@ -177,34 +205,36 @@ test("mobilynet's count is the names a service is sent with its links' fields, e
   };
   assert.equal(sent(entries()), 37);
   assert.equal(Object.keys(settingsPerService(NEEDS, entries()).web).length, 37, "each generated secret and the setup code once, though the Env holds them too");
-  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, entries())), null, "48 is taken");
-  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, entries("STRIPE_WEBHOOK_SECRET"))), null, "49 is taken");
-  // Its next Deploy sends both new entries, 50: one of them by a name mobilynet's runtime sets is refused first, and
-  // the 50 under another name are refused by the count.
+  // web shares its build with computers, so it is sent its V64_SERVICE too: 49 is taken, 50 isn't.
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, entries())), null, "48 and V64_SERVICE are taken");
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, entries("STRIPE_WEBHOOK_SECRET"))).code, "vibe64_production_too_many_settings",
+    "50 is refused");
+  // Its next Deploy sends both new entries, 51: one of them by a name mobilynet's runtime sets is refused first, and
+  // the 51 under another name are refused by the count.
   assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, entries("STRIPE_WEBHOOK_SECRET", "MOBILYNET_API_KEY"))).code,
     "vibe64_production_setting_reserved");
   const next = entries("STRIPE_WEBHOOK_SECRET", "MEMOBOT_MOBILYNET_API_KEY");
   assert.equal(sent(next), 39);
   assert.match(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, next)).message,
-    /^mobilynet gives an App Service at most 49 settings and secrets in all, its links' among them, and service web would have 50: 39 of its own and 11 from its links\./u);
+    /^mobilynet gives an App Service at most 49 settings and secrets in all, its links' among them, and service web would have 51: 40 of its own and 11 from its links\./u);
   // 49 is what a region holds while one of its hosts runs an agent before 2.9.0, and the count's figure where mobilynet
   // doesn't say. A region whose hosts all run 2.9.0 or later holds 199 (the adapter's serviceSettingsMax), which takes
-  // the 50, packaged; past 199 it refuses, naming 199, the service and the count.
+  // the 51, packaged; past 199 it refuses, naming 199, the service and the count.
   const region = { settingsMax: 199 };
-  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, next), region), null, "50 is taken where the region holds 199");
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, next), region), null, "51 is taken where the region holds 199");
   assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, next), { settingsMax: 49 }).code, "vibe64_production_too_many_settings");
   const packaged = servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, next), settingsMax: 199 });
   assert.equal(packaged.declarations.web.name, "shop-web");
   assert.throws(() => servicePackages({ app: "shop", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, next) }),
     { code: "vibe64_production_too_many_settings", status: 422 });
   const plenty = (count) => [...next, ...Array.from({ length: count }, (_, at) => ({ key: `WEB_${at}`, secret: false, services: ["web"] }))];
-  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, plenty(149)), region), null, "199 is taken");
-  const past = servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, plenty(150)), region);
+  assert.equal(servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, plenty(148)), region), null, "199 is taken");
+  const past = servicePackagesProblem(DEPLOYMENT, settingsPerService(NEEDS, plenty(149)), region);
   assert.equal(past.code, "vibe64_production_too_many_settings");
   assert.match(past.message, /^mobilynet gives an App Service at most 199 settings and secrets in all, its links' among them, and service web would have 200: 189 of its own and 11 from its links\. Remove Production Env entries it doesn't use/u);
 
   // In fact both new entries hold no value (the card's "Secret, not set"): the Production Env gives a Deploy no value
-  // for them, so none is sent, and neither is counted nor checked. web comes to 48, MOBILYNET_API_KEY kept or not.
+  // for them, so none is sent, and neither is counted nor checked. web comes to 49, MOBILYNET_API_KEY kept or not.
   const unset = (key) => ({ key, secret: true, services: ["web"], valuePresent: false });
   const saved = [...entries(), unset("STRIPE_WEBHOOK_SECRET"), unset("MOBILYNET_API_KEY")];
   assert.equal(Object.keys(settingsPerService(NEEDS, saved).web).length, 37);
@@ -232,7 +262,7 @@ test("Production gives a service the domain's other names as APP_REDIRECT_HOSTS,
   assert.match(envEntryProblem({ key: "APP_REDIRECT_HOSTS" }, NEEDS), /APP_REDIRECT_HOSTS is set by Production itself/u);
 });
 
-test("each service's script exports its settings, its resources' names, the instance facts from _mobilynet and its own settings, then serves; its migrate task's exports them and migrates", async (t) => {
+test("the release's service script runs the instance's service, whose script exports its settings, its resources' names, the instance facts from _mobilynet and its own settings, then serves; its migrate task's exports them and migrates", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-deploy-serve-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const { scripts } = servicePackages({ app: "memobot", deployment: DEPLOYMENT, needs: NEEDS, settings: settingsPerService(NEEDS, ENV) });
@@ -244,16 +274,17 @@ test("each service's script exports its settings, its resources' names, the inst
   await Promise.all(["npm", "node"].map((file) => chmod(path.join(bin, file), 0o755)));
   const release = path.join(root, "release");
   await mkdir(path.join(release, "vibe64-app"), { recursive: true });
-  const settingsFile = (service) => path.join(root, `${service}.json`);
+  // Both services run the one app, memobot-web, whose start leaves the settings in one file for its login.
+  const settingsFile = path.join(root, "settings.json");
   for (const [file, text] of Object.entries(scripts)) {
-    const service = /serve-([a-z-]+)\.sh$/u.exec(file)?.[1];
-    await writeFile(path.join(release, file), service ? text.replace(`/run/app-settings/memobot-${service}/settings.json`, settingsFile(service)) : text);
+    await writeFile(path.join(release, file), text.replaceAll("/run/app-settings/memobot-web/settings.json", settingsFile));
   }
+  // An instance of a service: the release's one service script, with the V64_SERVICE the engine gives its App Service.
   const serve = async (service, settings) => {
-    await writeFile(settingsFile(service), JSON.stringify(settings));
+    await writeFile(settingsFile, JSON.stringify({ ...settings, V64_SERVICE: service }));
     await rm(path.join(root, "given"), { force: true });
     await rm(path.join(root, "steps"), { force: true });
-    await exec("bash", [`vibe64-app/serve-${service}.sh`], { cwd: release, env: { PATH: `${bin}:${process.env.PATH}` } });
+    await exec("bash", ["vibe64-app/serve.sh"], { cwd: release, env: { PATH: `${bin}:${process.env.PATH}` } });
     return { given: (await readFile(path.join(root, "given"), "utf8")).trim().split("\n"), steps: await readFile(path.join(root, "steps"), "utf8") };
   };
   const instance = (service, hostname) => ({
@@ -271,19 +302,20 @@ test("each service's script exports its settings, its resources' names, the inst
     "V64_INSTANCE_ID=c-0a1b",
     "V64_INSTANCE_URL=http://c-0a1b.memobot-computers.prj-q7-memobot.internal:3000",
     "V64_PRIVATE_ADDRESS=10.4.0.7",
-    "V64_WORK_DIR=/srv/memobot-computers"
+    "V64_SERVICE=computers",
+    "V64_WORK_DIR=/srv/memobot-web"
   ]);
   assert.equal(computers.steps, "node bin/memobot-server.js serve\n", "no service migrates");
   // web, reached at any instance: no address of its own, and Serve's production default for what nothing set.
   const { NODE_ENV: _unset, ...webSettings } = instance("web", "w-9z");
   const web = await serve("web", webSettings);
   assert.deepEqual(web.given, ["DB_HOST=db.internal", "MEMOBOT_COMPUTERS_AGENT=0", "NODE_ENV=production", "V64_DATABASE_HOST=db.internal",
-    "V64_INSTANCE_ID=w-9z", "V64_PRIVATE_ADDRESS=10.4.0.7", "V64_WORK_DIR=/srv/memobot-web"]);
+    "V64_INSTANCE_ID=w-9z", "V64_PRIVATE_ADDRESS=10.4.0.7", "V64_SERVICE=web", "V64_WORK_DIR=/srv/memobot-web"]);
 
   // Without _mobilynet (another host) a service gets no facts, and one reached at each instance stops, naming why.
   const elsewhere = { V64_DATABASE_HOST: "db.internal", V64_INSTANCE_URL: "http://planted:3000" };
   const plain = await serve("web", elsewhere);
-  assert.deepEqual(plain.given, ["DB_HOST=db.internal", "NODE_ENV=production", "V64_DATABASE_HOST=db.internal"]);
+  assert.deepEqual(plain.given, ["DB_HOST=db.internal", "NODE_ENV=production", "V64_DATABASE_HOST=db.internal", "V64_SERVICE=web"]);
   await assert.rejects(serve("computers", elsewhere), (error) => error.code === 1
     && error.stderr.includes("Service computers is reached at each instance, so it needs this instance's own address: its settings have no _mobilynet"));
   await assert.rejects(readFile(path.join(root, "steps"), "utf8"), { code: "ENOENT" }, "Serve didn't run");
@@ -292,7 +324,7 @@ test("each service's script exports its settings, its resources' names, the inst
   // nothing, so one of computers, reached at each instance, needs no address of its own.
   const credentials = path.join(root, "credentials");
   await mkdir(credentials);
-  await writeFile(path.join(credentials, "settings.json"), JSON.stringify(elsewhere));
-  await exec("bash", ["vibe64-app/migrate-computers.sh"], { cwd: release, env: { PATH: `${bin}:${process.env.PATH}`, CREDENTIALS_DIRECTORY: credentials } });
+  await writeFile(path.join(credentials, "settings.json"), JSON.stringify({ ...elsewhere, V64_SERVICE: "computers" }));
+  await exec("bash", ["vibe64-app/migrate.sh"], { cwd: release, env: { PATH: `${bin}:${process.env.PATH}`, CREDENTIALS_DIRECTORY: credentials } });
   assert.equal(await readFile(path.join(root, "steps"), "utf8"), "npm --prefix .memobot-server-generated/app run db:migrate\n");
 });

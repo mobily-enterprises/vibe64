@@ -72,7 +72,7 @@ function jskitDeployment(overrides = {}) {
 
 // A Deployment without services is one public service, web, that may run up to its Instances.
 const WEB = Object.freeze({
-  id: "web", exposure: "public", reached: "any", instances: { min: 1, max: 3, start: 1 }, atLeast: null, reaches: [], settings: {}, sandbox: []
+  id: "web", exposure: "public", reached: "any", instances: { min: 1, max: 3, start: 1 }, atLeast: null, reaches: [], settings: {}, sandbox: [], builtWith: "web"
 });
 
 test("the needs are the Deployment's services, generated secrets and setup code, and each resource's bindings", () => {
@@ -122,7 +122,7 @@ test("a Stack that doesn't say what Production needs is refused, naming the fix 
   refused(jskitDeployment({ generatedSecrets: ["DB_PASSWORD"] }), "production_needs_invalid", /needs\.generatedSecrets/u);
 });
 
-test("a Deployment with services gives each one's needs: exposure, instances, smallest machine, reaches, settings, sandbox", () => {
+test("a Deployment with services gives each one's needs: exposure, instances, smallest machine, reaches, settings, sandbox and the service it is built with", () => {
   const { needs, problem } = needsOfStack(inspected(MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES), RESOURCE_RULES);
   assert.equal(problem, null);
   assert.deepEqual(needs, {
@@ -131,12 +131,12 @@ test("a Deployment with services gives each one's needs: exposure, instances, sm
         id: "web", exposure: "public", reached: "any",
         instances: { min: 1, max: 6, start: 2 }, atLeast: { vcpus: 2, memoryGib: 2 },
         reaches: [{ service: "computers", setting: "MEMOBOT_COMPUTERS_URL" }],
-        settings: {}, sandbox: ["gvisor"]
+        settings: {}, sandbox: ["gvisor"], builtWith: "web"
       },
       {
         id: "computers", exposure: "internal", reached: "each",
         instances: { min: 1, max: 20, start: 2 }, atLeast: { vcpus: 8, memoryGib: 16 },
-        reaches: [], settings: { MEMOBOT_COMPUTERS_AGENT: "1" }, sandbox: ["gvisor"]
+        reaches: [], settings: { MEMOBOT_COMPUTERS_AGENT: "1" }, sandbox: ["gvisor"], builtWith: "web"
       }
     ],
     resources: [
@@ -192,6 +192,10 @@ test("needs whose services break a rule of the Stack are refused, naming the ser
   assert.match(withServices([{ ...web, reaches: [{ service: "computers", setting: "SIDE_EFFECTS" }] }, computers]), /reaches other services/u);
   assert.match(withServices([web, { ...computers, settings: { SIDE_EFFECTS: "live" } }]), /settings are its own/u);
   assert.match(withServices([web, { ...computers, sandbox: ["docker"] }]), /needs\.services computers sandbox allows only fuse and gvisor/u);
+  // Built with a service of these needs that is built with itself; needs from before shared builds say nothing.
+  assert.match(withServices([web, { ...computers, builtWith: "nothing" }]), /needs\.services computers is built with itself or with a service built with itself/u);
+  assert.match(withServices([{ ...web, builtWith: "computers" }, { ...computers, builtWith: "web" }]), /needs\.services web is built with itself/u);
+  assert.equal(withServices([{ ...web, builtWith: undefined }, { ...computers, builtWith: undefined }]), "");
   assert.match(withServices([web, { ...computers, size: "a-8" }]), /needs\.services computers has no field "size"/u);
   // needsOfStack refuses them with the fix in genesis/stack.md.
   const refused = needsOfStack({ ...inspected(MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES), services: [] }, RESOURCE_RULES);

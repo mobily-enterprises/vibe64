@@ -7,6 +7,7 @@
 // The engine depends on no editor package: the editor passes the Deployment section as public Vibe64's Genesis boundary
 // inspected it, and its own resource rules (the project package's preferredAlternative, which checks a resource's
 // bindings for its kind, and resourceKindIsDatabase).
+import { buildLeadsOf } from "./builds.js";
 import { NEED_KINDS, STACK_FIX, needsProblem } from "./needs.js";
 
 /** A refusal of the Stack, as the page and the deploy show it. */
@@ -75,8 +76,11 @@ function needsOfStack(deployment, { preferredAlternative, resourceKindIsDatabase
       supplied.push({ id, kind, settings: Object.values(bindings), allowEmpty });
     }
   }
+  const declared = Array.isArray(deployment.services) ? deployment.services : [];
+  // The service whose build each shares (builds.js): services the provider would release alike are built once.
+  const leads = buildLeadsOf(declared);
   const needs = {
-    services: (Array.isArray(deployment.services) ? deployment.services : []).map((service) => ({
+    services: declared.map((service) => ({
       id: service.id,
       exposure: service.exposure,
       reached: service.reached,
@@ -84,7 +88,8 @@ function needsOfStack(deployment, { preferredAlternative, resourceKindIsDatabase
       atLeast: service.atLeast ?? null,
       reaches: (service.reaches ?? []).map((reach) => ({ service: reach.service, setting: reach.setting })),
       settings: { ...service.settings },
-      sandbox: [...(service.sandboxAllowances ?? [])]
+      sandbox: [...(service.sandboxAllowances ?? [])],
+      builtWith: leads[service.id]
     })),
     resources,
     supplied,

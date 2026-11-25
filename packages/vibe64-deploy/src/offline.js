@@ -34,6 +34,8 @@ async function takeOffline(adapter, record, {
     const words = `Deleting App Service ${item.name}`;
     tell({ kind: "step", phase: "start", step: "deleteService", service: item.name, words });
     await adapter.deleteService(item.id);
+    // The App Service it was made in place of, while a Deploy that stopped in between left it running (steps.js 8).
+    if (item.replaces) await adapter.deleteService(item.replaces.id).catch((error) => { if (![404, 409].includes(error?.status)) throw error; });
     tell({ kind: "step", phase: "done", step: "deleteService", service: item.name, words });
     delete kept.items[`service.${item.name}`];
     for (const resource of Object.values(kept.items)) delete resource.links?.[item.name];

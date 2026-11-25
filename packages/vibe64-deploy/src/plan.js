@@ -15,9 +15,17 @@
 // says they aren't checked. The hash leaves the quotas out: their use moves with the rest of the provider project, and
 // the Deploy counts them again as it starts.
 //
+//
+// Services built together (builds.js) run one app where the provider names apps as the engine does (mobilynet): an
+// App Service whose app, as the inventory reports it (`app`, fixed at its create), isn't its build's is `replaced`,
+// changing `app`, with a `note` saying how: a new App Service is made beside it and the old one keeps serving until the
+// new one is healthy and the services reaching it moved, then is deleted; it holds no data. Its quota counts both
+// while they run together. One made again whose old App Service still runs (a Deploy stopped in between) says so too.
+//
 // Nothing here calls a provider: the adapter's `offer()` and `inventory()` answer what the plan reads.
 import { createHash } from "node:crypto";
 
+import { buildAppName } from "./builds.js";
 import { LABEL, itemKey } from "./record.js";
 
 /**
@@ -146,13 +154,16 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
   const recorded = record?.items ?? {};
   const deploymentId = record?.deploymentId ?? null;
   const byId = new Map(observed.map((thing) => [thing.id, thing]));
-  const ours = new Set(Object.values(recorded).map((item) => item.id).filter(Boolean));
+  // What the record names, the App Service one made again still replaces among them (steps.js 8 deletes it).
+  const ours = new Set(Object.values(recorded).flatMap((item) => [item.id, item.replaces?.id]).filter(Boolean));
   const kept = record?.choices ?? { services: {}, resources: {} };
   const items = [];
   const effective = { services: {}, resources: {} };
   // Each service's count at the provider, null for one the Deploy makes: shown, never a choice.
   const running = {};
   const lines = [];
+  // The services made again beside their App Service (a new app), which the quota counts as new while both run.
+  const remade = new Set();
 
   // Drift on a recorded thing the provider still has: its size as the record left it, against what the provider
   // reports. Each needs a decision; keeping one sets the choice in effect to the provider's value.
@@ -207,19 +218,33 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
     running[service.id] = live;
     let verb = "kept";
     const changes = [];
+    let note = null;
+    const app = record?.app ? buildAppName(record.app, service) : null;
     if (!item) verb = "new";
     else if (!thing) verb = "missing";
     else if (thing.exposure && thing.exposure !== service.exposure) {
       verb = "replaced";
       changes.push({ field: "exposure", from: thing.exposure, to: service.exposure });
+    } else if (app && typeof thing.app === "string" && thing.app !== app) {
+      verb = "replaced";
+      remade.add(service.id);
+      changes.push({ field: "app", from: thing.app, to: app });
+      note = `${service.id}'s App Service runs the app ${thing.app}, and its build's app is now ${app}: services built from one source `
+        + `share one app, built once. An App Service's app can't change, so a new App Service of ${app} is made beside it, with its `
+        + "settings, size and count; the one that runs now keeps serving until the new one is healthy and the services that "
+        + "reach it reach the new one, then it is deleted. It holds no data.";
     } else {
+      if (item.replaces && byId.has(item.replaces.id)) {
+        note = `The App Service ${service.id} ran before, ${item.replaces.providerName}, still runs: it is deleted once this one serves the release `
+          + "and the services that reach it reach this one.";
+      }
       // What the Deploy changes at the provider: its size, where the choice in effect differs from it there.
       if (thing.size !== choice.size) {
         changes.push({ field: "size", from: thing.size, to: choice.size });
         verb = "changed";
       }
     }
-    items.push({ kind: "service", name: service.id, verb, id: thing?.id ?? null, changes, drift });
+    items.push({ kind: "service", name: service.id, verb, id: thing?.id ?? null, changes, drift, ...(note ? { note } : {}) });
     const price = sizes.find((size) => size.name === choice.size);
     if (price && Number.isInteger(choice.instances)) {
       lines.push({ item: key, part: "instances", size: choice.size, count: choice.instances, monthlyNano: (BigInt(price.monthlyNano) * BigInt(choice.instances)).toString() });
@@ -282,7 +307,7 @@ function planOf({ needs, record, observed, offer, choices = {}, decisions = {} }
 
   const quota = quotaOf(offer, needs, effective, (kind, name) => {
     const item = recorded[itemKey(kind, name)];
-    return item?.id ? byId.get(item.id) : undefined;
+    return item?.id && !(kind === "service" && remade.has(name)) ? byId.get(item.id) : undefined;
   }, problems);
 
   // The provider project's other things: not this deployment's, never changed, linked, deleted or priced.

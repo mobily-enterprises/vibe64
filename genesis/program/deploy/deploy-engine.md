@@ -11,10 +11,12 @@ mobilynet, Google Cloud and AWS.
 - Main: `packages/vibe64-deploy/src/index.js`
 - `packages/vibe64-deploy/src/needs.js`
 - `packages/vibe64-deploy/src/needsOfStack.js`
+- `packages/vibe64-deploy/src/builds.js`
 - `packages/vibe64-deploy/src/package.js`
 - `packages/vibe64-deploy/src/image.js`
 - `packages/vibe64-deploy/src/plan.js`
 - `packages/vibe64-deploy/src/steps.js`
+- `packages/vibe64-deploy/src/failures.js`
 - `packages/vibe64-deploy/src/serviceValues.js`
 - `packages/vibe64-deploy/src/address.js`
 - `packages/vibe64-deploy/src/lastRun.js`
@@ -101,17 +103,41 @@ Genesis boundary's result names the section's `### Resource` entries
 
 The saved commit is packed once (`packArchive`), with the shared build script
 `vibe64-app/build.sh` and one `vibe64-app/serve-<service>.sh` per service; a
-commit that already has Vibe64's own files is refused. Each service is its own
-app at mobilynet, `<app>-<service>` (at most 32 characters), whose upload is the
-archive with that service's `mobilynet.json` added at its root
-(`servicePackages`, `serviceUpload`). Each declaration requires the base's
-packages, the runtime's, the shared Packages and the service's own, each once
-and at most 200 (a runtime's are its pack's, `RUNTIME_PACKAGES`: `postgresql`
+commit that already has Vibe64's own files is refused.
+
+Services built from one source build once. Every service builds from the one
+archive, so the needs say which services share a build (`builtWith`,
+`buildLeadsOf` in `builds.js`): services whose health path and sandbox
+allowances are the same, since mobilynet keeps one health check and one set of
+machine features per release. A build's lead is its public service, else its
+first in the Stack's order. A build is one app at mobilynet, named after its
+lead, `<app>-<lead>` (at most 32 characters), whose upload is the archive with
+its `mobilynet.json` added at its root (`servicePackages`, `serviceUpload`); a
+service alone in its build is its own lead, so its app keeps the name it always
+had. mobilynet builds a release once per project, app and upload, and a release
+by version (`{ version }`) builds nothing, so the first service of a build a
+Deploy hands a release uploads it and every other one of that build is handed
+the same version (`shareRelease`, `sharedVersionOf`): one upload and one build
+for a two-service app, where before 25 Nov it uploaded the same commit under
+two apps and mobilynet built it twice (an output may bake its app's run path,
+so mobilynet never shares a build between apps). A shared build's declaration
+takes every service's packages and settings (a setting is secret where any
+service's is, required only where every service requires it, and the engine
+still checks each service's own) and declares one service, `app`, whose
+command `vibe64-app/serve.sh` runs the instance's own serve script by its
+`V64_SERVICE` setting, which the engine gives each App Service of a shared
+build (its own settings, `settingValues`' `own`), and one migrate task alike
+(`vibe64-app/migrate.sh`); an unknown or missing `V64_SERVICE` stops the
+instance, naming it. What stays each service's own is its App Service's:
+exposure, reach, size, count, settings and connections. Services whose health
+paths or sandbox allowances differ are separate builds, each its own app, as
+before. Each declaration requires the base's packages, the runtime's, the
+shared Packages and its services' own, each once and at most 200 (a runtime's are its pack's, `RUNTIME_PACKAGES`: `postgresql`
 gives PostgreSQL 18's tools, `postgresql_18`, the major of the only PostgreSQL
 mobilynet's catalogue runs, since `pg_dump` refuses a newer server and
 `pg_restore` a newer dump); declares the machine features its sandbox allowances need, a
 need for every resource, and the settings the Stack names for that service
-(`stackSettingsPerService`), with their types and required flags: Production's
+(`stackSettingsPerService`; a shared build's, those of all its services), with their types and required flags: Production's
 own and the generated secrets every service, the setup code the public one, and
 each Reaches setting the service that reaches. A Production Env entry is never
 declared. Each service is given its declared settings and each Production Env
@@ -132,8 +158,9 @@ secrets. No setting may take a name mobilynet's runtime sets on every instance
 `GIT_CONFIG_VALUE_` or `MOBILYNET_`, `runtimeSets`), which an app exporting its
 settings would lose. The engine counts the names a Deploy sends a service, each
 once (a generated secret or the setup code the Production Env holds too is
-one), with its links' fields: a production web holding 48 matched it on 19 Nov,
-and its next Deploy's 50 fit a region that holds 199.
+one), with its links' fields and, in a shared build, its `V64_SERVICE`: a
+production web holding 48 matched it on 19 Nov, and its next Deploy's 50 fit a
+region that holds 199.
 An Env entry that holds no value (a secret not set, `valuePresent: false`) is
 given to no service, so it is neither sent, counted nor checked against
 mobilynet's names. It may count one name it doesn't send, the setup code once
@@ -160,8 +187,8 @@ back what the project's last build of that app left in those folders before the
 build command and keeps them again after it, at most 4 GiB in all (its
 `mobilynet-build-run` cache-restore and cache-save). So a Prepare that installs
 each pinned tool into a store in the home and links it into the release
-downloads nothing on the next build with the same pins: Mercbot's
-822 MiB tools store (`~/.cache/mercbot-tools`) was downloaded again by every
+downloads nothing on the next build with the same pins: a two-service app's
+822 MiB tools store (in its home's `~/.cache`) was downloaded again by every
 build, 81 s of its 101 s command on 24 Nov 2026, because only `~/.npm` was
 kept. What a step reuses there is the step's to check by the version or hash it
 pins; mobilynet puts back only that project's app's own last cache.
@@ -283,6 +310,13 @@ on mobilynet), so the image's layer of what it installed is reused while the
 script and the packages stay the same. Nix's image has no `apt-get`, so a script
 that needs it fails the image's build there.
 
+Images are still one per service, built per upload: each service's
+Containerfile names its own packages and serve script, so two services of one
+source upload two images, and Google Cloud's and AWS's adapters read each
+service's health path, reach and machine features from its own declaration and
+upload in their own `releaseService`. One image per build, as mobilynet's one
+app per build, is not built for them yet ([the plan](../../../docs/deployment-adapters.md)).
+
 ## The Plan
 
 `planOf()` compares the needs (the desired state), the record (what Vibe64
@@ -290,7 +324,8 @@ made) and what the provider reports now, read first through the adapter's
 `inventory()`. Each service is offered the instance sizes that meet its
 `- Needs at least`, cheapest first, and is refused
 `production_size_unavailable` when none does. Each item gets a verb: new, kept,
-changed (with each change), replaced (a service whose exposure changed),
+changed (with each change), replaced (a service whose exposure changed, or
+whose App Service runs another app than its build's: below),
 removed (a service the Stack dropped), disconnected (a resource the Stack
 dropped: unlinked, kept with its data, still priced) or missing (gone at the
 provider; a missing resource stops the Deploy). A resource whose kind changed
@@ -358,6 +393,20 @@ In the inventory, a service may report `internalUrl`, the address other
 services reach it at when that is not `http://<internalName>:<port>`; each
 Reaches setting is then that address.
 
+A service may report its `app` too (mobilynet's inventory does). An App
+Service's app is fixed when it is made, so a recorded service whose `app` is
+not its build's (a Production made when each service was its own app, before 25
+Nov, or one whose build's services changed) is planned `replaced`, its change
+`app` from the one it runs to its build's, with a note in words: a new App
+Service of its build's app is made beside it, with its settings, size and
+count; the one that runs keeps serving until the new one is healthy and the
+services that reach it reach the new one, then it is deleted; it holds no data.
+A public service is always its build's lead, so its App Service, routes and
+domain stay; in a two-service app only the internal service is made again.
+While the old one waits to go, the record names it (`replaces`), so the Plan
+counts it as this deployment's, Take offline deletes it too, and the Plan's
+note says it goes once the new one serves.
+
 ## The steps
 
 `deploy()` reads the Plan again and refuses a Deploy whose hash is not the one
@@ -393,7 +442,8 @@ making it twice. In order:
    transaction; a production Deploy on 18 Nov handed a service a release at
    23:42:09, and its first instance started at 23:42:10). Every service is
    linked before the Deploy hands any release. Its settings go with its release,
-   never ahead of it (below). Then, each service in turn: its release is uploaded and its App Service made (labelled,
+   never ahead of it (below). Then, each service in turn: its release is uploaded, once per build (a service
+   whose build another service was handed in this Deploy takes that one's version, built once), and its App Service made (labelled,
    internal ones with no routes, the public one routed at the domain and its
    other names with a connection to each service it reaches, or made with no
    route while another App Service the record holds has the domain or one of
@@ -472,8 +522,8 @@ making it twice. In order:
      the names were has no names, so after that release succeeds it keeps no
      hash and 6 replaces the settings once, dropping names no longer given: the
      one Deploy after an editor before 7f3529167 kept a record rolls each
-     service whose settings it brings twice (Mercbot's production Deploy of 24
-     Nov), and none after it does, its names kept; on 25 Nov no Production
+     service whose settings it brings twice (a two-service app's production
+     Deploy of 24 Nov), and none after it does, its names kept; on 25 Nov no Production
      record from before it remained, so that roll is not needed for day 0. A
      service whose settings name one this Deploy still makes (a Reaches of a
      new service) is handed its release without them and given them in 6, on
@@ -528,7 +578,17 @@ making it twice. In order:
    them again. The provider gives no exit code or output: their output is the
    logs of the instance they ran on, which the step reading the refresh names. A release that
    fails after its migrations ran says that the version before serves on the
-   migrated database, and the next Deploy doesn't run them again;
+   migrated database, and the next Deploy doesn't run them again.
+   A service whose App Service runs another app than its build's (the Plan's
+   `replaced`, above) is made again beside it: its release is its build's, an
+   upload or another service's version, and the new App Service takes the
+   name it always had, or `<name>-2` while the old one holds it (the one after
+   takes the name again). Each service that reaches it is given a connection to
+   the new one ahead of the release or settings that reach it, never losing the
+   old one's until 6. The new one is linked to every resource as a new service
+   is, once its refresh is open, and the old one serves until 8. A Deploy cut
+   short once the new one was made, before its record kept it, is finished by
+   the next, which adopts it by its labels and makes none twice;
 5. a resource the Stack no longer names is unlinked from the services that
    stay and kept with its data;
 6. each service's settings (`settingValues`: Production's own, each Reaches
@@ -564,7 +624,10 @@ making it twice. In order:
    deleted; a public service lacking it otherwise (its route deleted or moved by
    hand) asks for it plainly, which the provider refuses when a thing the record
    doesn't hold has it, failing the Deploy with its reason;
-8. a service the Stack no longer names is deleted;
+8. an App Service made in another's place (4: one whose app was not its build's)
+   has the one it replaced deleted once it serves its release and the services
+   reaching it reach it (6); then a service the Stack no longer names is
+   deleted;
 9. live, once every service runs its release on as many healthy instances as
    the provider runs it on now (its live count, whatever set it; 1 where the
    provider reports none) and its last refresh (a link's or a change's) did not
@@ -831,7 +894,11 @@ link sets refused, checked at the call against the release while no other
 refresh of the service is open, merged into the service's settings as its
 refresh starts, the service's own only once that refresh succeeded, the same
 Idempotency-Key answering again, and `services:manage` needed beside
-`services:deploy`. mobilynet has no leases yet: an
+`services:deploy`. The inventory gives each App Service's `app`, and
+`releaseService` hands a service a `version` it is given (another service of
+its build already has it) in place of uploading one, so a shared build is
+uploaded and built once; the stand-in keeps an App Service's app fixed and
+releases a version only of that app, as mobilynet does. mobilynet has no leases yet: an
 adapter made without `leases: true` takes none, which is safe only while one
 editor deploys an environment. mobilynet runs a release's task (main
 `17340a6a`, its `docs/stages/release-tasks.md`), and the stand-in answers it as
@@ -1136,7 +1203,8 @@ request's signature (or the gateway's token), for the engine's tests.
 ## Implementation map
 
 - `needsOfStack()` — the needs from the inspected Stack.
-- `servicePackages()` — one mobilynet declaration per service and the scripts.
+- `servicePackages()` — one mobilynet declaration per build (services built from one source share it) and the scripts.
+- `buildLeadsOf()`, `sharedVersionOf()` — which services share a build, and the version one of them already has in a Deploy.
 - `imagePackages()`, `imageUpload()` — the image per service, for container providers.
 - `packArchive()` — the saved commit packed once with Vibe64's scripts, and the machine setup script at its root.
 - `planOf()` — the Plan with verbs, drift, the quote, the quotas and its hash.

@@ -26,7 +26,8 @@
 //      Env has no value for fails the Deploy before any change, naming it. A service whose settings name one this
 //      Deploy still makes (a Reaches of a new service) is handed its release without them, and given them in 6.
 //      Services that reach each other, none made yet, fail the Deploy, saying to deploy without one Reaches line first.
-//      Then, each service in turn: its release is uploaded, then its service made (internal: no routes; public: routed
+//      Then, each service in turn: its release is uploaded, once per build (a service built with one already handed
+//      it in this Deploy takes that one's version: builds.js), then its service made (internal: no routes; public: routed
 //      at the domain and its other names, with a connection to each service it reaches; without any while another
 //      service the record holds has one: address.js), with the count the plan chose for a service it makes, or handed the release, which rolls to the count the service runs (a provider's refresh rolls to the count the service has as
 //      it rolls, as mobilynet's does); then each resource it is still not linked to is linked the moment that refresh
@@ -43,7 +44,9 @@
 //      that fails may end the links made against the release it moved to (mobilynet's do), which the record lets go so
 //      the next Deploy makes them again, and fails the deployment with that service's reason; the services not yet
 //      moved keep serving their version. Where the adapter runs a release's task, the first release a Deploy hands
-//      carries the migrations, once, unless the database ran that code's (the record's `migrated`);
+//      carries the migrations, once, unless the database ran that code's (the record's `migrated`). An App Service
+//      whose app is not its build's (made when each service was its own app) can't take the build's release: a new one
+//      is made beside it (`<name>-2`), connected ahead to what it reaches, while the old one serves on;
 //   5. a resource the Stack no longer names is unlinked from every service that stays, now that none runs a release
 //      naming it, and kept running with its data;
 //   6. each service's settings (package.js settingValues, the public one's with the other names as APP_REDIRECT_HOSTS,
@@ -56,7 +59,8 @@
 //      them succeeded: one that failed left the service with those it had, which the next Deploy gives again;
 //   7. the domain and its other names, where the public service lacks any, are routed to it once it serves its
 //      release (address.js);
-//   8. a service the Stack no longer names is deleted (its links end with it);
+//   8. an App Service made in another's place (4) has the old one deleted once it serves and the services reaching it
+//      reach it (6); a service the Stack no longer names is deleted (its links end with it);
 //   9. live, once every service runs its release with as many healthy instances as it runs at the provider and its
 //      last refresh did not fail; the address's DNS target is told once (address.js).
 //
@@ -97,23 +101,21 @@
 import { createHash, randomBytes } from "node:crypto";
 
 import { addressChange, addressWords, aliasesProblem, domainHolder, domainStep } from "./address.js";
+import { replacementName, sharedVersionOf } from "./builds.js";
+import { backoffPauses, deployError, firstRead, retryable } from "./failures.js";
 import { settleLastRun } from "./lastRun.js";
 import { MIGRATED_NOTE, migrationDue, migrationsOf, noteHandOver, noteTask } from "./migrations.js";
 import { planOf, stableJson } from "./plan.js";
 import { LABEL, keptChoices, labelsFor } from "./record.js";
 import { reporterOf, stepEvent, stepWords } from "./report.js";
 import { requiredWithoutValue } from "./package.js";
-import { broughtOf, connectionsOf, givenOf, unmadeReach, valuesOf } from "./serviceValues.js";
+import { broughtOf, connectionsAhead, connectionsOf, givenOf, unmadeReach, valuesOf } from "./serviceValues.js";
 import { STOP_WORDS, stopAtBoundary } from "./stop.js";
 
 const LEASE_SECONDS = 600;
 // An adapter's refusal of a link its provider takes only with the service's new release under way: the release the
 // service runs doesn't name the resource, it runs none yet, or the refresh moving it hasn't read its release yet.
 const LINK_NEEDS_RELEASE = "link_needs_release";
-/** A refusal or failure of a Deploy: `code`, a message a person can act on, and `status` for the caller's answer. */
-function deployError(code, message, status = 409, details = {}) {
-  return Object.assign(new Error(message), { code, status, details });
-}
 
 /**
  * The order a Deploy moves services in: each after the services it reaches, so it starts with their addresses once
@@ -148,42 +150,20 @@ function releaseDigest(upload, declaration) {
   return `sha256:${createHash("sha256").update(stableJson({ upload: upload.sha256, declaration })).digest("hex")}`;
 }
 
+/** The App Service a service's new one is made in place of, for its record (the steps' 8 deletes it). */
+const replacesOf = (step) => (step.replaces ? { replaces: step.replaces } : {});
+/**
+ * The record lets go of the links it names for a service made again in another's place: they are the old App
+ * Service's, which end with it, and the new one is linked as any new service is, once its refresh is open.
+ */
+function unlinkReplaced(record, service) {
+  for (const item of Object.values(record.items)) if (item.kind === "resource") delete item.links?.[service];
+}
+
 /** The thing of the provider labelled as this deployment's item, made by a Deploy cut short before its record kept it. */
 function labelledAs(observed, record, kind, name) {
   return observed.find((thing) => thing.kind === kind && thing.state !== "deleting" && thing.labels?.[LABEL.deployment] === record.deploymentId
     && thing.labels?.[LABEL.item] === `${kind}.${name}`);
-}
-
-/** A read of the provider that may answer later: no answer, a 5xx, its rate limit, a thing busy. @param {any} error */
-const retryable = (error) => error?.retryable === true;
-// A read tried again waits one pause, then two, four and at most six (5, 10, 20 and 30 seconds at the caller's 5).
-const BACKOFF_PAUSES_MAX = 6;
-/** The pauses before the provider is read again after this many failed reads in a row. @param {number} failures */
-const backoffPauses = (failures) => Math.min(2 ** (failures - 1), BACKOFF_PAUSES_MAX);
-// How many times a Deploy makes each read it makes before it changes anything: then it stops, nothing changed.
-const FIRST_READS = 5;
-
-/**
- * A read a Deploy makes before it changes anything (the offer, the inventory, the edge's addresses), tried again as
- * the loop's reads are while the provider may answer later; after FIRST_READS it stops with
- * `production_deploy_unanswered`, saying in words that nothing changed (the provider's own words are in each retry).
- * @template T @param {any} adapter @param {() => Promise<T>} read
- * @param {{ tell: (event: any) => void, pause: () => Promise<void> | void }} context @returns {Promise<T>}
- */
-async function firstRead(adapter, read, { tell, pause }) {
-  for (let failures = 1; ; failures += 1) {
-    try {
-      return await read();
-    } catch (error) {
-      if (!retryable(error)) throw error;
-      if (failures >= FIRST_READS) {
-        throw deployError("production_deploy_unanswered",
-          `${adapter.title} didn't answer, so the Deploy stopped before changing anything. Deploy again.`, 503);
-      }
-      tell({ kind: "retry", words: `Reading ${adapter.title} again`, attempt: failures, message: error.message });
-      for (let one = 0; one < backoffPauses(failures); one += 1) await pause();
-    }
-  }
 }
 
 /**
@@ -290,20 +270,36 @@ function nextStep({ plan, needs, record, observed, release }) {
     const parts = partsOf(service);
     const { item, state, thing } = parts;
     const unlinked = (resource) => !linked(resource.id, service.id);
+    // An App Service that runs another app than its build's (made when each service was its own app, or before its
+    // build's services changed) can't be handed this release: a new one is made beside it, which the record then
+    // names, and the old one serves until the new one does and every service reaching it was moved to it (8).
+    const replacing = thing && typeof thing.app === "string" && thing.app !== release.declarations[service.id].name ? thing : null;
+    // One a Deploy cut short made before its record kept it, labelled as the item, is adopted in its place.
+    const remade = replacing && observed.find((one) => one.id !== replacing.id && one.app === release.declarations[service.id].name
+      && labelledAs([one], record, "service", service.id));
+    if (remade) return { kind: "adopt", item: "service", name: service.id, thing: remade, replaces: { id: replacing.id, providerName: replacing.name } };
     if (!state.version) {
-      const ready = readyOf(service, parts);
+      const ready = replacing ? null : readyOf(service, parts);
       if (ready) return ready;
-      if (keeps(service, item, thing)) return { kind: "keepRelease", service: service.id };
-      if (!thing) return { kind: "uploadRelease", service: service.id, id: null };
+      if (!replacing && keeps(service, item, thing)) return { kind: "keepRelease", service: service.id };
+      // A release of the app another service of its build already has in this Deploy is that one's version: uploaded
+      // and built once.
+      const shared = sharedVersionOf(service, { needs, release, run });
+      if (!thing || replacing) {
+        return shared ? { kind: "shareRelease", service: service.id, version: shared.version, from: shared.service } : { kind: "uploadRelease", service: service.id, id: null };
+      }
+      // A service it reaches that is new since its last release gets its connection before the release that reaches it.
+      const ahead = connectionsAhead(service, thing, record, release.port);
+      if (ahead) return { kind: "changeService", service: service.id, id: thing.id, change: { connections: ahead } };
       // Its settings go with its release where they differ from those it was given; where they name a service this
       // Deploy still makes, they follow in 6, on that release.
-      const values = valuesOf(service, { record, release }, byId);
+      const values = valuesOf(service, { record, release, needs }, byId);
       const brought = values && values.hash !== item.settingsHash ? { values } : {};
-      return { kind: "releaseService", service: service.id, id: thing.id, ...migrateTask(service.id), ...brought };
+      return { kind: "releaseService", service: service.id, id: thing.id, ...(shared ? { version: shared.version } : {}), ...migrateTask(service.id), ...brought };
     }
-    if (!thing) {
-      const name = release.declarations[service.id].name;
-      const leaving = observed.find((one) => one.name === name);
+    if (!thing || replacing) {
+      const name = replacementName(service, { record, release }, replacing);
+      const leaving = replacing ? null : observed.find((one) => one.name === name);
       if (leaving) return { kind: "wait", words: `Waiting for the old ${service.id} to go` };
       // Made after the services it reaches, so one not made yet reaches it back: none can start without another's
       // address, which a provider gives only once it is made (mobilynet refuses a release without a declared setting).
@@ -312,10 +308,13 @@ function nextStep({ plan, needs, record, observed, release }) {
         return { kind: "failed", message: `${service.id} reaches ${unmade.service}, which can't start before ${service.id} does, and neither `
           + "runs yet: take one of their Reaches lines out of genesis/stack.md until both run, then deploy to production." };
       }
-      const values = valuesOf(service, { record, release }, byId);
+      const values = valuesOf(service, { record, release, needs }, byId);
       if (!values) return { kind: "wait", words: `Waiting for the services ${service.id} reaches` };
-      const held = service.exposure === "public" ? [release.domain, ...aliases].map((name) => domainHolder(record, thingOf, name)).find(Boolean) : null;
-      return { kind: "createService", service: service.id, values, ...(held ? { withoutDomain: held.name } : {}), ...migrateTask(service.id) };
+      const held = service.exposure === "public" ? [release.domain, ...aliases].map((host) => domainHolder(record, thingOf, host)).find(Boolean) : null;
+      return {
+        kind: "createService", service: service.id, name, values, ...(replacing ? { replaces: { id: replacing.id, providerName: replacing.name } } : {}),
+        ...(held ? { withoutDomain: held.name } : {}), ...migrateTask(service.id)
+      };
     }
     // A service runs one refresh at a time, the rest queued behind it, and shows the one under way, else the next: this
     // Deploy's has ended once none is. A resource it is still not linked to (a new service, one that runs no release,
@@ -339,11 +338,13 @@ function nextStep({ plan, needs, record, observed, release }) {
     if (linkId) return { kind: "unlink", resource: item.name, id: item.id, service, linkId };
   }
 
-  // 6. Settings, the services each reaches, then size, as chosen.
+  // 6. Settings, the services each reaches, then size, as chosen: a connection the settings need first.
   for (const service of servicesInOrder(needs)) {
     const item = itemOf("service", service.id);
     const thing = thingOf(item);
-    const values = valuesOf(service, { record, release }, byId);
+    const values = valuesOf(service, { record, release, needs }, byId);
+    const ahead = values.hash !== item.settingsHash ? connectionsAhead(service, thing, record, release.port) : null;
+    if (ahead) return { kind: "changeService", service: service.id, id: thing.id, change: { connections: ahead } };
     if (values.hash !== item.settingsHash) return { kind: "putSettings", service: service.id, id: thing.id, values };
     const connections = connectionsOf(service, record, release.port);
     if (stableJson(connections) !== stableJson(thing.connections ?? [])) return { kind: "changeService", service: service.id, id: thing.id, change: { connections } };
@@ -360,7 +361,15 @@ function nextStep({ plan, needs, record, observed, release }) {
   });
   if (routing) return routing;
 
-  // 8. A service the Stack no longer names.
+  // 8. An App Service made again (4) goes once the one in its place serves its release and every service reaching it
+  // was moved to the new one (4 and 6); then a service the Stack no longer names.
+  for (const service of servicesInOrder(needs)) {
+    const item = itemOf("service", service.id);
+    const thing = thingOf(item);
+    if (!item?.replaces || !thing || !serves(service, thing)) continue;
+    const old = byId.get(item.replaces.id);
+    return { kind: "deleteReplaced", service: service.id, id: old && old.state !== "deleting" ? old.id : null, providerName: item.replaces.providerName };
+  }
   for (const item of Object.values(record.items)) {
     if (item.kind === "service" && !needs.services.some((one) => one.id === item.name) && thingOf(item)) {
       return { kind: "deleteService", service: item.name, id: item.id, replaced: false };
@@ -426,6 +435,9 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     case "uploadRelease":
       stateOf(step.service).version = (await adapter.uploadRelease(release.declarations[step.service].name, upload(step.service))).version;
       break;
+    case "shareRelease":
+      stateOf(step.service).version = step.version;
+      break;
     case "keepRelease":
       stateOf(step.service).version = record.items[`service.${step.service}`].release.version;
       break;
@@ -434,6 +446,7 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       const brought = step.values ? broughtOf(step.values, item) : null;
       const answer = await adapter.releaseService(step.id, upload(step.service), {
         app: release.declarations[step.service].name,
+        ...(step.version ? { version: step.version } : {}),
         task: step.task ?? null,
         values: step.values ?? null,
         remove: brought?.remove ?? [],
@@ -449,19 +462,21 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
       const choice = plan.choices.services[service.id];
       const { values } = step;
       const connections = connectionsOf(service, record, release.port);
-      const name = release.declarations[service.id].name;
+      const name = step.name ?? release.declarations[service.id].name;
+      const app = release.declarations[service.id].name;
       const state = stateOf(service.id);
       // A public service is routed at the other names with the domain; an adapter that can't route them never gets one.
       const aliases = service.exposure === "public" && !step.withoutDomain ? release.aliases ?? [] : [];
       const made = await adapter.createService({
-        name, exposure: service.exposure, size: choice.size, instances: choice.instances, app: name, version: state.version,
+        name, exposure: service.exposure, size: choice.size, instances: choice.instances, app, version: state.version,
         settings: values.settings, secrets: values.secrets, domain: step.withoutDomain ? null : release.domain, connections, labels: labelsFor(record, { kind: "service", name: service.id }),
         ...(aliases.length > 0 ? { aliases } : {}), ...(step.task ? { task: step.task } : {})
       }, { idempotencyKey: keyOf(record, "service", service.id, name) });
       record.items[`service.${service.id}`] = {
         kind: "service", name: service.id, id: made.id, providerName: name, origin: "made", size: choice.size,
-        exposure: service.exposure, ...givenOf(values), release: { digest: release.digests[service.id], version: state.version }
+        exposure: service.exposure, ...givenOf(values), release: { digest: release.digests[service.id], version: state.version }, ...replacesOf(step)
       };
+      if (step.replaces) unlinkReplaced(record, service.id);
       Object.assign(state, { refreshId: made.refreshId, handed: true });
       message = noteHandOver(record, release.migrations, step);
       break;
@@ -492,10 +507,11 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
     case "adopt": {
       const { thing } = step;
       record.items[`${step.item}.${step.name}`] = step.item === "service"
-        ? { kind: "service", name: step.name, id: thing.id, providerName: thing.name, origin: "made", size: thing.size, exposure: thing.exposure }
+        ? { kind: "service", name: step.name, id: thing.id, providerName: thing.name, origin: "made", size: thing.size, exposure: thing.exposure, ...replacesOf(step) }
         : { kind: "resource", name: step.name, id: thing.id, providerName: thing.name, origin: "made", size: thing.size, resourceKind: thing.resourceKind, links: {} };
-      // A service adopted is handed this Deploy's release like any other.
+      // A service adopted is handed this Deploy's release like any other; one made in another's place is linked anew.
       if (step.item === "service") delete run.services[step.name];
+      if (step.replaces) unlinkReplaced(record, step.name);
       break;
     }
     case "checkRefresh": {
@@ -543,6 +559,10 @@ async function applyStep(adapter, step, { record: given, needs, plan, release })
         take: Boolean(step.from), ...(step.aliases ? { aliases: step.aliases } : {}),
         idempotencyKey: keyOf(record, "takeDomain", step.service, step.aliases ? { domain: step.domain, aliases: step.aliases } : step.domain)
       });
+      break;
+    case "deleteReplaced":
+      if (step.id) await adapter.deleteService(step.id);
+      delete record.items[`service.${step.service}`].replaces;
       break;
     case "deleteService":
       await adapter.deleteService(step.id);

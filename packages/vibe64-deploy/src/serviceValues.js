@@ -1,5 +1,6 @@
 // What a Deploy gives each App Service besides its release (steps.js): its settings, with each Reaches setting the
 // address of the service it reaches, what the record keeps of them, and its connections to the services it reaches.
+import { SERVICE_SETTING, sharesBuild } from "./builds.js";
 import { settingValues } from "./package.js";
 
 /** A service the given one reaches that the provider doesn't run yet (none made, or gone). */
@@ -8,9 +9,11 @@ const unmadeReach = (service, record, byId) => service.reaches.find((reach) => !
 /**
  * The values a service is given, with each of its Reaches settings the reached service's private address: its own
  * (`internalUrl`) where the provider reports one, else `http://<internalName>:<port>`; null while one has no address.
- * @param {any} service the need's service @param {any} context the run's context @param {Map<string, any>} byId
+ * A service that shares its build (builds.js) is given its id as V64_SERVICE, which its release's service script reads.
+ * @param {any} service the need's service @param {any} context the run's context (`needs` its needs)
+ * @param {Map<string, any>} byId
  */
-function valuesOf(service, { record, release }, byId) {
+function valuesOf(service, { record, release, needs }, byId) {
   const reached = {};
   for (const reach of service.reaches) {
     const thing = byId.get(record.items[`service.${reach.service}`]?.id);
@@ -20,7 +23,8 @@ function valuesOf(service, { record, release }, byId) {
   }
   return settingValues({
     declared: release.settings[service.id], env: release.env, domain: release.domain, aliases: service.exposure === "public" ? release.aliases ?? [] : [],
-    trustedProxies: release.trustedProxies, port: release.port, reached
+    trustedProxies: release.trustedProxies, port: release.port, reached,
+    ...(needs && sharesBuild(needs, service.id) ? { own: { [SERVICE_SETTING]: service.id } } : {})
   });
 }
 
@@ -47,4 +51,16 @@ function connectionsOf(service, record, port) {
   return service.reaches.map((reach) => ({ to: record.items[`service.${reach.service}`]?.id ?? null, port }));
 }
 
-export { broughtOf, connectionsOf, givenOf, unmadeReach, valuesOf };
+/**
+ * The connections a service holds with those of connectionsOf it lacks added, never one taken away, or null when it
+ * lacks none: what it needs before a release or settings that reach a service it doesn't reach yet (a service made
+ * again in another's place, or new). The steps' 6 then leaves it exactly connectionsOf.
+ * @param {any} service a need's service @param {{ connections?: any[] }} thing its App Service @param {any} record @param {number} port
+ */
+function connectionsAhead(service, thing, record, port) {
+  const held = thing.connections ?? [];
+  const lacking = connectionsOf(service, record, port).filter((one) => one.to && !held.some((other) => other.to === one.to && other.port === one.port));
+  return lacking.length > 0 ? [...held, ...lacking] : null;
+}
+
+export { broughtOf, connectionsAhead, connectionsOf, givenOf, unmadeReach, valuesOf };

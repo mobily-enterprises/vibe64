@@ -135,6 +135,38 @@ each needs the other's address: the Deploy fails before making either, naming
 both. Take one of their `- Reaches:` lines out of `genesis/stack.md`, deploy,
 then put it back once both run.
 
+### One build for the app's services
+
+Every service of a project builds from the same saved work, so on mobilynet a
+Deploy to production builds it once for all of them. Services built together
+are one app at mobilynet, named after the public service, such as
+`shop-web`. The first service a Deploy updates uploads the release, and the
+others take the same version, with nothing built again. Each service keeps
+its own App Service: its address, size, instance count, settings and Serve
+command. Each instance starts its own service's Serve command, which its
+`V64_SERVICE` setting names. That setting counts toward mobilynet's settings
+limit for the service, so it has one Production Env entry less of room.
+
+Services whose Ready check paths differ, or whose sandbox allowances differ,
+can't share a build: mobilynet keeps one health check and one set of machine
+features per build. Each such service stays its own app and builds on its own.
+
+A Production deployed before 25 Nov 2026 has one app per service. Its next
+Deploy moves it to one app, and its Plan shows the move:
+
+- The public service is **kept**. Its App Service, address and domain stay.
+- Each other service is **replaced**, its change listed as `app` from its own
+  app (such as `shop-worker`) to the shared one (`shop-web`). mobilynet can't
+  change an App Service's app, so the Deploy makes a new App Service beside the
+  old one, named `shop-worker-2`. It gets the same settings, size and count.
+- The old App Service keeps serving until the new one is healthy and the
+  services that reach it reach the new one. Then the Deploy deletes it. An App
+  Service holds no data, and every database, Redis and bucket stays as it is,
+  linked to the new App Service.
+
+If that Deploy stops partway, deploy again. The next one picks up the App
+Service already made and finishes the move without making another one.
+
 ## Remove a service
 
 There is no **Remove** button. Ask the AI in the session to remove the

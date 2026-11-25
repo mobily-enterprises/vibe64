@@ -536,13 +536,18 @@ test("moveDomain routes the running public App Service to another domain at once
 const writesAfter = (standIn, count) => requestsAfter(standIn, count).filter((request) => isWrite(request) && !request.path.startsWith("/v1/leases"))
   .map((request) => [request.method, request.path]);
 /**
- * The writes that hand a service its release: its upload to the project, then the release by its version, which brings
- * its settings where they changed. @param {string} projectId @param {any} kept a record @param {string} service
+ * The writes that hand a service its release: its build's upload to the project (the two services' one app, unless
+ * `app` says another; none where another service of its build was handed that release first in the Deploy), then the
+ * release by its version, which brings its settings where they changed.
+ * @param {string} projectId @param {any} kept a record @param {string} service
+ * @param {{ app?: string, uploaded?: boolean }} [options]
  */
-const handed = (projectId, kept, service) => [
-  ["POST", `/v1/projects/${projectId}/apps/${kept.items[`service.${service}`].providerName}/releases`],
+const handed = (projectId, kept, service, { app = "memobot-web", uploaded = true } = {}) => [
+  ...(uploaded ? [["POST", `/v1/projects/${projectId}/apps/${app}/releases`]] : []),
   ["POST", `/v1/services/${kept.items[`service.${service}`].id}/releases`]
 ];
+/** A Stack's needs with each service built alone, as the engine packed every Deployment before one build per source. */
+const apart = ({ deployment, needs }) => ({ deployment, needs: { ...needs, services: needs.services.map((service) => ({ ...service, builtWith: service.id })) } });
 /** Each resource's links as mobilynet holds them now: `{ item: [[link id, consumer, state]] }`, ids naming the credentials. */
 const linksHeld = (standIn, kept) => Object.fromEntries(["resource.database", "resource.files"].map((item) => [item,
   standIn.hosted.service(kept.items[item].id).links.map((link) => [link.id, link.consumer.id, link.state]).sort()]));
@@ -565,9 +570,9 @@ test("a redeploy of unchanged code and Stack sends the provider nothing but its 
   assert.deepEqual(standIn.services.instances(items["service.computers"].id).map((one) => one.id), instances, "the same machines");
 });
 
-test("a redeploy where one of two services changed hands that one alone its release: no hosted service, link or other service is touched", async () => {
+test("a redeploy where one of two services built apart changed hands that one alone its release: no hosted service, link or other service is touched", async () => {
   const { standIn, projectId, run, record } = setup();
-  const first = await run({ record, commit: "c1" });
+  const first = await run({ stack: apart(stackOf()), record, commit: "c1" });
   assert.equal(first.outcome, "live", first.message);
   settle(standIn);
   const { items } = first.record;
@@ -575,11 +580,11 @@ test("a redeploy where one of two services changed hands that one alone its rele
   const links = linksHeld(standIn, first.record);
   const webInstances = standIn.services.instances(web).map((one) => one.id);
   // The same commit, with one more package for computers alone: only computers' declaration changes.
-  const changed = stackOf((lines) => lines.map((line) => (line.startsWith("- Packages: `tint2`") ? `${line} \`htop\`` : line)));
+  const changed = apart(stackOf((lines) => lines.map((line) => (line.startsWith("- Packages: `tint2`") ? `${line} \`htop\`` : line))));
   const at = standIn.requests().length;
   const second = await run({ stack: changed, record: first.record, commit: "c1" });
   assert.equal(second.outcome, "live", second.message);
-  assert.deepEqual(writesAfter(standIn, at), handed(projectId, first.record, "computers"), "computers' release, and nothing else");
+  assert.deepEqual(writesAfter(standIn, at), handed(projectId, first.record, "computers", { app: "memobot-computers" }), "computers' release, and nothing else");
   assert.equal(computers, second.record.items["service.computers"].id);
   assert.deepEqual(second.steps.filter((step) => !step.startsWith("wait")), ["ensureDomain", "releaseService computers", "checkRefresh computers", "keepRelease web"]);
   assert.deepEqual(standIn.services.refreshes(web).map((one) => one.kind), ["create"], "no refresh of web");
@@ -648,8 +653,8 @@ test("a service whose release failed is handed it again on the next Deploy, whil
   const at = standIn.requests().length;
   const again = await run({ record: failed.record, commit: "c2" });
   assert.equal(again.outcome, "live", again.message);
-  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, again.record, "computers"), ...handed(projectId, again.record, "web")],
-    "computers handed c2 again and web its first c2: no hosted-service write, no link");
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, again.record, "computers"), ...handed(projectId, again.record, "web", { uploaded: false })],
+    "computers handed c2 again and web its first c2, the one upload's: no hosted-service write, no link");
   assert.deepEqual([computers, web], [again.record.items["service.computers"].id, again.record.items["service.web"].id]);
   assert.deepEqual(linksHeld(standIn, again.record), links, "the same links (the same logins) through the failure and the Deploy after it");
 });
@@ -682,7 +687,7 @@ test("a release that fails for a secret's value is put right by a Deploy with th
   const at = standIn.requests().length;
   const fixed = await run({ record: failed.record, commit: "c2", env, report: events.report });
   assert.equal(fixed.outcome, "live", fixed.message);
-  assert.deepEqual(writesAfter(standIn, at), handed(projectId, fixed.record, "web"));
+  assert.deepEqual(writesAfter(standIn, at), handed(projectId, fixed.record, "web", { uploaded: false }), "web takes the release computers runs: no upload");
   assert.deepEqual(fixed.steps.filter((step) => !step.startsWith("wait")), ["ensureDomain", "keepRelease computers", "releaseService web", "checkRefresh web"]);
   const words = events.events.filter((event) => event.kind === "step" && event.phase === "start" && event.service === "web").map((event) => event.words);
   assert.deepEqual(words, ["Handing App Service web the new release", "Reading how the update of web ended"]);
@@ -705,7 +710,7 @@ test("a release that fails for a secret's value is put right by a Deploy with th
   const moved = standIn.requests().length;
   const third = await run({ record: again.record, commit: "c3", env });
   assert.equal(third.outcome, "live", third.message);
-  assert.deepEqual(writesAfter(standIn, moved), [...handed(projectId, third.record, "computers"), ...handed(projectId, third.record, "web")]);
+  assert.deepEqual(writesAfter(standIn, moved), [...handed(projectId, third.record, "computers"), ...handed(projectId, third.record, "web", { uploaded: false })]);
   assert.equal(computers, third.record.items["service.computers"].id);
   const broughtBy = (id) => requestsAfter(standIn, moved).filter((request) => request.path === `/v1/services/${id}/releases`)
     .flatMap((request) => Object.keys(request.body).filter((key) => ["settings", "secrets", "remove"].includes(key)));
@@ -1010,7 +1015,7 @@ test("a two-service Deploy hands each service its release with its new settings,
   const at = standIn.requests().length;
   const second = await run({ record: first.record, commit: "c2", env });
   assert.equal(second.outcome, "live", second.message);
-  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web")]);
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web", { uploaded: false })]);
   assert.deepEqual(database.refused, [], "no instance refused the migrated database");
   assert.equal(database.migrated(), 2);
   for (const [service, id] of [["computers", computers], ["web", web]]) {
@@ -1048,9 +1053,9 @@ test("each service of a Deploy that hands both a release, each reaching the othe
   let [at, counts] = [standIn.requests().length, countsNow()];
   const second = await run({ stack: eachReachesTheOther(), record: first.record, commit: "c2" });
   assert.equal(second.outcome, "live", second.message);
-  // computers' connection to web is opened after the move: a change that starts no refresh.
-  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web"),
-    ["PATCH", `/v1/services/${ids.computers}`]]);
+  // computers' connection to web is opened before the release that reaches web: a change that starts no refresh.
+  assert.deepEqual(writesAfter(standIn, at), [["PATCH", `/v1/services/${ids.computers}`], ...handed(projectId, second.record, "computers"),
+    ...handed(projectId, second.record, "web", { uploaded: false })]);
   assert.deepEqual(kindsAfter(counts), { computers: [["release", "succeeded"]], web: [["release", "succeeded"]] });
   settle(standIn);
   const serving = (id) => standIn.services.instances(id).filter((one) => !one.removedReason);
@@ -1059,7 +1064,7 @@ test("each service of a Deploy that hands both a release, each reaching the othe
   [at, counts] = [standIn.requests().length, countsNow()];
   const third = await run({ stack: eachReachesTheOther(), record: second.record, commit: "c3" });
   assert.equal(third.outcome, "live", third.message);
-  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, third.record, "computers"), ...handed(projectId, third.record, "web")]);
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, third.record, "computers"), ...handed(projectId, third.record, "web", { uploaded: false })]);
   assert.deepEqual(kindsAfter(counts), { computers: [["release", "succeeded"]], web: [["release", "succeeded"]] });
 });
 
@@ -1091,7 +1096,7 @@ test("a first Deploy of two services that reach each other, neither made yet, fa
   const second = await run({ stack: eachReachesTheOther(), record: first.record, commit: "c2" });
   assert.equal(second.outcome, "live", second.message);
   assert.deepEqual(writesAfter(standIn, at).filter(([method]) => method !== "PATCH"),
-    [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web")]);
+    [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web", { uploaded: false })]);
 });
 
 test("a record an editor before setting names kept (no names; a hash a failed settings refresh dropped) gets each service's settings with its release, then once more in a settings refresh, which a Deploy after it never repeats", async () => {
@@ -1111,13 +1116,13 @@ test("a record an editor before setting names kept (no names; a hash a failed se
   let at = standIn.requests().length;
   const second = await run({ record: old, commit: "c2" });
   assert.equal(second.outcome, "live", second.message);
-  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web"),
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, second.record, "computers"), ...handed(projectId, second.record, "web", { uploaded: false }),
     put("computers"), put("web")], "computers' release, web's, then computers' settings and web's: the names no longer given go");
   settle(standIn);
   at = standIn.requests().length;
   const third = await run({ record: second.record, commit: "c3" });
   assert.equal(third.outcome, "live", third.message);
-  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, third.record, "computers"), ...handed(projectId, third.record, "web")],
+  assert.deepEqual(writesAfter(standIn, at), [...handed(projectId, third.record, "computers"), ...handed(projectId, third.record, "web", { uploaded: false })],
     "each service's release alone");
 });
 
@@ -1173,9 +1178,10 @@ test("the migrations run once per Deploy as the first release's task, before any
   assert.ok(stepsOf.indexOf("task_succeeded") < stepsOf.indexOf("instance_started"), "the task finished before any instance started");
   assert.equal(first.migrations(), "ran");
   assert.ok(first.said().includes(`The migrations ran once. Their output is in the logs of ${ranOn.id}.`), first.said().join(" | "));
+  // One task for both services, of their one app, which runs the service's own migrate script (by its V64_SERVICE).
   for (const service of ["computers", "web"]) {
     const declaration = releaseOf("c1", stackOf()).declarations[service];
-    assert.match(declaration.tasks.migrate.command, new RegExp(`^systemd-run .* --uid=memobot-${service} .* bash vibe64-app/migrate-${service}\\.sh$`, "u"));
+    assert.match(declaration.tasks.migrate.command, /^systemd-run .* --uid=memobot-web .* bash vibe64-app\/migrate\.sh$/u);
   }
   assert.deepEqual(made.record.migrated.map((one) => one.release), ["c1"]);
 
@@ -1187,13 +1193,15 @@ test("the migrations run once per Deploy as the first release's task, before any
   assert.deepEqual(tasksRan(standIn, kept.record).length, 1);
   assert.equal(same.migrations(), "skipped");
 
-  // One service's declaration changed and the code didn't: its release is handed with no migrations.
+  // One service's packages changed and the code didn't: the two services' build changed, so each is handed its one
+  // release, with no migrations.
   settle(standIn);
   const changed = stackOf((lines) => lines.map((line) => (line.startsWith("- Packages: `tint2`") ? `${line} \`htop\`` : line)));
   const packages = reports();
   const repacked = await run({ stack: changed, record: kept.record, commit: "c1", report: packages.report });
   assert.equal(repacked.outcome, "live", repacked.message);
-  assert.deepEqual(repacked.steps.filter((step) => !step.startsWith("wait")), ["ensureDomain", "releaseService computers", "checkRefresh computers", "keepRelease web"]);
+  assert.deepEqual(repacked.steps.filter((step) => !step.startsWith("wait")),
+    ["ensureDomain", "releaseService computers", "checkRefresh computers", "releaseService web", "checkRefresh web"]);
   assert.deepEqual(tasksRan(standIn, repacked.record).length, 1, "no task with it");
   assert.ok(packages.said().includes("Migrations skipped: the database already ran this code's migrations."), packages.said().join(" | "));
   assert.equal(packages.migrations(), "skipped");
@@ -1659,7 +1667,7 @@ test("a Deploy reports each step as it starts and ends in the engine's words, ea
     "Uploading the release of computers",
     "Making App Service computers, internal: only the app's other services reach it, which first runs the migrations once",
     "Linking computers to database",
-    "Uploading the release of web",
+    "web takes the release uploaded for computers: one build of one source, built once",
     `Making App Service web, public behind the load balancer at ${DOMAIN}`,
     "Reading how the update of computers ended"
   ]) {
@@ -1669,7 +1677,8 @@ test("a Deploy reports each step as it starts and ends in the engine's words, ea
   }
   // In the order the steps run: the resources, the domain, the internal service, then the public one.
   const order = ["start Making the hosted service for database", `start Adding the domain ${DOMAIN}`, "start Uploading the release of computers",
-    "start Uploading the release of web"].map((line) => said.indexOf(line));
+    "start web takes the release uploaded for computers: one build of one source, built once"].map((line) => said.indexOf(line));
+  assert.equal(said.includes("start Uploading the release of web"), false, "one upload of the two services' one build");
   assert.deepEqual([...order].sort((one, other) => one - other), order);
   // A step that starts a refresh names it, so its caller can follow what the provider does; reading how it ended too.
   const made = events.find((event) => event.kind === "step" && event.phase === "done" && event.step === "createService" && event.service === "web");

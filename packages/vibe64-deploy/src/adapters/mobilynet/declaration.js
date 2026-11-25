@@ -1,9 +1,19 @@
-// The mobilynet adapter's declaration: the package Vibe64 hands mobilynet for each service of an app, its mobilynet.json
+// The mobilynet adapter's declaration: the package Vibe64 hands mobilynet for each build of an app, its mobilynet.json
 // and the scripts it runs, in mobilynet's build model of 16 Nov 2026. Every service builds from the one archive (the
-// saved commit with the shared build script and one serve script per service); each is its own app at mobilynet,
-// `<app>-<service>`, whose upload is that archive with its declaration at the root. mobilynet builds the release from source in a throwaway build VM
-// by the declaration's `build` block, keeps the folder as the app's read-only output and runs the app as a service, as
-// the app's own login.
+// saved commit with the shared build script and one serve script per service). Services built together (builds.js:
+// the same health path and sandbox allowances) are one app at mobilynet, named after their lead, `<app>-<lead>`, whose
+// one upload is that archive with its one declaration at the root: mobilynet builds a release once (its project, app
+// and upload's bytes), so each service's App Service runs that app's version and none builds it again. A service built
+// alone is its own app, `<app>-<service>`, as every service was before. mobilynet builds the release from source in a
+// throwaway build VM by the declaration's `build` block, keeps the folder as the app's read-only output and runs the app
+// as a service, as the app's own login.
+//
+// An App Service runs every service its release declares, and checks the first one's health path. So a shared build's
+// declaration has one service, `app`, whose script runs the service the instance's App Service is: the engine gives
+// each its V64_SERVICE (builds.js), and `serve.sh` runs that service's own `serve-<service>.sh`, which exports its own
+// settings and instance facts as before. Its packages are the shared ones and every service's own; a setting one of
+// its services requires and another doesn't is declared optional, and the engine checks each service's own
+// (steps.js requiredWithoutValue). The migrate task runs `migrate.sh`, which picks the service's script alike.
 //
 // mobilynet runs `start`, `check` and a release task as root, and the build can write any file of the output. So none
 // runs a file of the app's: start is `install`, which copies the settings mobilynet keeps for root into a file only the
@@ -24,6 +34,7 @@
 // release (its docs/colleague-usage/setup-scripts.md and app-builds.md). A layer is the project's, base's, packages'
 // and script's, so a service is built on its own layer once and reuses it until one of them changes.
 
+import { SERVICE_SETTING, buildLeadsOf, serviceAppName } from "../../builds.js";
 import { MACHINE_SETUP_FILE, stackSettingsPerService, withRootFile } from "../../package.js";
 
 /**
@@ -35,7 +46,7 @@ const BUILD_SCRIPT = `${APP_SCRIPTS_FOLDER}/build.sh`;
 const DECLARATION_FILE = "mobilynet.json";
 // The port every service listens on, which a service it reaches and the load balancer ask.
 const SERVICE_PORT = 3000;
-// mobilynet's own limits: app names (logins too) of at most 32 characters, and the settings of an App Service (its open
+// mobilynet's own limits: app names (logins too) of at most 32 characters (builds.js APP_NAME_MAX), and the settings of an App Service (its open
 // settings, 19 Nov 2026). An App Service holds at most as many settings and secrets in all, its links' among them, as
 // its region says now (`GET /v1/regions`, `serviceSettingsMax`): one fewer than the entries the region's hosts take for
 // an instance's app, one of them mobilynet's own, so 199 where every host runs agent 2.9.0 or later and 49 while one
@@ -45,7 +56,6 @@ const SERVICE_PORT = 3000;
 // sets on every instance (RUNTIME_NAMES, RUNTIME_PREFIXES), which an app exporting its settings would lose; mobilynet
 // refuses one the release doesn't declare, and the engine refuses each before anything changes. V64_* names are
 // Vibe64's own, which mobilynet leaves open and the engine keeps out of the Production Env (package.js envEntryProblem).
-const APP_NAME_MAX = 32;
 const SERVICE_SETTINGS_FALLBACK = 49;
 const RUNTIME_NAMES = Object.freeze(["PATH", "HOME", "LANG", "GIT_CONFIG_COUNT"]);
 const RUNTIME_PREFIXES = Object.freeze(["MOBILYNET_", "GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_"]);
@@ -191,6 +201,10 @@ function migrateScriptOf(service) {
 
 // The name the migrate task's settings take in its credentials' folder ($CREDENTIALS_DIRECTORY).
 const MIGRATE_SETTINGS = "settings.json";
+// A shared build's one service and its scripts, which run the instance's service's own (dispatchScript).
+const SHARED_SERVICE = "app";
+const SHARED_SERVE_SCRIPT = `${APP_SCRIPTS_FOLDER}/serve.sh`;
+const SHARED_MIGRATE_SCRIPT = `${APP_SCRIPTS_FOLDER}/migrate.sh`;
 
 /**
  * The migrate task's command, which mobilynet runs as root in the app's folder in place of the machine's start (so no
@@ -207,14 +221,6 @@ function migrateTaskOf(name, login, script) {
     "--property=EnvironmentFile=/etc/mobilynet/service.env", `--property=LoadCredential=${MIGRATE_SETTINGS}:/run/mobilynet/apps/${name}/settings.json`,
     `bash ${script}`
   ].join(" ");
-}
-
-/**
- * A service's app at mobilynet: the app's name and the service's id, the app's part shortened to fit 32 characters.
- * @param {string} app productionAppName's name @param {string} service
- */
-function serviceAppName(app, service) {
-  return `${app.slice(0, APP_NAME_MAX - service.length - 1).replace(/-+$/u, "")}-${service}`;
 }
 
 /**
@@ -523,6 +529,9 @@ function servicePackagesProblem(deployment, settings = {}, { settingsMax = SERVI
   // code the Env holds too is one); the setup code is counted even once the first account removed it from the Env, as
   // a first Deploy makes and sends it.
   const linked = (deployment.resources ?? []).reduce((sum, declared) => sum + (LINK_FIELDS[MOBILYNET_INTERFACES[declared?.resource?.kind]]?.length ?? 0), 0);
+  // A service of a shared build is given one more, its V64_SERVICE.
+  const leads = buildLeadsOf(deployment.services);
+  const shared = (id) => deployment.services.some((other) => other.id !== id && leads[other.id] === leads[id]);
   for (const service of deployment.services) {
     const allowances = unsupportedSandboxAllowances(service.sandboxAllowances);
     if (allowances.length > 0) {
@@ -554,12 +563,13 @@ function servicePackagesProblem(deployment, settings = {}, { settingsMax = SERVI
             : `Save its value in the Production Env under another name and remove ${reserved}, then deploy to production.`)
       };
     }
-    const count = names.length + linked;
+    const own = names.length + (shared(service.id) ? 1 : 0);
+    const count = own + linked;
     if (count > settingsMax) {
       return {
         code: "vibe64_production_too_many_settings",
         message: `mobilynet gives an App Service at most ${settingsMax} settings and secrets in all, its links' among them, `
-          + `and service ${service.id} would have ${count}: ${names.length} of its own and ${linked} from its links. Remove Production Env `
+          + `and service ${service.id} would have ${count}: ${own} of its own and ${linked} from its links. Remove Production Env `
           + "entries it doesn't use, or give them only to the services that use them, then deploy to production."
       };
     }
@@ -568,13 +578,49 @@ function servicePackagesProblem(deployment, settings = {}, { settingsMax = SERVI
 }
 
 /**
- * mobilynet's package for each service of a Deployment: one declaration per service, named `<app>-<service>` and run
- * as a login of that name, which builds from the shared build script and runs its own serve script; every service
- * needs every resource. A declaration declares only the settings the Stack names for its service, with their types and
- * required flags (package.js stackSettingsPerService), and a need per resource, whose settings its link gives: never a
- * Production Env entry, which mobilynet takes in a settings replace as a setting or a secret the release doesn't
- * declare. So a release is made of the code and the Stack alone, and a change of the Env is a change of settings, never
- * a new release or build. Refuses with servicePackagesProblem's reason.
+ * A shared build's dispatching script: it reads the service the instance's App Service is (its V64_SERVICE, in the
+ * settings file `settingsLines` name) and runs that service's own script, or stops naming why.
+ * @param {string} role what it runs, for its comment @param {string[]} settingsLines @param {Record<string, string>} scripts
+ *   each service's own script by its id
+ */
+function dispatchScript(role, settingsLines, scripts) {
+  const known = Object.keys(scripts);
+  return [
+    "#!/usr/bin/env bash",
+    `# Made by Vibe64: the release's ${role}, shared by its services (${known.join(", ")}). It runs the script of the `
+      + `service this instance's App Service is, which its ${SERVICE_SETTING} setting names.`,
+    "set -euo pipefail",
+    ...settingsLines,
+    `service="$(jq -r '.${SERVICE_SETTING} // "" | tostring' "$settings")"`,
+    "case \"$service\" in",
+    ...Object.entries(scripts).map(([id, script]) => `  ${id}) exec bash ${script} ;;`),
+    `  *) echo "${SERVICE_SETTING} is \\"$service\\", and this release runs ${known.join(" or ")}: the deploy gives each App Service its own." >&2; exit 1 ;;`,
+    "esac",
+    ""
+  ].join("\n");
+}
+
+/** A setting's flags across a build's services: secret where any says so, required only where every one requires it. */
+function unionSettings(each) {
+  const names = [...new Set(each.flatMap((settings) => Object.keys(settings)))];
+  return Object.fromEntries(names.map((name) => [name, {
+    type: "string",
+    secret: each.some((settings) => settings[name]?.secret === true),
+    required: each.every((settings) => settings[name]?.required === true)
+  }]));
+}
+
+/**
+ * mobilynet's package for each build of a Deployment: one declaration per build (builds.js; each need's service's
+ * `builtWith`, its own when the needs don't say), named `<app>-<lead>` and run as a login of that name, which builds
+ * from the shared build script; every service needs every resource. A build of one service runs its own serve script,
+ * as every service did before; a shared build runs `serve.sh`, which runs the instance's service's own (dispatchScript),
+ * and takes the packages and settings of all its services (unionSettings). A declaration declares only the settings
+ * the Stack names for its services, with their types and required flags (package.js stackSettingsPerService), and a
+ * need per resource, whose settings its link gives: never a Production Env entry, which mobilynet takes in a settings
+ * replace as a setting or a secret the release doesn't declare. So a release is made of the code and the Stack alone,
+ * and a change of the Env is a change of settings, never a new release or build. Refuses with servicePackagesProblem's
+ * reason.
  * @param {object} options
  * @param {string} options.app the app's name (productionAppName)
  * @param {any} options.deployment the Stack's Deployment section as public Vibe64 inspected it (v2)
@@ -585,7 +631,8 @@ function servicePackagesProblem(deployment, settings = {}, { settingsMax = SERVI
  *   adapter's serviceSettingsMax), SERVICE_SETTINGS_FALLBACK when not given
  * @param {Record<string, string>} [options.defaults] Serve's own defaults beside the runtime's (the Stack's Environment
  *   defaults), which a setting overrides
- * @returns {{ declarations: Record<string, object>, scripts: Record<string, string> }}
+ * @returns {{ declarations: Record<string, object>, scripts: Record<string, string> }} `declarations` by service id,
+ *   the services of one build sharing one declaration
  */
 function servicePackages({ app, deployment, needs, settings, settingsMax, defaults = {} }) {
   const problem = servicePackagesProblem(deployment, settings, { settingsMax });
@@ -599,37 +646,58 @@ function servicePackages({ app, deployment, needs, settings, settingsMax, defaul
   // devDependencies Build needs.
   const serveDefaults = { ...defaults, ...(runtimes.includes("node26") ? { NODE_ENV: "production" } : {}) };
   const declared = stackSettingsPerService(needs);
+  const leadOf = (id) => needs.services.find((one) => one.id === id)?.builtWith ?? id;
+  const builds = new Map();
+  for (const service of deployment.services) builds.set(leadOf(service.id), [...(builds.get(leadOf(service.id)) ?? []), service]);
   const declarations = {};
   const scripts = {};
-  for (const service of deployment.services) {
-    const name = serviceAppName(app, service.id);
-    const made = appPackage({
+  for (const [lead, services] of builds) {
+    const name = serviceAppName(app, lead);
+    const shared = {
       name,
       login: name,
+      port: SERVICE_PORT,
+      healthPath: services[0].readyWhen.path,
+      runtimes,
+      settings: unionSettings(services.map((service) => declared[service.id] ?? {})),
+      workdir: deployment.workdir,
+      needs: declarationNeeds(needs),
+      bindingLines: bindingExportLines(needs),
+      packages: [...deployment.packages, ...services.flatMap((service) => service.packages)],
+      sandboxAllowances: services[0].sandboxAllowances,
+      buildCache: deployment.buildCache ?? [],
+      machineSetup: Boolean(deployment.machineSetup)
+    };
+    const made = services.map((service) => appPackage({
+      ...shared,
       service: service.id,
       reached: service.reached,
-      port: SERVICE_PORT,
-      healthPath: service.readyWhen.path,
-      runtimes,
-      settings: Object.fromEntries(Object.entries(declared[service.id] ?? {})
-        .map(([key, { secret, required }]) => [key, { type: "string", secret, required }])),
-      workdir: deployment.workdir,
       steps: {
         prepare: step("prepare"),
         build: step("build"),
         migrate: step("migrate"),
         serve: { command: commandOf(service.serve.argv), label: service.serve.label, defaults: serveDefaults }
       },
-      needs: declarationNeeds(needs),
-      bindingLines: bindingExportLines(needs),
-      packages: [...deployment.packages, ...service.packages],
-      sandboxAllowances: service.sandboxAllowances,
-      buildCache: deployment.buildCache ?? [],
-      machineSetup: Boolean(deployment.machineSetup),
       serviceSettings: service.settings
-    });
-    declarations[service.id] = made.declaration;
-    Object.assign(scripts, made.scripts);
+    }));
+    for (const one of made) Object.assign(scripts, one.scripts);
+    let declaration = made[0].declaration;
+    if (services.length > 1) {
+      const serving = Object.fromEntries(services.map((service) => [service.id, serveScriptOf(service.id)]));
+      scripts[SHARED_SERVE_SCRIPT] = dispatchScript("service", [
+        `settings=${shellWord(settingsFileForLogin(name))}`,
+        `if [ ! -r "$settings" ]; then echo "No settings at $settings: the app's start step writes them." >&2; exit 1; fi`
+      ], serving);
+      declaration = { ...declaration, services: [{ ...declaration.services[0], name: SHARED_SERVICE, command: `bash ${SHARED_SERVE_SCRIPT}` }] };
+      if (declaration.tasks?.migrate) {
+        scripts[SHARED_MIGRATE_SCRIPT] = dispatchScript("migrate task", [
+          `settings="\${CREDENTIALS_DIRECTORY:-}/${MIGRATE_SETTINGS}"`,
+          `if [ ! -r "$settings" ]; then echo "No settings at $settings: the release task's systemd-run hands them over." >&2; exit 1; fi`
+        ], Object.fromEntries(services.map((service) => [service.id, migrateScriptOf(service.id)])));
+        declaration = { ...declaration, tasks: { ...declaration.tasks, migrate: { command: migrateTaskOf(name, name, SHARED_MIGRATE_SCRIPT) } } };
+      }
+    }
+    for (const service of services) declarations[service.id] = declaration;
   }
   return { declarations, scripts };
 }
