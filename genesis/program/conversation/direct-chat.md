@@ -2355,7 +2355,8 @@ plan owner reopens it as active and moves it out of History, preserving its
 checklist and evidence; the viewer switches to Current plan. The server rejects
 an occupied current slot, including competing restores, and active work or
 pending review. Neither control starts AI. Other lifecycle and execution
-requests use chat. Task instructions are maintained in `docs/colleague-usage/plans.md`.
+requests use chat. Task instructions are maintained in `docs/colleague-usage/plans.md`, and a
+plan's steps and status line in `docs/colleague-usage/plan-steps.md`.
 
 Discussion is read-only. Beginning a Senior turn never modifies or invalidates a
 plan. Junior preserves delivered work and records actual evidence in Progress
