@@ -140,8 +140,10 @@ test("app-owned CI verifies the application on Node 26", async () => {
   }
   assert.match(workflowSource, /^ +run: npm run test:full -- --shard=\$\{\{ matrix\.shard \}\}\/\$\{\{ strategy\.job-total \}\}$/mu);
   assert.match(workflowSource, /fail-fast: false/u);
-  // A newer push to the same branch, or a newer commit on the same pull request, cancels the run it supersedes.
-  assert.match(workflowSource, /^concurrency:\n {2}group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\n {2}cancel-in-progress: true$/mu);
+  // A newer commit on the same pull request cancels the run it supersedes. A run on main always finishes: the platform
+  // release's CI gate reads the run of the exact public commit it ships, and counts a cancelled one as failed.
+  assert.match(workflowSource, /^concurrency:\n {2}group: \$\{\{ github\.workflow \}\}-\$\{\{ github\.ref \}\}\n {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/mu);
+  assert.doesNotMatch(workflowSource, /cancel-in-progress: true/u);
   // A hang ends each job long before GitHub's six-hour limit.
   const jobsSource = workflowSource.slice(workflowSource.search(/^jobs:$/mu));
   const jobs = jobsSource.match(/^ {2}[a-z-]+:$/gmu) || [];
