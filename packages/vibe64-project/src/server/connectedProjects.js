@@ -3,8 +3,8 @@ import { constants } from "node:fs";
 import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
-import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { connectedRepositoryName } from "@local/vibe64-core/server/projectRepository";
+import { writeSourceFileAtomic } from "./projectEnvironmentFiles.js";
 import {
   connectedPackageTypeListText,
   connectedPackageTypeUsesScript,
@@ -113,12 +113,12 @@ async function saveConnectedProjects(sourceRoot, value, expectedRevision) {
   if (typeof expectedRevision !== "string" || current.revision !== expectedRevision) {
     throw vibe64Error("Connected repositories changed. Refresh and review the current list before saving.", "vibe64_connections_changed");
   }
-  // Match the shared atomic writer's formatted UTF-8 JSON before replacing a
-  // readable file with content that this owner's reader would reject.
-  if (Buffer.byteLength(`${JSON.stringify(normalized, null, 2)}\n`, "utf8") > CONNECTED_PROJECTS_MAX_BYTES) {
+  // Refuse before replacing a readable file with content that this owner's reader would reject.
+  const text = `${JSON.stringify(normalized, null, 2)}\n`;
+  if (Buffer.byteLength(text, "utf8") > CONNECTED_PROJECTS_MAX_BYTES) {
     invalid("The connection list exceeds 64 KiB. Shorten its entries before saving.");
   }
-  await writeJsonFileAtomic(connectionsPath(sourceRoot), normalized, {
+  await writeSourceFileAtomic(sourceRoot, connectionsPath(sourceRoot), text, {
     directoryMode: vibe64SharedModes().inheritingDirectory,
     fileMode: vibe64SharedModes().file
   });

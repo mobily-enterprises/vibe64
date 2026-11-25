@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { watch } from "node:fs";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -54,6 +55,62 @@ test("a write with durable: false is published whole by rename, with neither it 
   assert.equal(events.filter((event) => event.op === "rename" && event.to === filePath).length, 1);
   assert.deepEqual(events.filter((event) => event.op === "fsync"), []);
   assert.deepEqual(await readdir(path.dirname(filePath)), ["owner.json"]);
+});
+
+test("every atomic write's temporary file has the one fixed name, beside the file", async (t) => {
+  const root = await temporaryRoot(t);
+  const names = [];
+  let sentinelSeen;
+  const sentinel = new Promise((resolve) => { sentinelSeen = resolve; });
+  const watcher = watch(root, (type, name) => {
+    names.push(name);
+    if (name === "sentinel") sentinelSeen();
+  });
+  try {
+    await writeFileAtomic(path.join(root, "value.txt"), "one\n");
+    await writeFileAtomic(path.join(root, "created.txt"), "new\n", { exclusive: true });
+    await writeFile(path.join(root, "sentinel"), "");
+    await sentinel;
+  } finally {
+    watcher.close();
+  }
+  const temporary = [...new Set(names.filter((name) => !["value.txt", "created.txt", "sentinel"].includes(name)))];
+  assert.equal(temporary.length, 2, names.join(" "));
+  for (const name of temporary) assert.match(name, /^\.vibe64-write-[0-9a-f-]{36}\.tmp$/u);
+  assert.deepEqual((await readdir(root)).sort(), ["created.txt", "sentinel", "value.txt"]);
+});
+
+test("an exclusive atomic write creates a missing file whole and refuses an existing one, unchanged", async (t) => {
+  const root = await temporaryRoot(t);
+  const filePath = path.join(root, "notes", "new.md");
+  await writeFileAtomic(filePath, "first\n", { exclusive: true, fileMode: 0o640 });
+  assert.equal(await readFile(filePath, "utf8"), "first\n");
+  assert.equal((await stat(filePath)).mode & 0o777, 0o640);
+  await assert.rejects(writeFileAtomic(filePath, "second\n", { exclusive: true }), { code: "EEXIST" });
+  assert.equal(await readFile(filePath, "utf8"), "first\n");
+  assert.deepEqual(await readdir(path.dirname(filePath)), ["new.md"]);
+});
+
+test("removeStale clears the folder's temporary files a killed write left over a minute ago, and only when asked", async (t) => {
+  const root = await temporaryRoot(t);
+  const folder = (...names) => path.join(root, ...names);
+  await mkdir(folder("other"));
+  await mkdir(folder(".vibe64-write-folder.tmp"));
+  const stale = folder(".vibe64-write-11111111-1111-4111-8111-111111111111.tmp");
+  const live = folder(".vibe64-write-22222222-2222-4222-8222-222222222222.tmp");
+  const elsewhere = folder("other", ".vibe64-write-33333333-3333-4333-8333-333333333333.tmp");
+  const unrelated = folder(".vibe64-write-notes.txt");
+  const minutesAgo = new Date(Date.now() - 2 * 60_000);
+  for (const file of [stale, live, elsewhere, unrelated]) await writeFile(file, "partial");
+  for (const entry of [stale, elsewhere, unrelated, folder(".vibe64-write-folder.tmp")]) await utimes(entry, minutesAgo, minutesAgo);
+
+  // A records folder never pays for a listing: without removeStale nothing else in it is touched.
+  await writeFileAtomic(folder("record.json"), "{}\n");
+  assert.ok(await stat(stale));
+
+  await writeFileAtomic(folder("record.json"), "{}\n", { removeStale: true });
+  await assert.rejects(stat(stale), { code: "ENOENT" });
+  for (const entry of [live, elsewhere, unrelated, folder(".vibe64-write-folder.tmp")]) assert.ok(await stat(entry));
 });
 
 test("serializeByKey runs one key's operations in order, past failures, and other keys independently", async () => {

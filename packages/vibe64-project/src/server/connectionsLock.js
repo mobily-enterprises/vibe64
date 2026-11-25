@@ -6,7 +6,7 @@
 // lock name the published version it installs.
 import { lstat, readFile, rm } from "node:fs/promises";
 import path from "node:path";
-import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
+import { writeSourceFileAtomic } from "./projectEnvironmentFiles.js";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { CONNECTIONS_LOCK_FILE, CONNECTIONS_LOCK_SCHEMA } from "@local/vibe64-genesis/shared/connectedPackageTypes";
@@ -110,7 +110,7 @@ async function writeConnectionsLock(sourceRoot, pins) {
   const text = `${JSON.stringify({ schema: CONNECTIONS_LOCK_SCHEMA, repositories: pins }, null, 2)}\n`;
   if (existing === text) return { changed: false };
   const modes = vibe64SharedModes();
-  await writeFileAtomic(lockPath(sourceRoot), text, { directoryMode: modes.inheritingDirectory, fileMode: modes.file });
+  await writeSourceFileAtomic(sourceRoot, lockPath(sourceRoot), text, { directoryMode: modes.inheritingDirectory, fileMode: modes.file });
   return { changed: true };
 }
 

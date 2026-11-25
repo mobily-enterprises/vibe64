@@ -938,7 +938,7 @@ test("source editor reads and saves files with hash conflict protection", async 
     assert.match(saveResponse.fileChange.updatedAt, /^\d{4}-\d{2}-\d{2}T/u);
     assert.equal(await readFile(path.join(fixture.sourceRoot, "src", "app.js"), "utf8"), "console.log('two');\n");
     assert.deepEqual(
-      (await readdir(path.join(fixture.sourceRoot, "src"))).filter((entry) => entry.startsWith(".vibe64-editor-")),
+      (await readdir(path.join(fixture.sourceRoot, "src"))).filter((entry) => entry.startsWith(".vibe64-write-")),
       []
     );
 
@@ -982,11 +982,11 @@ test("source editor creates and saves a file whole, so a reader never sees it em
     await sentinel;
 
     // Each file appears once, already whole: no write ever lands on the path a reader opens.
-    assert.deepEqual(events.filter((event) => !event.includes(".vibe64-editor-") && !event.endsWith(":sentinel")), ["rename:whole.json", "rename:app.js"]);
+    assert.deepEqual(events.filter((event) => !event.includes(".vibe64-write-") && !event.endsWith(":sentinel")), ["rename:whole.json", "rename:app.js"]);
     assert.equal(await earlierReader.readFile("utf8"), "console.log('one');\n");
     assert.equal(await readFile(scriptPath, "utf8"), "console.log('two');\n");
     assert.equal((await lstat(scriptPath)).mode & 0o777, 0o750);
-    assert.deepEqual((await readdir(directory)).filter((entry) => entry.startsWith(".vibe64-editor-")), []);
+    assert.deepEqual((await readdir(directory)).filter((entry) => entry.startsWith(".vibe64-write-")), []);
   } finally {
     watcher.close();
     await earlierReader.close();
@@ -1003,10 +1003,10 @@ test("a temporary file a killed editor write leaves is never committed, and the 
   const git = (...args) => spawnSync("git", ["-C", fixture.sourceRoot, ...args], { encoding: "utf8" });
   try {
     assert.equal(git("init", "-q").status, 0);
-    const stale = path.join(directory, ".vibe64-editor-11111111-1111-4111-8111-111111111111.tmp");
-    const live = path.join(directory, ".vibe64-editor-22222222-2222-4222-8222-222222222222.tmp");
-    const nested = path.join(fixture.sourceRoot, "docs", ".vibe64-editor-33333333-3333-4333-8333-333333333333.tmp");
-    const unrelated = path.join(directory, ".vibe64-editor-notes.txt");
+    const stale = path.join(directory, ".vibe64-write-11111111-1111-4111-8111-111111111111.tmp");
+    const live = path.join(directory, ".vibe64-write-22222222-2222-4222-8222-222222222222.tmp");
+    const nested = path.join(fixture.sourceRoot, "docs", ".vibe64-write-33333333-3333-4333-8333-333333333333.tmp");
+    const unrelated = path.join(directory, ".vibe64-write-notes.txt");
     await mkdir(path.dirname(nested), { recursive: true });
     for (const file of [stale, live, nested, unrelated]) await writeFile(file, "partial");
     const minutesAgo = new Date(Date.now() - 2 * 60_000);
@@ -1019,8 +1019,8 @@ test("a temporary file a killed editor write leaves is never committed, and the 
 
     // Save stages with Git, which ignores the editor's temporary files anywhere in the source, and nothing else.
     const staged = git("add", "-A", "--dry-run", "--", ".").stdout;
-    assert.doesNotMatch(staged, /\.vibe64-editor-[^\n]*\.tmp/u, staged);
-    assert.match(staged, /src\/\.vibe64-editor-notes\.txt/u, staged);
+    assert.doesNotMatch(staged, /\.vibe64-write-[^\n]*\.tmp/u, staged);
+    assert.match(staged, /src\/\.vibe64-write-notes\.txt/u, staged);
     assert.match(staged, /src\/app\.js/u, staged);
     // The write removed the stale one in its own folder; one a live write may still hold, another folder's and an
     // unrelated name stay.

@@ -97,6 +97,27 @@ async function treeState(directory) {
   return result;
 }
 
+// Fails, once, the removal of the temporary file a write renamed onto target: a failure after the file was published.
+function failCleanupAfterRename(t, target, message) {
+  const realRename = fs.rename;
+  const realRemove = fs.rm;
+  let published = "";
+  let interrupted = false;
+  const renameSpy = t.mock.method(fs, "rename", async (...args) => {
+    await realRename(...args);
+    if (args[1] === target) published = String(args[0]);
+  });
+  const removeMock = t.mock.method(fs, "rm", async (...args) => {
+    if (!interrupted && published && String(args[0]) === published) {
+      interrupted = true;
+      throw Object.assign(new Error(message), { code: "EIO" });
+    }
+    return realRemove(...args);
+  });
+  syncBuiltinESMExports();
+  return { restore() { renameSpy.mock.restore(); removeMock.mock.restore(); syncBuiltinESMExports(); } };
+}
+
 test("readState requires identity and reads absent state without filesystem writes or a local fallback", async t => {
   const f = await fixture(t);
   const before = await treeState(f.systemRoot);
@@ -293,18 +314,9 @@ test("progress save failures remain unconfirmed before and after rename, with no
   finally { renameMock.mock.restore(); syncBuiltinESMExports(); }
   assert.equal((await f.state.readState({ actor: f.actor })).revision, 0);
   await assert.rejects(() => fs.lstat(f.paths.progress), { code: "ENOENT" });
-  const realRemove = fs.rm;
-  let interrupted = false;
-  const removeMock = t.mock.method(fs, "rm", async (...args) => {
-    if (!interrupted && String(args[0]).startsWith(path.join(f.paths.root, ".progress.json."))) {
-      interrupted = true;
-      throw Object.assign(new Error("Fixture cleanup failed after progress rename"), { code: "EIO" });
-    }
-    return realRemove(...args);
-  });
-  syncBuiltinESMExports();
+  const cleanupFailure = failCleanupAfterRename(t, f.paths.progress, "Fixture cleanup failed after progress rename");
   try { await assert.rejects(() => f.reserve(), error => error.code === "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED" && /may already have saved/u.test(error.message)); }
-  finally { removeMock.mock.restore(); syncBuiltinESMExports(); }
+  finally { cleanupFailure.restore(); }
   const saved = await f.state.readState({ actor: f.actor });
   assert.equal(saved.revision, 1);
   assert.equal(saved.activeSummaryCurrent, false);
@@ -880,21 +892,11 @@ test("installed catalogue save errors truthfully cover failure before and after 
     syncBuiltinESMExports();
   }
   assert.deepEqual(await catalogue.readCatalogue(), { schemaVersion: 1, revision: 0, courses: [] });
-  const realRemove = fs.rm;
-  let interrupted = false;
-  const removeMock = t.mock.method(fs, "rm", async (...args) => {
-    if (!interrupted && String(args[0]).startsWith(path.join(f.systemRoot, "training/.catalogue.json."))) {
-      interrupted = true;
-      throw Object.assign(new Error("Fixture cleanup failure after catalogue rename"), { code: "EIO" });
-    }
-    return realRemove(...args);
-  });
-  syncBuiltinESMExports();
+  const cleanupFailure = failCleanupAfterRename(t, filename, "Fixture cleanup failure after catalogue rename");
   try {
     await assert.rejects(() => catalogue.enableCourse({ ...input, expectedRevision: 0 }), error => error.code === "VIBE64_TRAINING_CATALOGUE_SAVE_UNCONFIRMED" && /may already have succeeded/u.test(error.message));
   } finally {
-    removeMock.mock.restore();
-    syncBuiltinESMExports();
+    cleanupFailure.restore();
   }
   const saved = await catalogue.readCatalogue();
   assert.equal(saved.revision, 1);
@@ -1107,21 +1109,11 @@ test("preparation progress failures before and after rename retain one identity 
     syncBuiltinESMExports();
   }
   assert.deepEqual((await f.state.readState({ actor: f.actor })).active.preparation, { phase: "reserved" });
-  const realRemove = fs.rm;
-  let interrupted = false;
-  const removeMock = t.mock.method(fs, "rm", async (...args) => {
-    if (!interrupted && String(args[0]).startsWith(path.join(f.paths.root, ".progress.json."))) {
-      interrupted = true;
-      throw Object.assign(new Error("Fixture preparation cleanup failure after rename"), { code: "EIO" });
-    }
-    return realRemove(...args);
-  });
-  syncBuiltinESMExports();
+  const cleanupFailure = failCleanupAfterRename(t, f.paths.progress, "Fixture preparation cleanup failure after rename");
   try {
     await assert.rejects(() => f.state.beginPreparation(input), error => error.code === "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED" && !error.reservationSaved && /may already have succeeded/u.test(error.message));
   } finally {
-    removeMock.mock.restore();
-    syncBuiltinESMExports();
+    cleanupFailure.restore();
   }
   const state = await f.state.readState({ actor: f.actor });
   assert.equal(state.revision, 2);

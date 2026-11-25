@@ -53,7 +53,7 @@ test("connected source inputs are session-specific, ignored, repeatable and poin
     assert.equal(Number(before.mode) & 0o777, 0o660);
     await materializeProjectEnvironmentFiles(environmentInput);
     assert.equal(await projectEnvironmentFilesAreCurrent(environmentInput), true);
-    const ignored = [".env", ".development/connected.json", ".development/.connected.json.123.test.tmp"];
+    const ignored = [".env", ".development/connected.json", ".development/.vibe64-write-123.tmp"];
     const checked = await exec("git", ["check-ignore", "--", ...ignored], { cwd: first.root });
     assert.deepEqual(checked.stdout.trim().split("\n"), ignored);
     const visible = await exec("git", ["ls-files", "--others", "--exclude-standard"], { cwd: first.root });
