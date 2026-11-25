@@ -174,6 +174,7 @@
           <div v-else class="vibe64-repository-workspace__empty">
             <strong>No unsaved file changes</strong>
             <span>This session has no file changes waiting to be saved.</span>
+            <span v-if="pinsToRecord">{{ pinsToRecord }}.</span>
           </div>
         </section>
 
@@ -242,6 +243,7 @@ import Vibe64RepositoryFileBrowser from "@/components/studio/repository/Vibe64Re
 import Vibe64RepositoryHistoryList from "@/components/studio/repository/Vibe64RepositoryHistoryList.vue";
 import Vibe64RepositoryVersionDialog from "@/components/studio/repository/Vibe64RepositoryVersionDialog.vue";
 import { useVibe64RepositoryWorkspace } from "@/composables/useVibe64RepositoryWorkspace.js";
+import { saveWorkReadyTitle, sessionPinsToRecordLabel } from "@/lib/vibe64SessionRepositoryWorkState.js";
 import {
   incomingVersions,
   summaryDetail,
@@ -317,7 +319,8 @@ const repositoryOperationBusy = computed(() => Boolean(
   updates.applying ||
   saving.value
 ));
-const saveWorkTitle = computed(() => saveWorkBlockedReason.value || "Review changes and choose where to commit them");
+const saveWorkTitle = computed(() => saveWorkBlockedReason.value || saveWorkReadyTitle(dashboard.value.workState));
+const pinsToRecord = computed(() => sessionPinsToRecordLabel(dashboard.value.workState));
 
 // What the status texts read.
 function statusState() {

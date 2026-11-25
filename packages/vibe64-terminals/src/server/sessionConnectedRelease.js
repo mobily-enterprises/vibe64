@@ -1,16 +1,67 @@
 // Save's part for the session's connections in its own source, between pushing the copies and its
 // own commit: each composition copy's saved commit is pinned in the project's connections lock, so
 // the project's main names exactly what it was saved with; typed dependencies move to newly
-// published versions; the Stack's Save entries run. Only a Save that saves something does it.
+// published versions; the Stack's Save entries run. Only a Save that saves something does it, and
+// whether a session has something to save is answered here, once, for Save and its status alike.
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { connectedRepositoryName, sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { GENESIS_DERIVED_ARTIFACT_PATHS } from "@local/vibe64-genesis/server";
 import { CONNECTIONS_LOCK_FILE } from "@local/vibe64-genesis/shared/connectedPackageTypes";
-import { connectedCopyError, shortCommit } from "./sessionConnectedCopies.js";
+import { connectedCopyError, inspectConnectedCopies, shortCommit } from "./sessionConnectedCopies.js";
 import { runGit } from "./sessionSource.js";
 import { saveError } from "./sessionWorkCommands.js";
+import { inspectSessionWork } from "./sessionWorkSave.js";
+
+/**
+ * Whether a session has work to save: the one answer Save gives, which its status shows and every
+ * check of it reads. Its work is changes in its own source, a connected copy's (files, or commits
+ * its main lacks), or a connections lock behind the copies, as after Update moves a composition
+ * copy onto its main's newer commit: Save records that pin, and nothing else writes the lock.
+ * @param {{ ownUnsaved: boolean, copiesUnsaved: boolean, pins: { changed: boolean } }} work
+ */
+function sessionHasWorkToSave({ ownUnsaved, copiesUnsaved, pins }) {
+  return ownUnsaved || copiesUnsaved || pins.changed;
+}
+
+/**
+ * What Save would pin from these copies' recorded commits: Project's plan of the connections lock.
+ * @param {{ copies: object[], project: ProjectService, session: object }} input
+ * @returns {Promise<{ changed: boolean, compositions: string[], pinsToRecord: Array<{ fullName: string, commit: string }> }>}
+ */
+async function planCopyPins({ copies, project, session }) {
+  if (!copies.length) return { changed: false, compositions: [], pinsToRecord: [] };
+  return project.planCompositionPins({
+    session,
+    commits: Object.fromEntries(copies.map(copy => [copy.repository, copy.canonicalCommit]))
+  });
+}
+
+/**
+ * The session's work to save, read without changing anything: its own repository's (`own`), each
+ * connected copy's (`connected`), the pins Save would record (`pinsToRecord`) and the answer
+ * (`unsaved`).
+ * @param {{ project: ProjectService, projectRecord: object, session: object }} input
+ */
+async function inspectSessionWorkToSave({ project, projectRecord, session }) {
+  const copies = sessionConnectedCopies(session);
+  const own = await inspectSessionWork({ derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS, project: projectRecord, session });
+  const connected = await inspectConnectedCopies({
+    copies,
+    derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
+    project: projectRecord,
+    session
+  });
+  const pins = await planCopyPins({ copies, project, session });
+  return {
+    connected,
+    own,
+    pinsToRecord: pins.pinsToRecord,
+    unsaved: sessionHasWorkToSave({ ownUnsaved: own.unsaved === true, copiesUnsaved: connected.some(copy => copy.unsaved), pins })
+  };
+}
 
 /**
  * A failure after Save pushed connected copies: they are on their main, and the project's own
@@ -126,12 +177,7 @@ function createSessionConnectedRelease({ project, workspaceSetup }) {
    * @param {string} input.sessionId
    */
   async function planConnectedSave({ copies, execution, onProgress, runtime, session, sessionId }) {
-    const pins = copies.length
-      ? await project.planCompositionPins({
-        session,
-        commits: Object.fromEntries(copies.map(copy => [copy.repository, copy.canonicalCommit]))
-      })
-      : { changed: false, compositions: [] };
+    const pins = await planCopyPins({ copies, project, session });
     // Whatever stops the Save once copies pushed leaves their main ahead of what the project names,
     // so it says so and stays retryable.
     const finishing = async (connected, operation) => {
@@ -143,12 +189,14 @@ function createSessionConnectedRelease({ project, workspaceSetup }) {
     };
     return Object.freeze({
       finishing,
+      // Whether this Save has work, given the copies about to push: Save refuses before any push when not.
+      hasWork: (ownUnsaved, ready) => sessionHasWorkToSave({ ownUnsaved, copiesUnsaved: ready.length > 0, pins }),
       // The session's own repository saves too when it has work, when the lock is behind the copies
       // or when a composition is about to push: its Save is then refused first, before any push.
       ownSaves: (ownUnsaved, ready) => ownUnsaved || pins.changed || ready.some(copy => pins.compositions.includes(copy.repository)),
-      // Only a Save that saves something records, so one with nothing to save stays one.
-      record: async (ownUnsaved, connected) => {
-        if (!copies.length || !(ownUnsaved || pins.changed || connected.length)) return [];
+      // A Save with copies records once they pushed; one with nothing to save was refused before.
+      record: async (connected) => {
+        if (!copies.length) return [];
         const recording = { compositions: pins.compositions, execution, onProgress, runtime, session, sessionId };
         return finishing(connected, () => recordRelease(recording));
       }
@@ -177,4 +225,4 @@ function createSessionConnectedRelease({ project, workspaceSetup }) {
   });
 }
 
-export { createSessionConnectedRelease };
+export { createSessionConnectedRelease, inspectSessionWorkToSave };

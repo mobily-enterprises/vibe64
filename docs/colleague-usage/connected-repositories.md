@@ -128,6 +128,18 @@ holds the same pin. A pin an unfinished Save of this session left in the file is
 put back before Update, so it never conflicts; the next Save writes the copies'
 commits again.
 
+When a Composition repository's main moved without this project pinning it (it
+was saved from another project or outside Vibe64), Update still brings the copy
+onto that main, and the session's source keeps the earlier pin. Until a Save
+records the new one, the project's main, and so Staging and Production, keep
+building the earlier commit. So the session then has work to save even with no
+changed file: its badge shows **Unsaved changes**, the badge's hover text and
+the **Save** button's say `Save pins example/library at 6e0b7a2c91d4 in
+vibe64.connections.lock.json`, and **Save** records it (step 3 below). The same
+holds when the project's main has no `vibe64.connections.lock.json` yet: Save
+stays available in each session with a Composition copy until one Save writes
+it.
+
 The session's regular check for newer saved work also watches each copy's main,
 so the session asks for an Update when any of them moves. The session's AI runs
 this same Update itself when the session is behind, before building on the old
@@ -137,8 +149,11 @@ code, and repairs a copy's conflict the same way, or leaves it and tells you; se
 ## Save saves the copies first
 
 **Save** covers the copies and the session's own repository together. The
-session badge shows **Unsaved changes** when any copy has work, even when the
-session's own repository is clean.
+session badge shows **Unsaved changes** when any copy has work, or when
+`vibe64.connections.lock.json` is behind a Composition copy (see above), even
+when the session's own repository is clean. Save answers **Nothing to save**
+only when no repository has work and every pin names its copy's commit, before
+it pushes anything.
 
 1. Before pushing anything, Save checks every copy against its main, and the
    session's own repository too when it has work or this Save will pin a
@@ -168,8 +183,9 @@ session's own repository is clean.
      fails stops Save before the session's own commit, with `The connected Save
      step <label> failed: <reason>.`
 4. Last, it saves the session's own repository, as usual, in one commit with
-   what step 3 changed. When only copies have work and nothing changed in step 3,
-   Save saves them and leaves the session's own repository as it is.
+   what step 3 changed, even when that is only the pin. When only copies have
+   work and nothing changed in step 3, Save saves them and leaves the session's
+   own repository as it is.
 
 The Save result lists the connected repositories it saved, with their commits.
 When Main chat's AI saves a finished stage itself, with **Automatically save
@@ -197,7 +213,8 @@ If Vibe64 stops while saving, for example on a restart, recovery records each
 copy whose push landed and never pushes it again; a copy that was not pushed
 keeps its work for the next Save. A Save of copies alone shows **Interrupted
 Save recovered and reconciled.** with one `[Connected] library saved at …` line
-per copy once every copy it pushed is recorded and nothing is left unsaved.
+per copy once every copy it pushed is recorded and pinned and nothing is left
+unsaved; until then the next Save finishes it.
 
 ## Archive and renewal
 

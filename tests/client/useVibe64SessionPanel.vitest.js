@@ -8,7 +8,7 @@ import {
   sessionPanelSelectedSessionArchiving,
   sessionPanelToolbarSessions
 } from "../../src/composables/useVibe64SessionPanel.js";
-import { sessionRepositoryWorkState } from "../../src/lib/vibe64SessionRepositoryWorkState.js";
+import { repositoryWorkStateDescription, sessionRepositoryWorkState } from "../../src/lib/vibe64SessionRepositoryWorkState.js";
 
 describe("useVibe64SessionPanel", () => {
   it("uses the empty-state loader for both initial loading and session creation", () => {
@@ -222,6 +222,14 @@ describe("useVibe64SessionPanel", () => {
       state: "unsaved",
       updateAvailable: true
     });
+  });
+
+  it("shows a pin Update left behind the copy as work to save, and says the pin moves", () => {
+    const pinsToRecord = [{ commit: "05a1ec9".padEnd(40, "0"), fullName: "example/mercbot" }];
+    const repositoryWorkState = sessionRepositoryWorkState({ changedPaths: [], checkedAt: "now", pinsToRecord, unsaved: true });
+    expect(repositoryWorkState).toEqual({ changedCount: 0, checkedAt: "now", pinsToRecord, state: "unsaved", updateAvailable: false });
+    expect(repositoryWorkStateDescription({ repositoryWorkState }))
+      .toBe("Unsaved changes: Save pins example/mercbot at 05a1ec900000 in vibe64.connections.lock.json");
   });
 
   it("keeps an unresolved Update conflict as needs help with its stored reason and next step", () => {

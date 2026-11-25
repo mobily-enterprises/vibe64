@@ -274,7 +274,15 @@ test("the connections lock keeps a composition this session has no copy of, goes
   assert.deepEqual(await readConnectionsLock(root), [{ name: "Library", repository: library.repository, commit, tree }, otherPin]);
   assert.deepEqual(await planCompositionPins({ sourceRoot: root, connections, commits: { "example/library": commit } }), {
     compositions: ["example/library", "example/other"],
-    changed: false
+    changed: false,
+    pinsToRecord: []
+  });
+  // A copy at a commit its pin does not name is a pin to record.
+  const moved = "d".repeat(40);
+  assert.deepEqual(await planCompositionPins({ sourceRoot: root, connections, commits: { "example/library": moved, "example/other": otherPin.commit } }), {
+    compositions: ["example/library", "example/other"],
+    changed: true,
+    pinsToRecord: [{ fullName: "example/library", commit: moved }]
   });
 
   // No composition left: the lock goes.

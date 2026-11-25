@@ -2562,6 +2562,26 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkConfirmOpen.value).toBe(true);
   });
 
+  it("offers Save for a pin Update left behind the copy, with no changed file, and says the pin moves", async () => {
+    const commit = "05a1ec9".padEnd(40, "0");
+    // The server's answer after Update moved the connected copy: the session's own source is clean.
+    const view = await createView({
+      workState: {
+        changedPaths: [],
+        pinsToRecord: [{ commit, fullName: "example/mercbot" }],
+        unsaved: true,
+        updateAvailable: false,
+        updateStatusPending: false
+      }
+    });
+    expect(view.saveWorkDisabled.value).toBe(false);
+    expect(view.saveWorkTitle.value).toBe(
+      `Review changes and choose where to commit them. Save pins example/mercbot at ${commit.slice(0, 12)} in vibe64.connections.lock.json.`
+    );
+    await view.requestSaveWork();
+    expect(view.saveWorkConfirmOpen.value).toBe(true);
+  });
+
   it("fails closed when Save has no work or the canonical version needs checking", async () => {
     const noChanges = await createView({
       workState: {

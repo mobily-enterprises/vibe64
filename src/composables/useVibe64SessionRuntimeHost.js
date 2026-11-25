@@ -254,22 +254,9 @@ function useVibe64SessionRuntimeHost(props, emit) {
     await workInspector.inspect(sessionId, { settle });
   }
 
-  async function refreshWorkState(observedWork = null) {
+  // The session's work is the server's one answer, with its connected copies and pins: never a pane's own reading.
+  async function refreshWorkState() {
     if (sourceOperationsSuspended.value) {
-      return workState.value;
-    }
-    if (
-      observedWork &&
-      typeof observedWork === "object" &&
-      observedWork.ok !== false &&
-      String(observedWork.sessionId || "").trim() === selectedSessionId.value
-    ) {
-      workState.value = {
-        ...observedWork,
-        checkedAt: new Date().toISOString(),
-        error: "",
-        loading: false
-      };
       return workState.value;
     }
     await inspectWorkState();

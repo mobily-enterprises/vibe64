@@ -179,11 +179,11 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
       changes.payload = append
         ? { ...result, files: [...previousFiles, ...(result.files || [])] }
         : result;
+      // The changes list holds only this session's own files; whether it has work to save is the server's answer for
+      // the whole session, with its connected copies and pins, read again now.
       // readable-check: allow method-probe - optional operation: a Dashboard context carries refreshSessionWork only while a session is open (Vibe64DashboardContext)
       if (!append && typeof context.value.refreshSessionWork === "function") {
-        const observedWork = { ...result };
-        delete observedWork.initialDiff;
-        await context.value.refreshSessionWork(observedWork);
+        await context.value.refreshSessionWork();
       }
       const first = !append ? changes.payload?.files?.[0] : null;
       if (first) {
@@ -386,10 +386,12 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     if (updates.payload.updateAvailable === true) {
       return `${sessionUpdateLabel.value} before saving`;
     }
-    if (changes.loading) {
+    // Whether there is work to save is the session's answer, as the header's Save reads it.
+    const work = context.value.workState;
+    if (work?.loading || work?.unsaved === null || work?.unsaved === undefined) {
       return "Checking whether this session has work to save";
     }
-    if (changes.payload?.unsaved !== true) {
+    if (work.unsaved !== true) {
       return "No work to save";
     }
     return "";

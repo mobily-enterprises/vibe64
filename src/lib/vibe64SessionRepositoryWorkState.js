@@ -1,3 +1,4 @@
+import { CONNECTIONS_LOCK_FILE } from "@local/vibe64-genesis/shared/connectedPackageTypes";
 import { SESSION_WORK_PROBLEM_LABEL, sessionWorkProblem } from "@local/vibe64-terminals/shared/sessionWorkProblem";
 
 // One owner for a session's repository work state: the derivation from the
@@ -13,6 +14,28 @@ const REPOSITORY_WORK_STATE_PRESENTATION = Object.freeze({
   update_available: Object.freeze({ icon: "$cloudDownload", label: "Update available" }),
   updating: Object.freeze({ icon: "$pending", label: "Updating session" })
 });
+
+/**
+ * What Save records that no changed file shows: each composition pin the project's connections lock is behind on,
+ * as the server's answer for the session names it (`pinsToRecord`), such as a connected copy Update moved. "" when
+ * there is none.
+ * @param {{ pinsToRecord?: Array<{ fullName: string, commit: string }> } | null} workState
+ */
+function sessionPinsToRecordLabel(workState = null) {
+  const pins = Array.isArray(workState?.pinsToRecord) ? workState.pinsToRecord : [];
+  if (!pins.length) return "";
+  const named = pins.map(pin => `${pin.fullName} at ${String(pin.commit || "").slice(0, 12)}`).join(", ");
+  return `Save pins ${named} in ${CONNECTIONS_LOCK_FILE}`;
+}
+
+/**
+ * The Save button's title when Save can act: what it does, and the pins it records.
+ * @param {object | null} workState the server's answer for the session
+ */
+function saveWorkReadyTitle(workState = null) {
+  const pins = sessionPinsToRecordLabel(workState);
+  return pins ? `Review changes and choose where to commit them. ${pins}.` : "Review changes and choose where to commit them";
+}
 
 function sessionRepositoryWorkState(workState = null) {
   const source = workState && typeof workState === "object" ? workState : {};
@@ -66,6 +89,7 @@ function sessionRepositoryWorkState(workState = null) {
     return {
       changedCount,
       ...freshness,
+      ...(source.pinsToRecord?.length ? { pinsToRecord: source.pinsToRecord } : {}),
       state: "unsaved",
       updateAvailable: source.updateAvailable === true
     };
@@ -115,8 +139,10 @@ function repositoryWorkStateDescription(sessionItem = {}) {
   const label = repositoryWorkStateLabel(sessionItem);
   const problem = repositoryWorkStateProblem(sessionItem);
   if (problem) return `${label}: ${problem.message} ${problem.nextStep}`;
-  const fixing = repositoryWorkState(sessionItem) === "fixing" ? sessionItem.repositoryWorkState?.repositoryAiTask?.message : "";
-  return fixing ? `${label}: ${fixing}` : label;
+  const state = repositoryWorkState(sessionItem);
+  const reason = state === "fixing" ? sessionItem.repositoryWorkState?.repositoryAiTask?.message
+    : state === "unsaved" ? sessionPinsToRecordLabel(sessionItem.repositoryWorkState) : "";
+  return reason ? `${label}: ${reason}` : label;
 }
 
 function repositoryWorkStateIcon(sessionItem = {}) {
@@ -152,6 +178,8 @@ export {
   repositoryWorkStateLabel,
   repositoryWorkStateProblem,
   repositoryWorkStateProvisional,
+  saveWorkReadyTitle,
   sessionArchiveWorkNotice,
+  sessionPinsToRecordLabel,
   sessionRepositoryWorkState
 };

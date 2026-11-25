@@ -2,9 +2,9 @@ import { sessionConnectedCopies } from "@local/vibe64-core/server/projectReposit
 import {
   checkConnectedCopies,
   connectedCopyActorSession,
-  connectedCopyWork,
-  inspectConnectedCopies
+  connectedCopyWork
 } from "./sessionConnectedCopies.js";
+import { inspectSessionWorkToSave } from "./sessionConnectedRelease.js";
 import {
   checkSessionUpdates as checkManagedSessionUpdates,
   readSessionAuthorityHeads as readManagedSessionAuthorityHeads
@@ -12,8 +12,7 @@ import {
 import { inspectSessionUpdateFailure as inspectManagedSessionUpdateFailure } from "./sessionWorkUpdateRecovery.js";
 import {
   inspectSessionChangeDiff as inspectManagedSessionChangeDiff,
-  inspectSessionChanges as inspectManagedSessionChanges,
-  inspectSessionWork as inspectManagedSessionWork
+  inspectSessionChanges as inspectManagedSessionChanges
 } from "./sessionWorkSave.js";
 import {
   inspectRepositoryHistory as inspectManagedRepositoryHistory,
@@ -137,23 +136,17 @@ function createServiceSessionWorkInspection({
   async function inspectSessionWork(sessionId, input = {}) {
     const normalizedSessionId = String(sessionId || "").trim();
     const { session } = await sessionAccess.sessionContext(normalizedSessionId, input);
-    const projectRecord = await project.readCurrentProject();
-    const work = await inspectManagedSessionWork({
-      derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-      project: projectRecord,
-      session
-    });
-    const connected = await inspectConnectedCopies({
-      copies: sessionConnectedCopies(session),
-      derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-      project: projectRecord,
+    const { connected, own: work, pinsToRecord, unsaved } = await inspectSessionWorkToSave({
+      project,
+      projectRecord: await project.readCurrentProject(),
       session
     });
     return {
       ...work,
       connected,
-      // The session's work includes its copies': unsaved or behind in any of them is the session's.
-      unsaved: work.unsaved === true || connected.some(copy => copy.unsaved),
+      // The session's work includes its copies' and the pins Save would record: Save's own answer.
+      pinsToRecord,
+      unsaved,
       updateAvailable: work.updateAvailable === true || connected.some(copy => copy.behind > 0),
       publicationRequiresPullRequest: work.destination?.mode === "github" &&
         (await project.readRepositoryWorkflow()).requirePullRequest

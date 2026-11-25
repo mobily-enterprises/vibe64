@@ -20,7 +20,8 @@ const oversized = {
   turn: { id: long(5000), state: long(5000), active: true },
   renewal: { ...strings(["renewalId", "status"]), error: { code: long(5000), message: long(5000) } },
   versions: [{ ...strings(["commit", "author", "message"]), isMerge: false }],
-  files: [{ path: long(5000), status: "M", added: 1, deleted: 2 }]
+  files: [{ path: long(5000), status: "M", added: 1, deleted: 2 }],
+  pinsToRecord: [strings(["fullName", "commit"])]
 };
 oversized.sessions = [oversized];
 

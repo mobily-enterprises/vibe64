@@ -1,5 +1,6 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { saveWorkReadyTitle } from "@/lib/vibe64SessionRepositoryWorkState.js";
 
 const SAVE_WORK_STAGE_LABELS = Object.freeze({ published: "pushed", publishing: "pushing" });
 
@@ -160,7 +161,7 @@ function useVibe64SessionSaveWork(props, {
     if (!saveWorkUnsaved.value) {
       return "No work to save";
     }
-    return "Review changes and choose where to commit them";
+    return saveWorkReadyTitle(saveWorkRepositoryState.value);
   });
   watch(() => {
     const attempt = saveWorkAttempt.value;
