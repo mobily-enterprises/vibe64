@@ -1520,6 +1520,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-core/src/server/stateUpgrades/20261010-assistant-workflow.js`
 - `packages/vibe64-terminals/src/shared/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/agentPlanCommand.js`
+- `packages/vibe64-core/src/server/commandInput.js`
 - `packages/vibe64-terminals/src/server/assistantPlanUpgrade.js`
 - `src/components/studio/vibe64-session/Vibe64WorkPlan.vue`
 - `src/components/studio/vibe64-session/Vibe64WorkPlanSections.vue`
@@ -2271,7 +2272,9 @@ a planning turn does not create a plan. Unrelated direct requests do not read or
 attach the current plan; Junior's lifecycle permissions remain unchanged.
 
 The model uses vibe64-helper plan read/history/new/write/complete/archive/reopen,
-through the existing bound session command socket. The server derives Senior,
+through the existing bound session command socket. Its outcome reads the
+workflow identity a read returns under the same names (`status`, when given,
+must match the request's) and refuses any other field. The server derives Senior,
 Junior or review authority from the admitted turn, never a caller's claimed role.
 Junior can write paired Progress and move existing checklist items among their
 three marks: `[ ]` not done yet, `[~]` built (implemented, and its own focused
@@ -3102,7 +3105,24 @@ exit status and signal handling; `deployment` is the Env executable asked for
 `deployment`, the read-only staging status of the session's project and, where a host allows the session,
 how it reaches staging itself (`ssh staging`). Missing groups fail without searching PATH
 for a substitute. Each underlying command retains its session binding and
-authorization. The individual executables stay installed for existing
+authorization. Every operation that takes input refuses a field it does not
+read, a missing one it needs, and input that is not a JSON object, naming the
+fields it takes, before anything changes (`refuseUnreadFields` in
+`@local/vibe64-core/server/commandInput`, codes `vibe64_command_input_unread`,
+`vibe64_command_input_missing` and `vibe64_command_input_not_object`): every
+plan operation, outcome and handoff included, `database erd apply` (its batch
+and each move), `preview identities save` given an object, and the session
+commands, whose routes hand each its own fields and whose client sends each only
+those. A field is never ignored while the command answers ok, as plan
+`progress-write` once kept an empty Progress for a field it did not read. The
+plan client also refuses input that is not an object and the names it adds
+itself (`operation`, `token`, `sessionId`, `generationId`) instead of replacing
+them. A value a read returns goes back to its write under the same name: the
+Plan as `text`, the Progress as `progressText`, an outcome's workflow identity
+(`messageId`, `turnId`, `stage`, `status`), an ERD's `revision` and moves
+(`table`, `x`, `y`, `pinned`, as `previousMoves` gives them) and the identity
+list as `identities`; the paired `revision` a read returns goes back as
+`expectedRevision`, the convention of every compare-and-swap. The individual executables stay installed for existing
 conversations and scripts; new session guidance uses the common entry point.
 The ordinary `vibe64` launcher, managed `git`/`gh`, and internal process helpers
 retain their existing roles.

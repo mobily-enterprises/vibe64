@@ -18,6 +18,7 @@
     "./server/heldWork": "./src/server/heldWork.js",
     "./server/heldRequests": "./src/server/heldRequests.js",
     "./server/core": "./src/server/core.js",
+    "./server/commandInput": "./src/server/commandInput.js",
     "./server/codexAuthState": "./src/server/codexAuthState.js",
     "./server/codexCacheUpgrade": "./src/server/codexCacheUpgrade.js",
     "./server/deepFreeze": "./src/server/deepFreeze.js",

@@ -2,6 +2,7 @@ import {
   logOperationalEvent,
   sanitizeLogText
 } from "@local/vibe64-core/server/logging";
+import { refuseUnreadFields } from "@local/vibe64-core/server/commandInput";
 import { collectSessionPreviewOpenAnswers } from "@local/vibe64-core/server/sessionUiSyncState";
 import {
   AGENT_PREVIEW_USAGE
@@ -171,13 +172,21 @@ function createAgentPreviewCommandLine({
       const identityTypes = [...new Set((status.outputTargets || []).flatMap((target) => target.identityTypes || []))];
       let result;
       if (subcommand === "save") {
-        let identities = null;
+        let value;
         try {
-          const value = JSON.parse(String(stdin || ""));
-          identities = Array.isArray(value) ? value : value?.identities;
+          value = JSON.parse(String(stdin || ""));
         } catch {
           // Invalid JSON is reported with the usage error below.
         }
+        // The list itself, or an object whose only field is the list, under the name a read returns it.
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          try {
+            refuseUnreadFields(value, { operation: "preview identities save", fields: ["identities"], required: ["identities"] });
+          } catch (error) {
+            return commandFailure(error.message, error.code, { exitCode: 64 });
+          }
+        }
+        const identities = Array.isArray(value) ? value : value?.identities;
         if (!Array.isArray(identities)) {
           return commandFailure(
             "Provide the complete ordered identity list as a JSON array on stdin.",

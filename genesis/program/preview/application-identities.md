@@ -53,7 +53,10 @@ Colleague reads and replaces the same complete ordered list through the canonica
 Project actions. A session's coding agent does the same with
 `vibe64-helper preview identities [save]`: the preview command service scopes it
 to the session's bound project and source, accepts only selector types its Stack
-declares under `#### Preview identity`, and calls the same Project save. The agent
+declares under `#### Preview identity`, and calls the same Project save. It takes
+the list itself or an object whose only field is `identities`; any other field,
+such as the `identityTypes` or `invalidIdentities` a read also returns, is refused
+before anything is saved, as is an object without the list. The agent
 saves only names and accounts the person asked for or confirmed, never creates
 application accounts or changes roles, and then verifies each name in Preview. The first entry is the default. It preserves unrequested entries,
 uses the user's actual identifiers and retains the ordinary project permissions

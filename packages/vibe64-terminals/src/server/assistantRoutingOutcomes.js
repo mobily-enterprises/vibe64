@@ -103,14 +103,16 @@ function createAssistantRoutingOutcomes({
   const planCheck = createAssistantPlanCheck({ routingState, records, delivery });
 
   /**
-   * The active agent declares an outcome; this does not dispatch while its turn runs.
+   * The active agent declares an outcome; this does not dispatch while its turn runs. Its identity is the workflow a
+   * plan read returns (messageId, turnId, stage and, when given, status), under the same names.
    */
   async function recordOutcome(sessionId, input, options) {
     return exclusiveAfterWrites(sessionId, options, async context => {
       const state = await read(context.runtime.store, sessionId);
       if (!state || (!state.workflow && state.stage !== "planning") || state.stopped ||
           state.status !== "working" || state.delivery !== "accepted" || input.messageId !== state.messageId ||
-          input.turnId !== state.turnId || input.stage !== state.stage) {
+          input.turnId !== state.turnId || input.stage !== state.stage ||
+          input.status !== undefined && input.status !== state.status) {
         throw failure("The workflow outcome does not match the active request and turn.", "vibe64_assistant_workflow_outcome_mismatch");
       }
       await decisions.validateDecision(context, state, Boolean(state.followup));

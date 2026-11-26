@@ -707,7 +707,11 @@ and `vibe64-helper session rename "Name"` use the store's label mutation and
 publish a session-list refresh. The chat command uses the existing managed
 session command listener with a separate, rename-only capability, checked against
 its bound project, session, and listener generation. It cannot authorize shell
-execution. Manual names may contain spaces and have a 120-character limit;
+execution. Each session command reads only its own fields (`SESSION_COMMAND_FIELDS`:
+`name` for rename, `projectSlug` and the rest for the cross-project commands,
+`reviewedConflictId` for Update, none for status, setup retry and Save) and
+refuses any other, and a missing one it needs, before acting; the client sends
+each command only its own. Manual names may contain spaces and have a 120-character limit;
 automatic names contain one word of up to 40 characters. The store checks for
 an existing label under its mutation lock before applying an automatic name,
 so a manual rename wins. IDs, directories, source branches and URLs never move.

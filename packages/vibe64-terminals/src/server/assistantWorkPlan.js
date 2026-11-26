@@ -2,6 +2,7 @@ import { lstat, mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { parseWorkPlanLines, workPlanScope, workPlanStep } from "../shared/assistantWorkPlan.js";
 import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
+import { refuseUnreadFields } from "@local/vibe64-core/server/commandInput";
 import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 import { readThroughOf, refuseUnprovenAgentWrite } from "./assistantWorkPlanAgentWrites.js";
@@ -442,8 +443,8 @@ function readWorkPlanPage(context, options) {
 // The AI's changes that bring the plan up to date, which record the source as it is then (the plan's mark).
 const MARKING_OPERATIONS = Object.freeze(["new", "write", "progress-write", "reopen", "checked"]);
 
-// The fields each operation reads. Any other is refused, never ignored: a text sent under a name the operation does not
-// read would otherwise be accepted and keep nothing.
+// The fields each operation reads besides the operation itself, the command's argument. Any other is refused, never
+// ignored (refuseUnreadFields): a text sent under a name the operation does not read would otherwise keep nothing.
 const PAIRED = ["expectedRevision", "expectedProgressRevision"];
 const OPERATION_FIELDS = Object.freeze({
   read: ["offset", "limit", ...PAIRED, "archiveId"],
@@ -466,18 +467,9 @@ const TEXT_OPERATIONS = Object.freeze({
 
 /** Refuses a field the operation does not read, and a whole document missing or empty, naming what it takes. */
 function refuseUnreadInput(input) {
-  const { operation } = input;
-  const fields = OPERATION_FIELDS[operation];
-  if (!fields) return;
-  const unread = Object.keys(input).filter((name) => name !== "operation" && !fields.includes(name));
-  if (unread.length) {
-    const takes = fields.join(", ") || "no input";
-    throw planError(
-      `plan ${operation} does not read ${unread.join(", ")}: nothing changed. It takes ${takes}.`,
-      "vibe64_work_plan_input_unknown",
-      { unread, fields }
-    );
-  }
+  const { operation, ...fields } = input;
+  if (!OPERATION_FIELDS[operation]) return;
+  refuseUnreadFields(fields, { operation: `plan ${operation}`, fields: OPERATION_FIELDS[operation] });
   const whole = TEXT_OPERATIONS[operation];
   if (whole && (typeof input[whole.field] !== "string" || !input[whole.field].trim())) {
     const message = `plan ${operation} takes the whole new ${whole.document} as ${whole.field}, a string that is not empty: nothing changed.`;

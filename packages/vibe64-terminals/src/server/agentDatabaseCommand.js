@@ -54,7 +54,7 @@ function usageText() {
     "Run this once after a migration or any other database schema change.",
     "It refreshes the session Database tool's tables, relationships, indexes, and ERD source.",
     "Overview reads the current schema, data-overview.json grouping, coverage and authoring instructions. It does not run queries or alter data.",
-    "ERD reads saved table bounds, pins and routed connection paths. Its response includes the exact revision and move format. Apply accepts that revision and a batch of table moves as JSON on stdin; it changes only the session diagram."
+    "ERD reads saved table bounds, pins and routed connection paths. Its response includes the exact revision and move format. Apply accepts that revision and a batch of table moves as JSON on stdin; it changes only the session diagram. A field the batch or a move does not read, or a missing one it needs, is refused and nothing moves."
   ].join("\n") + "\n";
 }
 
