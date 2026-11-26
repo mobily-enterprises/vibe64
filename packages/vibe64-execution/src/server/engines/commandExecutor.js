@@ -5,9 +5,10 @@
 // starts exactly that command with Node's spawn, with the options it is given, and reports what happens to it.
 //
 // Messages it receives:
-//   { type: "spawn", id, command, args, options: { cwd, env, detached, stdio }, input }
+//   { type: "spawn", id, command, args, options: { cwd, detached, env, stdio }, input }
 //   { type: "kill", id, signal }
 //   { type: "stop-reading", id, stream }        stream is "stdout" or "stderr"
+//   { type: "starts-read", count }              the editor has read `count` more start records
 // Messages it sends, each naming the command by its id:
 //   { type: "spawn", id, pid }                   the answer to spawn: pid is undefined when it did not start
 //   { type: "spawn-refused", id, error }         the answer to spawn when spawn() threw: nothing started
@@ -19,40 +20,51 @@
 //   { type: "close", id, code, signal }          the last message about a command that started
 // It refuses any other message (`refuse`), so the two sides never guess at each other.
 //
-// It starts a command only once every message it sent before has been written to the channel, and holds the commands'
-// output meanwhile, so the answer carrying the new pid is written in the same step that starts it, never queued behind
-// output in this process's memory: a spawner that dies after that step has handed the pid on. The messages that came
-// after a held spawn wait behind it, in order.
+// In the spawner, each command that starts is also recorded (`recordStart`), in the same synchronous step as the
+// spawn() that started it and before this process does anything else: its id and pid, as a START_RECORD_BYTES record,
+// into a pipe only the editor reads, which keeps what was written after this process dies. At most START_RECORD_CAP
+// records wait there unread; at the cap, the messages that follow wait, in order, until the editor says it has read
+// more, so the pipe never fills and a record's write never waits.
 
 import { spawn } from "node:child_process";
+import { constants } from "node:os";
+
+// An id (64 bits) and a pid (32 bits), little-endian.
+const START_RECORD_BYTES = 12;
+// Linux keeps each small write to a socket pair as its own buffer: at the default buffer size, a test host's pipe held
+// 180 records before a write would wait, so the cap stays well under it.
+const START_RECORD_CAP = 64;
+const SIGNALS = new Set([...Object.keys(constants.signals), ...Object.values(constants.signals)]);
 
 /**
  * @param {object} channel
- * @param {(message: object) => boolean} channel.send delivers one message; false while its backlog is full
- * @param {() => boolean} channel.written true once every message sent so far has been written
- * @param {(onWritten: () => void) => void} channel.whenWritten calls back once every message sent so far has been written
+ * @param {(message: object, onWritten: () => void) => boolean} channel.send delivers one message and calls onWritten
+ *   once it has been written; false while the channel's backlog is full
  * @param {(message: unknown) => void} channel.refuse called with a message it does not know
+ * @param {((id: number, pid: number) => void) | null} channel.recordStart records a started command where the editor
+ *   reads it even after this process dies; null where the editor is this process
  * @returns {(message: unknown) => void} receives one message
  */
-function createCommandExecutor({ send: deliver, written, whenWritten, refuse }) {
+function createCommandExecutor({ send: deliver, refuse, recordStart }) {
   const children = new Map();
   const waiting = [];
-  let backlogFull = false;
-  let holdingSpawn = false;
+  let unreadStarts = 0;
+  let pausedBy = null;
 
-  // While the channel's backlog is full, the commands' output waits instead of piling up here.
+  // While the channel's backlog is full, the commands' output waits in their pipes instead of piling up here; it flows
+  // again once the message that filled the backlog has been written.
   function send(message) {
-    if (deliver(message) || backlogFull) return;
-    backlogFull = true;
-    updateOutputFlow();
-    whenWritten(() => {
-      backlogFull = false;
-      updateOutputFlow();
+    const delivered = deliver(message, () => {
+      if (pausedBy !== message) return;
+      pausedBy = null;
+      setOutputFlowing(true);
     });
+    if (delivered || pausedBy) return;
+    pausedBy = message;
+    setOutputFlowing(false);
   }
 
-  function updateOutputFlow() {
-    const flowing = !backlogFull && !holdingSpawn;
+  function setOutputFlowing(flowing) {
     for (const child of children.values()) {
       for (const stream of [child.stdout, child.stderr]) {
         if (flowing) stream?.resume();
@@ -66,7 +78,7 @@ function createCommandExecutor({ send: deliver, written, whenWritten, refuse }) 
     try {
       child = spawn(command, args, {
         cwd: options.cwd,
-        detached: options.detached === true,
+        detached: options.detached,
         env: options.env,
         stdio: options.stdio,
         windowsHide: true
@@ -74,6 +86,10 @@ function createCommandExecutor({ send: deliver, written, whenWritten, refuse }) 
     } catch (error) {
       send({ type: "spawn-refused", id, error: errorFields(error) });
       return;
+    }
+    if (recordStart && child.pid !== undefined) {
+      recordStart(id, child.pid);
+      unreadStarts += 1;
     }
     children.set(id, child);
     send({ type: "spawn", id, pid: child.pid });
@@ -85,7 +101,7 @@ function createCommandExecutor({ send: deliver, written, whenWritten, refuse }) 
     });
     for (const name of ["stdout", "stderr"]) {
       child[name]?.on("data", (chunk) => send({ type: name, id, chunk }));
-      if (backlogFull) child[name]?.pause();
+      if (pausedBy) child[name]?.pause();
     }
     if (child.stdin) {
       child.stdin.on("error", (error) => send({ type: "input-error", id, error: errorFields(error) }));
@@ -96,23 +112,6 @@ function createCommandExecutor({ send: deliver, written, whenWritten, refuse }) 
       if (!children.delete(id)) return;
       send({ type: "close", id, code, signal });
     });
-  }
-
-  // Handles the messages in order; a spawn waits until everything sent before it has been written.
-  function handleWaiting() {
-    while (waiting.length > 0 && !holdingSpawn) {
-      if (waiting[0]?.type === "spawn" && !written()) {
-        holdingSpawn = true;
-        updateOutputFlow();
-        whenWritten(() => {
-          holdingSpawn = false;
-          handleWaiting();
-          updateOutputFlow();
-        });
-        return;
-      }
-      handle(waiting.shift());
-    }
   }
 
   function handle(message) {
@@ -128,8 +127,19 @@ function createCommandExecutor({ send: deliver, written, whenWritten, refuse }) 
     }
   }
 
+  // Handles the messages in order while fewer than START_RECORD_CAP starts wait unread.
+  function handleWaiting() {
+    while (waiting.length > 0 && unreadStarts < START_RECORD_CAP) handle(waiting.shift());
+  }
+
   return function receive(message) {
-    waiting.push(message);
+    if (message?.type !== "starts-read") {
+      waiting.push(message);
+    } else if (Number.isSafeInteger(message.count) && message.count > 0 && message.count <= unreadStarts) {
+      unreadStarts -= message.count;
+    } else {
+      refuse(message);
+    }
     handleWaiting();
   };
 }
@@ -137,10 +147,12 @@ function createCommandExecutor({ send: deliver, written, whenWritten, refuse }) 
 function knownMessage(message, children) {
   if (!message || typeof message !== "object" || !Number.isSafeInteger(message.id)) return false;
   if (message.type === "spawn") {
+    const { options } = message;
     return !children.has(message.id) && typeof message.command === "string" && Array.isArray(message.args) &&
-      Boolean(message.options) && typeof message.options === "object";
+      Boolean(options) && typeof options === "object" && typeof options.cwd === "string" &&
+      Boolean(options.env) && typeof options.env === "object" && Array.isArray(options.stdio);
   }
-  if (message.type === "kill") return typeof message.signal === "string" || typeof message.signal === "number";
+  if (message.type === "kill") return SIGNALS.has(message.signal);
   return message.type === "stop-reading" && ["stdout", "stderr"].includes(message.stream);
 }
 
@@ -155,6 +167,9 @@ function describeMessage(message) {
 }
 
 export {
+  SIGNALS,
+  START_RECORD_BYTES,
+  START_RECORD_CAP,
   createCommandExecutor,
   describeMessage
 };

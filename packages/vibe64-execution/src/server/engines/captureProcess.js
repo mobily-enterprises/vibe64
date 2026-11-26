@@ -3,13 +3,13 @@ import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { stripVTControlCharacters } from "node:util";
 
-import { spawnCommand } from "./commandSpawner.js";
+import { FORCE_KILL_DELAY_MS, spawnCommand } from "./commandSpawner.js";
 
 // The defaults capture commands had while they ran through execa 9, kept so
-// results and messages stay the same: output limit per stream, and the delay
-// before a timed-out command that ignores SIGTERM gets SIGKILL.
+// results and messages stay the same: the output limit per stream, and (from
+// commandSpawner.js) the delay before a timed-out command that ignores SIGTERM
+// gets SIGKILL.
 const DEFAULT_MAX_BUFFER = 100_000_000;
-const FORCE_KILL_DELAY_MS = 5_000;
 const SIGNAL_DESCRIPTIONS = Object.freeze({
   SIGABRT: "Aborted",
   SIGALRM: "Timeout or timer",
@@ -123,13 +123,14 @@ function capturedText(encoding, limit) {
 }
 
 /**
- * Starts a command (through commandSpawner) with its output captured, its own
- * process group (outside Windows) and a timeout. stdout, stderr and both
- * interleaved are decoded in outputEncoding; a stream stops being read at
- * maxBuffer characters, and the command then fails. started resolves with its
- * pid (undefined when it did not start) and rejects when spawn refused its
- * arguments. completion settles once the command has exited and its output has
- * closed, and never rejects.
+ * Starts a command (through commandSpawner, which gives it its own process
+ * group outside Windows) with its output captured and a timeout. A relative
+ * cwd is this process's. stdout, stderr and both interleaved are decoded in
+ * outputEncoding; a stream stops being read at maxBuffer characters, and the
+ * command then fails. spawned resolves with its pid (undefined when it did not
+ * start) and rejects when spawn refused its arguments. completion settles once
+ * the command has exited and its output has closed, or at once when it never
+ * started, and never rejects.
  * @param {string} command
  * @param {string[]} args
  * @param {{ cwd?: string, env?: Record<string, string>, input?: string | Uint8Array | null,
@@ -153,8 +154,7 @@ function startCaptureProcess(command, args, {
   };
   const hasInput = input !== undefined && input !== null;
   const child = spawnCommand(command, args, {
-    cwd: cwd || undefined,
-    detached: process.platform !== "win32",
+    cwd: cwd ? path.resolve(cwd) : undefined,
     env,
     input: hasInput ? input : null,
     stdio: [hasInput ? "pipe" : "ignore", "pipe", "pipe"]
@@ -178,6 +178,11 @@ function startCaptureProcess(command, args, {
     failure.spawnError ||= error;
     // A command that never started has no output to wait for.
     if (child.pid === undefined) settle();
+  });
+  // Nor one spawn refused.
+  child.spawned.catch((error) => {
+    failure.spawnError ||= error;
+    settle();
   });
   const terminate = () => {
     if (exited || !child.kill("SIGTERM") || forceKillTimer) return;
@@ -236,7 +241,7 @@ function startCaptureProcess(command, args, {
   return {
     completion,
     kill: (signal) => child.kill(signal),
-    started: child.spawned
+    spawned: child.spawned
   };
 }
 

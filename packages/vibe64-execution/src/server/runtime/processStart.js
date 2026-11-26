@@ -64,10 +64,7 @@ async function readProcessStart(pid, {
     return ambiguous;
   }
   try {
-    const { stdout } = await execFileFn("ps", ["-o", "pgid=,stat=,lstart=", "-p", String(normalizedPid)], {
-      encoding: "utf8",
-      env: psEnv()
-    });
+    const { stdout } = await execFileFn("ps", ["-o", "pgid=,stat=,lstart=", "-p", String(normalizedPid)], { env: psEnv() });
     const identity = parsePsProcessLine(String(stdout || "").split(/\r?\n/u)[0]);
     return identity ? { status: "exact", ...identity } : ambiguous;
   } catch (error) {
@@ -141,10 +138,7 @@ async function processGroupHasLiveMember(groupId, {
     }
   }
   try {
-    const { stdout } = await execFileFn("ps", ["-ax", "-o", "pgid=,stat="], {
-      encoding: "utf8",
-      env: psEnv()
-    });
+    const { stdout } = await execFileFn("ps", ["-ax", "-o", "pgid=,stat="], { env: psEnv() });
     return String(stdout || "").split(/\r?\n/u).some((line) => {
       const [group, state = ""] = line.trim().split(/\s+/u);
       return Number(group) === normalizedGroupId && !processEnded({ state: state.slice(0, 1) });

@@ -19,6 +19,7 @@ import {
   spawnCommand,
   startCommandSpawner
 } from "../../packages/vibe64-execution/src/server/engines/commandSpawner.js";
+import { START_RECORD_CAP } from "../../packages/vibe64-execution/src/server/engines/commandExecutor.js";
 import { processGroupHasLiveMember } from "../../packages/vibe64-execution/src/server/runtime/processStart.js";
 import { processRuns } from "../fixtures/processGroupMembers.js";
 
@@ -30,8 +31,6 @@ startCommandSpawner();
 const posix = { skip: process.platform === "win32" };
 const linux = { skip: process.platform !== "linux" };
 const env = { PATH: process.env.PATH };
-// commandExecutor.js's cap on the starts whose pid the editor has not read.
-const START_RECORD_CAP = 64;
 const SPAWNER_PROCESS = fileURLToPath(new URL(
   "../../packages/vibe64-execution/src/server/engines/commandSpawnerProcess.js", import.meta.url
 ));
@@ -485,6 +484,23 @@ test("a spawner that stops answering is stopped, and the command waiting on it f
   assert.match(result.error, new RegExp(`command spawner did not answer for ${STUCK_AFTER_MS} ms and was stopped`, "u"));
   assert.ok(await waitUntil(() => !processRuns(stuck)), "the stuck spawner was killed");
   assert.equal((await runCaptureCommand("sh", ["-c", "true"], { env })).ok, true);
+});
+
+test("a request made long after the spawner's last answer gets its full time to be answered", { ...posix, timeout: 30_000 }, async () => {
+  // An answered request leaves nothing outstanding; a later one, made just before the first one's timer would have
+  // struck, is not counted stuck for the time the spawner sat idle.
+  const spawner = await spawnerPid();
+  await new Promise((resolve) => setTimeout(resolve, STUCK_AFTER_MS - 300));
+  process.kill(spawner, "SIGSTOP");
+  const next = runCaptureCommand("sh", ["-c", "echo $PPID"], { env, timeout: 30_000 });
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  process.kill(spawner, "SIGCONT");
+  const result = await next;
+  assert.deepEqual({ ok: result.ok, error: result.error, sameSpawner: Number(result.stdout.trim()) === spawner }, {
+    ok: true,
+    error: "",
+    sameSpawner: true
+  });
 });
 
 test("a started command holds no channel to the spawner: its only open files are its stdin, stdout and stderr", linux, async () => {

@@ -72,10 +72,7 @@ function parseDscacheutilUsers(text = "") {
 
 async function commandOutput(execFileFn, command, args) {
   // The account tools run with the server's own environment, as they always have.
-  const result = await execFileFn(command, args, {
-    encoding: "utf8",
-    env: process.env
-  });
+  const result = await execFileFn(command, args, { env: process.env });
   return String((typeof result === "string" ? result : result?.stdout) || "");
 }
 
