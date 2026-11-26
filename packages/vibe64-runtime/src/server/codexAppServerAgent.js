@@ -57,6 +57,7 @@ import {
   prepareCodexAttachmentRoot
 } from "./codexAttachmentPaths.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { AI_PURPOSE_AGENT_TURN, AI_PURPOSE_HELPER_SHARED } from "@local/vibe64-execution/shared/aiPurpose";
 
 const CODEX_APP_SERVER_PROVIDER_ID = AGENT_PROVIDER_IDS.CODEX_APP_SERVER;
 const CODEX_APP_SERVER_MODEL_CATALOG_ERROR_CODE = "vibe64_codex_model_catalog_invalid";
@@ -416,6 +417,9 @@ function codexAppServerRuntimeHost(options = {}) {
         envPolicy: "auth",
         execution: {
           ...request.execution,
+          // The helper app-server serves every helper feature; the main one runs the chats' agent turns.
+          aiPurpose: helper ? AI_PURPOSE_HELPER_SHARED : AI_PURPOSE_AGENT_TURN,
+          label: `${toText(request.execution?.label) || "Codex assistant"} (${helper ? AI_PURPOSE_HELPER_SHARED : AI_PURPOSE_AGENT_TURN})`,
           controlGenerationId: helper ? "" : codexAppServerControlGeneration(normalizedTerminalEnv),
           ...(processProfile ? {
             resourceProfile: {

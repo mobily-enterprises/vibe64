@@ -128,7 +128,18 @@ behind. Finite and interactive executions get no private directory.
 
 Each managed command names itself through its execution descriptor's `label`
 and `operationId` and carries the project and session it serves, so a host
-listing running work need not fall back to a generic name. Account checks name
+listing running work need not fall back to a generic name. An AI run also
+names its purpose in `aiPurpose` (`@local/vibe64-execution/shared/aiPurpose`):
+`agent-turn` for a process running chats' agent turns (a Claude turn or
+terminal, the main Codex app-server, the OpenCode server), `helper:<workload>`
+for a helper's one-off turn (`helper:prompt_hint`, `helper:account` for
+Claude's account reads), and `helper:shared` for the Codex helper app-server
+that serves every helper. The descriptor refuses any other value
+(`vibe64_execution_ai_purpose_invalid`), the label ends with it ("Claude Code
+assistant (helper:prompt_hint)"), and the exec helper's unit description names
+it from the payload's `aiPurpose` ("Vibe64 assistant execution (agent-turn)").
+A helper turn is never a planned restart's crucial operation and never steered;
+the restart simply ends it. Account checks name
 themselves (`claude auth status` is "Checking the Claude sign-in"), as do a
 session's GitHub token and Git identity reads. The AI's own `git` and `gh`
 commands through the managed Git gateway are "Running Git for the AI" and

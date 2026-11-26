@@ -4,6 +4,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
+import { isAiPurpose } from "../shared/aiPurpose.js";
 import { createConnection } from "node:net";
 import { constants as osConstants } from "node:os";
 import process from "node:process";
@@ -102,6 +103,7 @@ function handleManagedExecutionOperation(payload = {}) {
 
   const mode = managedExecutionMode(payload.mode);
   const kind = managedExecutionKind(payload.kind);
+  const description = managedExecutionDescription(kind, payload.aiPurpose);
   const lifecycle = String(payload.lifecycle || "").trim();
   const expectedLifecycle = mode === "capture"
     ? "finite"
@@ -230,7 +232,7 @@ function handleManagedExecutionOperation(payload = {}) {
     `--unit=${unitName}`,
     "--service-type=exec",
     `--slice=${executionSlice}`,
-    `--property=Description=Vibe64 ${kind} execution`,
+    `--property=Description=${description}`,
     ...accountUnitLines(targetUser, { receiptRoot, sandboxAllowances }).map((line) => `--property=${line}`),
     // The daemon's and a person's executions never see the daemon's private state; a staging account's sandbox has no
     // home at all.
@@ -277,6 +279,17 @@ function handleManagedExecutionOperation(payload = {}) {
 // background mode is untouched, since that command is still running. Every other execution's unit runs while any of its
 // processes does: a service's (Preview, the assistant, a browser), whose first process may leave the rest running, and
 // a finite capture's or an interactive terminal's, whose caller waits for its descendants.
+/**
+ * The unit's description: its kind, and an AI run's purpose ("agent-turn", "helper:prompt_hint") when it names one.
+ * @param {string} kind
+ * @param {unknown} aiPurpose
+ */
+function managedExecutionDescription(kind, aiPurpose) {
+  if (aiPurpose === undefined || aiPurpose === null || aiPurpose === "") return `Vibe64 ${kind} execution`;
+  if (!isAiPurpose(aiPurpose)) throw new Error("Vibe64 exec helper rejected an invalid AI run purpose.");
+  return `Vibe64 ${kind} execution (${aiPurpose})`;
+}
+
 function managedExecutionExitType(kind = "", mode = "") {
   return kind === "job" && mode === "detached" ? "main" : "cgroup";
 }
@@ -554,6 +567,7 @@ export {
   awaitManagedExecutionGroupExit,
   handleManagedExecutionOperation,
   managedExecutionControllerLeaseName,
+  managedExecutionDescription,
   managedExecutionExitType,
   runManagedExecutionPayload
 };
