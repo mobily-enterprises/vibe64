@@ -9,7 +9,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { configureVibe64Host } from "@local/vibe64-execution/server/hostProfile";
-// The package export Online's own port allocators read, the one owner of the range.
+// The package export a host's own port allocators read, the one owner of the range.
 import { ephemeralPortRange } from "@local/vibe64-terminals/server/ephemeralPortRange";
 import { reserveAvailableWebLaunchTargetPort } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
