@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile, rm } from "node:fs/promises";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 /**
  * Keep filename discovery out of the typing loop. Root-tree refreshes and editor
@@ -54,14 +53,12 @@ function createSourceEditorFileIndex({
         if (value.truncated) {
           await rm(target, { force: true });
         } else {
-          await mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
-          const temporary = `${target}.${randomUUID()}.tmp`;
-          try {
-            await writeFile(temporary, JSON.stringify({ loadedAt: now(), value }), { mode: 0o600 });
-            if (entries.get(key) === entry) await rename(temporary, target);
-          } finally {
-            await rm(temporary, { force: true });
-          }
+          await writeFileAtomic(target, JSON.stringify({ loadedAt: now(), value }), {
+            beforePublish: () => entries.get(key) === entry,
+            directoryMode: 0o700,
+            durable: false,
+            fileMode: 0o600
+          });
         }
       }
       return value;

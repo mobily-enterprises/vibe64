@@ -1,20 +1,11 @@
 // Deployment and managed services: installing, inspecting, stopping and removing their units, their processes
 // without a unit, and a staging service's start.
 
-import {
-  chmodSync,
-  closeSync,
-  fchmodSync,
-  fsyncSync,
-  openSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync
-} from "node:fs";
+import { chmodSync, closeSync, readdirSync, readFileSync, rmSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { writeFileAtomicSync } from "@local/vibe64-atomic-file";
 
 import {
   stagingUnitFiles,
@@ -36,7 +27,6 @@ import {
 } from "./hostAccounts.js";
 import {
   canonicalPath,
-  fsyncDirectory,
   makeDirectory,
   openDirectoryBelow,
   openedPath,
@@ -428,32 +418,11 @@ function installSystemdUnit({
   }
   const linked = unitRoot !== SYSTEMD_UNIT_ROOT;
   if (linked) closeSync(openUnitRoot(unitRoot, rootUid));
-  // Durable: the unit's data reaches the disk before it is moved into place,
-  // and its folder after, so a power cut never leaves an empty unit. Every
-  // account reads it (UNIT_MODE), whatever umask sudo gave the helper.
-  const temporaryUnitPath = `${unitPath}.tmp-${process.pid}`;
-  const descriptor = openSync(temporaryUnitPath, "w", UNIT_MODE);
-  try {
-    fchmodSync(descriptor, UNIT_MODE);
-    writeFileSync(descriptor, unit);
-    fsyncSync(descriptor);
-  } finally {
-    closeSync(descriptor);
-  }
-  try {
-    run("mv", [
-      temporaryUnitPath,
-      unitPath
-    ]);
-  } catch (error) {
-    try {
-      unlinkSync(temporaryUnitPath);
-    } catch {
-      // Ignore cleanup failure after the real install error.
-    }
-    throw error;
-  }
-  fsyncDirectory(path.dirname(unitPath));
+  // Durable (Vibe64's atomic writer): the unit's data reaches the disk before
+  // it is renamed into place, and its folder after, so a power cut never
+  // leaves an empty unit. Every account reads it (UNIT_MODE), whatever umask
+  // sudo gave the helper.
+  writeFileAtomicSync(unitPath, unit, { createDirectory: false, fileMode: UNIT_MODE });
   if (linked) {
     run("systemctl", [
       enable ? "enable" : "link",

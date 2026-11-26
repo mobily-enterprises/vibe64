@@ -1,6 +1,6 @@
-import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { lessonHasSteps } from "./contentSchemas.js";
 import { createCourseLock, readPinnedTopic } from "./catalogue.js";
@@ -77,13 +77,7 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
       topics.push(await readPinnedTopic(root));
     }
     const lock = createCourseLock(course, topics);
-    const temporary = `${filename}.tmp-${randomUUID()}`;
-    try {
-      await writeFile(temporary, `${canonicalJson(lock)}\n`, { flag: "wx" });
-      await rename(temporary, filename);
-    } finally {
-      await rm(temporary, { force: true });
-    }
+    await writeFileAtomic(filename, `${canonicalJson(lock)}\n`, { durable: false });
     write(JSON.stringify({
       ok: true,
       courseId: lock.courseId,

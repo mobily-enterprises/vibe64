@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, open, realpath, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, open, realpath, rm } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import path from "node:path";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { isMissingPathError, pathExists, vibe64Error } from "@local/vibe64-core/server/core";
 import {
   assertNormalSessionIsReadable,
@@ -244,27 +245,24 @@ function createSessionArchiveAccess({
               const identity = await lstat(sourcePath);
               if (!identity.isFile()) throw new Error("Archived artifact source is not a regular file.");
               const source = await open(sourcePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK);
-              const temporary = `${target}.${randomUUID()}.tmp`;
               try {
                 const before = await source.stat();
                 if (!before.isFile() || before.ino !== identity.ino || before.dev !== identity.dev) {
                   throw new Error("Archived artifact source changed before publication.");
                 }
-                const destination = await open(temporary, "wx", 0o600);
-                try {
-                  if (before.size) await destination.writeFile(source.createReadStream({ autoClose: false, end: before.size - 1 }));
-                  await destination.sync();
-                } finally {
-                  await destination.close();
-                }
-                const after = await source.stat();
-                if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) {
-                  throw new Error("Archived artifact source changed during publication.");
-                }
-                await rename(temporary, target);
+                // archivedArtifactPath made and checked the target's folders; the write makes none.
+                await writeFileAtomic(target, before.size ? source.createReadStream({ autoClose: false, end: before.size - 1 }) : "", {
+                  beforePublish: async () => {
+                    const after = await source.stat();
+                    if (before.size !== after.size || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) {
+                      throw new Error("Archived artifact source changed during publication.");
+                    }
+                  },
+                  createDirectory: false,
+                  fileMode: 0o600
+                });
               } finally {
                 await source.close();
-                await rm(temporary, { force: true });
               }
             }
             await publishExtractedSessionArchive(archived, { beforeWork });
@@ -320,8 +318,8 @@ function createSessionArchiveAccess({
   async function publishExtractedSessionArchive(session, options = {}) {
     const { beforePublish = doNothing, beforeWork = doNothing } = options;
     await beforeWork({ stage: "publish", archivePath: session.archivePath, sessionRoot: session.sessionRoot });
-    const candidatePath = `${session.archivePath}.${randomUUID()}.tmp`;
-    try {
+    // Keep the archive index, metadata, messages and archival time unchanged.
+    await writeFileAtomic(session.archivePath, async (candidatePath) => {
       const result = await runCommand("tar", ["-czf", candidatePath, "-C", path.dirname(session.sessionRoot), session.sessionId], {
         allowedRoots: [path.dirname(session.sessionRoot), path.dirname(session.archivePath)],
         cwd: state.normalizedProjectContextRoot,
@@ -334,25 +332,13 @@ function createSessionArchiveAccess({
           "vibe64_session_archive_update_failed"
         );
       }
-      await archiveRecords.validateSessionArchive(candidatePath);
-      await beforePublish(candidatePath);
-      const candidate = await open(candidatePath, "r");
-      try {
-        await candidate.sync();
-      } finally {
-        await candidate.close();
-      }
-      // Keep the archive index, metadata, messages and archival time unchanged.
-      await rename(candidatePath, session.archivePath);
-      const directory = await open(path.dirname(session.archivePath), "r");
-      try {
-        await directory.sync();
-      } finally {
-        await directory.close();
-      }
-    } finally {
-      await rm(candidatePath, { force: true });
-    }
+    }, {
+      beforePublish: async (candidatePath) => {
+        await archiveRecords.validateSessionArchive(candidatePath);
+        await beforePublish(candidatePath);
+      },
+      createDirectory: false
+    });
   }
 
   function artifactExpiryRequest(relativePaths, beforePrune) {

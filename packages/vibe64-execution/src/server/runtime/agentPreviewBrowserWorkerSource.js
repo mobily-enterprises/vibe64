@@ -197,7 +197,7 @@ import crypto from "node:crypto";
 import http from "node:http";
 import { createRequire } from "node:module";
 import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
-import { readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { inflateSync } from "node:zlib";

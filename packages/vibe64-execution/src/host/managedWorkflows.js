@@ -1,17 +1,10 @@
 // The workspace's work slice and its workflow groups: their limits, counters, state and recorded results.
 
-import {
-  closeSync,
-  lstatSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync
-} from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { writeFileAtomicSync } from "@local/vibe64-atomic-file";
 
 import {
   MANAGED_EXECUTION_MEMORY_MAX_BYTES,
@@ -148,23 +141,11 @@ function writeManagedWorkflowResult(workflow, result) {
       throw new Error("Unsafe managed workflow result directory.");
     }
   }
-  const temporary = `${resultPath}.tmp-${process.pid}`;
-  // Opening exclusively before the cleanup block proves we own this temporary
-  // file. A pre-existing receipt temporary must never be removed on EEXIST.
-  const file = openSync(temporary, "wx", 0o600);
-  try {
-    try {
-      writeFileSync(file, `${JSON.stringify({ ...result, schema: "vibe64.managed-workflow.result.v1" })}\n`);
-    } finally {
-      closeSync(file);
-    }
-    renameSync(temporary, resultPath);
-  } catch (error) {
-    try { unlinkSync(temporary); } catch (cleanupError) {
-      if (cleanupError.code !== "ENOENT") throw new AggregateError([error, cleanupError], "Workflow receipt write and cleanup failed.");
-    }
-    throw error;
-  }
+  writeFileAtomicSync(resultPath, `${JSON.stringify({ ...result, schema: "vibe64.managed-workflow.result.v1" })}\n`, {
+    createDirectory: false,
+    durable: false,
+    fileMode: 0o600
+  });
 }
 
 function managedWorkflowState(workflow) {

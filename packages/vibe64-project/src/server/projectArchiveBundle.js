@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, lstat, mkdir, readFile, rename, rm } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
+import { writeFileAtomic, writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 
@@ -52,53 +52,51 @@ async function createTarArchive({
   sourceName = "",
   sourceParent = ""
 } = {}) {
-  await mkdir(path.dirname(archivePath), {
-    mode: 0o700,
-    recursive: true
-  });
-  const temporaryPath = `${archivePath}.partial`;
-  await rm(temporaryPath, {
-    force: true
-  });
-  const args = [
-    "--acls",
-    "--xattrs",
-    "--numeric-owner",
-    "-czf",
-    temporaryPath,
-    ...tarExcludeArgs(sourceName, disposablePaths),
-    ...excludePatterns.flatMap((pattern) => ["--exclude", pattern]),
-    "-C",
-    sourceParent,
-    sourceName
-  ];
-  const result = await runCommand({
-    actor: "daemon",
-    allowedRoots: [
+  // tar writes the archive into the writer's temporary file, and an empty one is never published. A retry removes
+  // what an interrupted run's write left in the bundle's folder (removeStale).
+  await writeFileAtomic(archivePath, async (temporaryPath) => {
+    const args = [
+      "--acls",
+      "--xattrs",
+      "--numeric-owner",
+      "-czf",
+      temporaryPath,
+      ...tarExcludeArgs(sourceName, disposablePaths),
+      ...excludePatterns.flatMap((pattern) => ["--exclude", pattern]),
+      "-C",
       sourceParent,
-      path.dirname(archivePath)
-    ],
-    args,
-    command: "tar",
-    cwd: sourceParent,
-    envPolicy: "project",
-    maxBuffer: COMMAND_BUFFER_BYTES,
-    mode: "capture",
-    purpose: "source",
-    timeout: ARCHIVE_TIMEOUT_MS
-  });
-  if (result?.ok !== true) {
-    await rm(temporaryPath, {
-      force: true
+      sourceName
+    ];
+    const result = await runCommand({
+      actor: "daemon",
+      allowedRoots: [
+        sourceParent,
+        path.dirname(archivePath)
+      ],
+      args,
+      command: "tar",
+      cwd: sourceParent,
+      envPolicy: "project",
+      maxBuffer: COMMAND_BUFFER_BYTES,
+      mode: "capture",
+      purpose: "source",
+      timeout: ARCHIVE_TIMEOUT_MS
     });
-    const error = new Error(`Project archive could not be created: ${commandOutput(result) || "tar failed."}`);
-    error.code = "vibe64_project_archive_failed";
-    error.result = result;
-    throw error;
-  }
-  await assertNonEmptyFile(temporaryPath, "vibe64_project_archive_empty");
-  await chmod(temporaryPath, 0o600);
-  await rename(temporaryPath, archivePath);
+    if (result?.ok !== true) {
+      const error = new Error(`Project archive could not be created: ${commandOutput(result) || "tar failed."}`);
+      error.code = "vibe64_project_archive_failed";
+      error.result = result;
+      throw error;
+    }
+  }, {
+    beforePublish: async (temporaryPath) => {
+      await assertNonEmptyFile(temporaryPath, "vibe64_project_archive_empty");
+    },
+    directoryMode: 0o700,
+    durable: false,
+    fileMode: 0o600,
+    removeStale: true
+  });
 }
 
 /**

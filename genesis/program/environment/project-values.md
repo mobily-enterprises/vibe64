@@ -37,8 +37,10 @@ host provide managed system values separately.
 - `packages/vibe64-core/src/server/runtimeConfig.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261114-staging-env-scope.js`
 - `src/composables/useRuntimeConfigDotenvDownload.js`
+- `packages/vibe64-atomic-file/src/atomicFile.js`
 - `packages/vibe64-core/src/server/atomicFile.js`
 - `tests/server/atomicFile.unit.test.js`
+- `tests/server/handWrittenAtomicWrites.unit.test.js`
 - `tests/server/durableStateWriters.unit.test.js`
 - `tests/server/durableWriteTrace.js`
 - `src/components/studio/EnvPanel.vue`
@@ -85,12 +87,32 @@ Saved user values live in one private (`0600`) file per project that every
 session shares. Saves queue per file, so concurrent saves from different
 sessions keep each other's values, and each one replaces the file atomically:
 an interrupted save leaves the previous values readable.
-Core's `atomicFile.js` is the one temporary-file-and-rename writer: saved
-values, the generated dotenv and Git exclude projections, Preview identities
-and archive bundle records all use it, so its temporary file never outlives a
-failed write. Every temporary file it makes is named `.vibe64-write-<uuid>.tmp`
-beside its file; `exclusive: true` links it into place instead of renaming it,
-so the write creates the file or fails with `EEXIST` when one exists. Writes into
+`@local/vibe64-atomic-file` is Vibe64's one temporary-file-and-rename writer,
+a plain Node package with no dependency so every package uses it; Core's
+`atomicFile.js` is the editor's name for it. Every file Vibe64 replaces or
+creates whole goes through it (`tests/server/handWrittenAtomicWrites.unit.test.js`
+refuses a file written under another name and renamed or linked into place by
+hand, with a short reasoned list of renames that are no in-place write): saved
+values, the generated dotenv and Git exclude projections, Preview identities,
+archive bundle records and project archives, crash records, state-upgrade
+files and the upgrade lock, Colleague's conversation upgrades, the file index
+and source interpretations, the training course lock, Genesis's host context
+registry, the deploy engine's record, the PHP recorder's module, toolchain
+downloads, connected npm files, and the privileged helper's person
+registrations, execution and workflow results, staging keys, sudo rules and
+systemd units, so its temporary file never outlives a failed write. Each keeps
+its own path, modes and durability. `writeFileAtomicSync` is the same writer
+for one that cannot wait (the helper, a dying process's crash record, a check
+and its write with nothing between); the preview browser's worker, a program
+Vibe64 writes, embeds `writeFileAtomic`'s text. Every temporary file it makes
+is named `.vibe64-write-<uuid>.tmp` beside its file; `exclusive: true` links it
+into place instead of renaming it, so the write creates the file or fails with
+`EEXIST` when one exists. Content is text, a Buffer or a stream, or a function
+that fills the temporary file itself (a copy, a download, `tar`).
+`beforePublish` checks the complete content before it is published (a
+checksum, `visudo`, whether the write is still wanted): a throw fails the
+write and `false` publishes nothing, leaving the file as it was.
+`createDirectory: false` writes only into a folder that already exists. Writes into
 a person's Git source (the editor's creates and saves, the generated dotenv, the
 connections file and lock, the connected Sources file and the connected-package
 files the adapters derive) go through the Project's `writeSourceFileAtomic`:

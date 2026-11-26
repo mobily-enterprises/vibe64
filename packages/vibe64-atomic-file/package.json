@@ -1,0 +1,35 @@
+{
+  "name": "@local/vibe64-atomic-file",
+  "version": "0.1.0",
+  "description": "Vibe64's one atomic file writer: the whole new content in a temporary file beside the file, renamed (or linked) into place. Plain Node with no dependency, so every package uses it, the privileged helper, Genesis and the deploy engine among them.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/atomicFile.js"
+  },
+  "jskit": {
+    "kind": "runtime",
+    "capabilities": {
+      "provides": [],
+      "requires": []
+    },
+    "runtime": {
+      "server": {
+        "providers": []
+      },
+      "client": {
+        "providers": []
+      }
+    },
+    "metadata": {
+      "apiSummary": {
+        "surfaces": [
+          {
+            "subpath": ".",
+            "summary": "writeFileAtomic and writeFileAtomicSync: a file replaced or created whole, under one temporary-file name, durable unless asked otherwise."
+          }
+        ]
+      }
+    }
+  }
+}

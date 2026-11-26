@@ -1029,7 +1029,7 @@ Stores project-specific agent configuration.
 
 ## `packages-vibe64-core` Core primitives
 
-Provides the shared paths, errors, request/context helpers, atomic file publication, the personal star store (one person's starred files or pages in a project) and state-upgrade facilities used by Vibe64’s product packages. It defines common mechanics without owning project, session, teaching or conversation policy.
+Provides the shared paths, errors, request/context helpers, the editor's name for atomic file publication (`atomicFile.js`, re-exporting the Atomic file writer), the personal star store (one person's starred files or pages in a project) and state-upgrade facilities used by Vibe64’s product packages. It defines common mechanics without owning project, session, teaching or conversation policy.
 
 The shared upload byte policy keeps Files, chat HTTP admission and browser validation aligned; each product service retains authorization, streaming storage and cleanup.
 
@@ -1115,6 +1115,22 @@ Turns a project's Stack into what runs at a provider: Production's needs, the pa
 
 ### Program
 - `genesis/program/deploy/deploy-engine.md`
+
+### Data owned
+- Nothing.
+
+### Data used
+- Nothing.
+
+## `packages-vibe64-atomic-file` Atomic file writer
+
+Vibe64's one way to write a file in place (`writeFileAtomic`, `writeFileAtomicSync`): the whole content in an exclusively created `.vibe64-write-<uuid>.tmp` beside the file, renamed (or linked, to create it only when missing) into place, durable unless a writer asks otherwise, with an optional check between the complete content and its publication. Plain Node with no dependency, so the privileged helper, Genesis, the deploy engine and the editor's packages all use it, and the preview browser's worker embeds its text. `tests/server/handWrittenAtomicWrites.unit.test.js` refuses a temporary file written and renamed into place anywhere else. Each writer keeps its own file's path, modes and durability.
+
+### Source
+- Directory `packages/vibe64-atomic-file`
+
+### Program
+- Nothing.
 
 ### Data owned
 - Nothing.

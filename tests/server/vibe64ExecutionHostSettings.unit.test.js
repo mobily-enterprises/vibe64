@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { mkdirSync, renameSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -379,7 +379,6 @@ function unitHost() {
     failing,
     run: (command, args) => {
       commands.push([command, ...args].join(" "));
-      if (command === "mv") renameSync(args[0], args[1]);
       return "";
     },
     runAllowFailure: (command, args) => {
@@ -398,7 +397,7 @@ test("a unit in systemd's own folder is enabled by name; one in another folder i
 
   let host = unitHost();
   install(host, { activation: "restart", unitName: RELEASE_UNIT, unitPath: path.join(folder, RELEASE_UNIT), unitRoot: "/etc/systemd/system" });
-  assert.deepEqual(host.commands.slice(1), [
+  assert.deepEqual(host.commands, [
     "systemctl daemon-reload",
     `systemctl enable ${RELEASE_UNIT}`,
     `systemctl reset-failed ${RELEASE_UNIT}`,
@@ -406,7 +405,7 @@ test("a unit in systemd's own folder is enabled by name; one in another folder i
   ]);
   host = unitHost();
   install(host, { enable: false, unitName: MANAGED_UNIT, unitPath: path.join(folder, MANAGED_UNIT), unitRoot: "/etc/systemd/system" });
-  assert.deepEqual(host.commands.slice(1), ["systemctl daemon-reload", `systemctl reset-failed ${MANAGED_UNIT}`, `systemctl start ${MANAGED_UNIT}`]);
+  assert.deepEqual(host.commands, ["systemctl daemon-reload", `systemctl reset-failed ${MANAGED_UNIT}`, `systemctl start ${MANAGED_UNIT}`]);
 
   host = unitHost();
   // Every account reads a unit, whatever umask sudo gave the helper (sudo-rs merges the caller's 0007 with its 0022).
@@ -416,8 +415,7 @@ test("a unit in systemd's own folder is enabled by name; one in another folder i
   } finally {
     process.umask(umask);
   }
-  assert.match(host.commands[0], new RegExp(`^mv \\S+\\.tmp-\\d+ ${path.join(folder, RELEASE_UNIT)}$`, "u"));
-  assert.deepEqual(host.commands.slice(1), [
+  assert.deepEqual(host.commands, [
     `systemctl enable --runtime ${path.join(folder, RELEASE_UNIT)}`,
     "systemctl daemon-reload",
     `systemctl reset-failed ${RELEASE_UNIT}`,
@@ -428,7 +426,7 @@ test("a unit in systemd's own folder is enabled by name; one in another folder i
   // A unit installed without its boot target stays without one.
   host = unitHost();
   install(host, { enable: false, unitName: MANAGED_UNIT, unitPath: path.join(folder, MANAGED_UNIT), unitRoot: folder });
-  assert.deepEqual(host.commands.slice(1), [
+  assert.deepEqual(host.commands, [
     `systemctl link --runtime ${path.join(folder, MANAGED_UNIT)}`,
     "systemctl daemon-reload",
     `systemctl reset-failed ${MANAGED_UNIT}`,
@@ -448,7 +446,7 @@ test("a unit in systemd's own folder is enabled by name; one in another folder i
   assert.deepEqual((await readdir(folder)).sort(), [MANAGED_UNIT, RELEASE_UNIT]);
 });
 
-test("a unit reaches the disk before it is moved into place, and its folder after", async (t) => {
+test("a unit reaches the disk before it is renamed into place, and its folder after", async (t) => {
   const folder = await temporaryFolder(t, "v64-units-durable-");
   const host = unitHost();
   const events = await traceDurableWrites(t);
@@ -470,7 +468,8 @@ test("relink-units links every unit root wrote outside systemd's folder again as
   await chmod(unrelated, 0o640);
   await symlink(unrelated, path.join(folder, "vibe64-managed-test-cache.service"));
   await writeFile(path.join(folder, "unrelated.service"), "[Service]\n", { mode: 0o644 });
-  await writeFile(path.join(folder, `${RELEASE_UNIT}.tmp-123`), "[Service]\n", { mode: 0o644 });
+  // What a killed write leaves (Vibe64's atomic writer's temporary file) is no unit.
+  await writeFile(path.join(folder, ".vibe64-write-0b6f3c2e-9d0a-4f43-8a51-2f0d7c1e5a11.tmp"), "[Service]\n", { mode: 0o644 });
 
   let host = unitHost();
   assert.throws(() => relinkSystemdUnits({ rootUid: UID, runAllowFailure: host.runAllowFailure, unitRoot: folder }), (error) => {

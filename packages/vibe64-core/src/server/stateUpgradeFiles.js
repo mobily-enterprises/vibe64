@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { writeFileAtomic } from "./atomicFile.js";
 import { isPlainObject } from "./isPlainObject.js";
 import { sha256Hex } from "./sha256Hex.js";
 
@@ -53,16 +54,11 @@ async function fileDigest(filePath) {
   return hash.digest("hex");
 }
 async function atomicCopy(source, destination) {
-  await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
-  const temporary = `${destination}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, "", { flag: "wx", mode: 0o600 });
-    await copyFile(source, temporary);
-    await chmod(temporary, 0o600);
-    await rename(temporary, destination);
-  } finally {
-    await rm(temporary, { force: true });
-  }
+  await writeFileAtomic(destination, (temporaryPath) => copyFile(source, temporaryPath), {
+    directoryMode: 0o700,
+    durable: false,
+    fileMode: 0o600
+  });
 }
 
 /**
