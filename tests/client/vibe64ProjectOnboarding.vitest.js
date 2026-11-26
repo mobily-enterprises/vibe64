@@ -421,7 +421,7 @@ describe("Preview project onboarding", () => {
       await Vue.nextTick();
       await fixture.projectChanged();
       const attention = opening("attention");
-      attention.inspection.diagnostics = [{ message: "Program module cites a missing or ineligible source file: src/Old.vue." }];
+      attention.inspection.diagnostics = [{ message: "genesis/program/old.md:5: cites `src/Old.vue`, which is not a file in the project; cite an existing source file by its path from the project root. See Program modules in `genesis --help`." }];
       await fixture.settleRead(1, attention);
       expect(nodeText(fixture.container)).toContain("src/Old.vue");
       expect(fixture.button("Fix it with AI").props.disabled).toBe(false);

@@ -13,7 +13,7 @@ const ATTENTION = {
   inspection: {
     state: "attention",
     nextAction: "repair",
-    diagnostics: [{ code: "PROGRAM_SOURCE_MISSING", message: "Program module cites a missing or ineligible source file: src/shared/report.js." }]
+    diagnostics: [{ code: "PROGRAM_SOURCE_MISSING", message: "genesis/program/shared/report.md:5: cites `src/shared/report.js`, which is not a file in the project; cite an existing source file by its path from the project root. See Program modules in `genesis --help`." }]
   },
   templates: []
 };

@@ -15,7 +15,7 @@ const TASK = {
   steps: ["The AI sets up the project", "Vibe64 inspects the project"],
   check: { by: "vibe64", label: "Vibe64 is inspecting the project…", retryLimit: 3, output: "", unstoppable: "" },
   revision: 1, phase: "working", active: true, reason: "", message: "", waiting: false, checkRunning: false,
-  problem: { key: "project-setup", summary: "Program module cites a missing or ineligible source file.", details: "" },
+  problem: { key: "project-setup", summary: "genesis/program/shared/report.md:5: cites `src/shared/report.js`, which is not a file in the project; cite an existing source file by its path from the project root. See Program modules in `genesis --help`.", details: "" },
   conflictReview: "", conflictPaths: [], startedBy: null, endedBy: null, attempt: 1, report: "", log: [], diagnostic: ""
 };
 

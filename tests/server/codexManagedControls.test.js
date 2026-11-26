@@ -591,7 +591,7 @@ PY` };
   const missingInstructions = await readInstructions();
   assert.notEqual(missingInstructions, initialInstructions);
   assert.match(missingInstructions, /Genesis needs attention:/u);
-  assert.match(missingInstructions, /Program module cites a missing or ineligible source file: referenced\.js/u);
+  assert.match(missingInstructions, /genesis\/program\/reference\/read-reference\.md:\d+: cites `referenced\.js`, which is not a file in the project/u);
   await provider.ensureThreadControls(thread.id);
   assert.equal(instructionReads, installedReads + 1, "Only the idle send admission reread the host before the native command started");
   assert.equal(provider.conversationRuntime.threadEnvironments.get(thread.id), installed);

@@ -889,7 +889,7 @@ for (const width of [1280, 768, 390]) {
           nextAction: state === "ready" ? "work" : "repair",
           diagnostics: state === "ready" ? [] : [{
             code: "PROGRAM_SOURCE_MISSING",
-            message: "Program module cites a missing or ineligible source file: src/components/contacts/ContactUpcomingBookings.vue."
+            message: "genesis/program/contacts/upcoming-bookings.md:5: cites `src/components/contacts/ContactUpcomingBookings.vue`, which is not a file in the project; cite an existing source file by its path from the project root. See Program modules in `genesis --help`."
           }]
         },
         templates: []
@@ -978,7 +978,7 @@ test("@preview-setup-warning choosing Preview while the Dashboard is still loadi
       inspection: state === "ready" ? { state, nextAction: "work", diagnostics: [] } : {
         state,
         nextAction: "repair",
-        diagnostics: [{ code: "PROGRAM_SOURCE_MISSING", message: "Program module cites a missing or ineligible source file: src/Missing.vue." }]
+        diagnostics: [{ code: "PROGRAM_SOURCE_MISSING", message: "genesis/program/missing.md:5: cites `src/Missing.vue`, which is not a file in the project; cite an existing source file by its path from the project root. See Program modules in `genesis --help`." }]
       },
       templates: []
     });
