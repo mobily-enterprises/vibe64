@@ -122,8 +122,9 @@ A message you send while the agent works (**Steer**) joins its running turn,
 such as a question about where the work has got to. Claude Code and Codex read
 it at their next step, once the command they are running returns, answer it and
 carry on: the answer appears under your message as an ordinary reply, in full,
-and what the agent does next stays in the turn's progress updates until its
-final reply. In OpenCode the answer is part of the agent's progress, which
+whichever AI provider Codex uses, and stays a reply after the editor restarts;
+what the agent does next stays in the turn's progress updates until its final
+reply. In OpenCode the answer is part of the agent's progress, which
 shows as an ordinary message too. Desktop and mobile behave the same; Colleague
 can explain this.
 

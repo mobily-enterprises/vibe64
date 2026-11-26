@@ -131,10 +131,16 @@ streamed or in one frame, is an assistant message with that input's identity,
 even when a tool call follows it. The transcript saves it as the reply of the
 steer's turn, so the progress after it goes to turns of its own. Narration
 after the reply, and text in a loop the message starts itself after the running
-loop's result, stay commentary. Codex records a steer as a user item of its
-running turn; JSKIT's Codex live items write the next agent message after it,
-when Codex calls it commentary, as that turn's reply in the same way. OpenCode
-keeps the model's own classification of a mid-turn answer: commentary.
+loop's result, stay commentary. Claude's saved history reads the same way
+(`readClaudeHistory`, which delivery recovery reads after an editor restart),
+so the reply does not fold back into progress. Codex records a steer as a user
+item of its running turn; JSKIT's Codex live items write the next agent message
+after it as that turn's reply in the same way, whether Codex calls it
+commentary or, as the DeepSeek, GLM and custom-endpoint providers do, gives it
+no phase. A phase-less agent message is progress once another item follows it
+and the turn's answer when it ends the turn, so a long or multi-line one, a
+reply, and any after one of those wait for that next item; none is dropped.
+OpenCode keeps the model's own classification of a mid-turn answer: commentary.
 What a finished turn leaves to routing (`afterTurn`, a reported outcome) queues
 for the lock again while such a write holds it, instead of giving up after the
 usual minute; everything else, `reconcile` included, still gives up after it.
