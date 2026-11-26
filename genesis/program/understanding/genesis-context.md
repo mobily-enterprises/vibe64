@@ -192,7 +192,20 @@ when the session is behind, then tells the sessions it works with to update;
 a temporary chat's says it never saves, so Save stays the person's there
 ([saving work](../source/save-work.md)). With the pages command it also
 tells every engine how to publish a page and when to offer one
-([publishing pages](../pages/publishing.md)). Framework conventions, such as
+([publishing pages](../pages/publishing.md)). Every session conversation's
+contribution gives the plan commands' current inputs
+(`VIBE64_PLAN_COMMAND_INSTRUCTIONS`): only the fields `vibe64-helper plan
+--help` gives an operation, the Plan as `text` and the Progress as
+`progressText` both ways, the paired revisions, whole documents with
+`readThrough`, the refusal of a field an operation does not read or a missing
+one, and that these replace any different wording earlier in the conversation.
+Each engine builds this contribution as its process starts or resumes a
+conversation (Claude's appended system prompt, Codex's developer instructions on
+each thread start and resume, OpenCode's session context), so after a release
+every turn that may use a plan command has the current inputs, a plan's pass
+included, whose message carries only its pass instructions. A Senior or Junior
+turn's plan guidance repeats them, for a learning session, which has no session
+guidance. Framework conventions, such as
 JSKIT's test-database names, belong to the Stack piece that owns them; Vibe64
 keeps only host rules, such as the `PLAYWRIGHT_BASE_URL` its managed Playwright
 supplies. The

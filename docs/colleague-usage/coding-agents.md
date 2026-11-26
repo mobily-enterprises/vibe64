@@ -76,6 +76,19 @@ Colleague does not run this command. To get a contract applied, ask the coding
 agent in Main chat; Colleague can explain which contract applies and offer to
 send that request. Desktop and mobile behave the same.
 
+## A conversation that began before an update
+
+A coding agent learns what Vibe64's plan commands take, such as the name each
+of Plan and Progress is written under, from the guidance its engine gets each
+time it starts or resumes your conversation. After Vibe64 is updated, every
+later turn works from the updated commands, a plan's pass included, even in a
+conversation that began on an older release and still shows older guidance
+earlier on. If the agent sends a field a plan command does not read, the
+command refuses it, changes nothing and names the fields it takes, so the agent
+corrects the input; a misnamed Progress is never saved empty. Colleague can
+explain this; it does not run these commands. Desktop and mobile behave the
+same.
+
 ## Send, steer and stop
 
 A message that a lesson's **Do it for me** sent for you (in a practice

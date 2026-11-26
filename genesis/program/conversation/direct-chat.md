@@ -2735,7 +2735,12 @@ the right one. Each operation reads only its own fields (`OPERATION_FIELDS`:
 that document, the paired revisions, `readThrough`, `archiveId`,
 `archiveCurrent`, a read's `offset` and `limit`); `refuseUnreadInput` refuses
 any other field and a missing or empty document, naming what the operation
-takes, so a Progress sent as `text` is never accepted as an empty Progress. The session command server hands the plan route
+takes, so a Progress sent as `text` is never accepted as an empty Progress.
+Every turn learns these inputs from the session guidance each engine builds as
+it starts or resumes the conversation (`VIBE64_PLAN_COMMAND_INSTRUCTIONS`,
+[Genesis context](../understanding/genesis-context.md)), never only from an
+earlier turn's plan guidance, which may be an older release's; a plan's pass
+turn carries only its pass instructions. The session command server hands the plan route
 the agent's own fields (`fields`), without the token, session and generation
 that admitted the request. A plan replaced or archived drops
 the record; a plan without one (from before it) reports its pair's save time as
