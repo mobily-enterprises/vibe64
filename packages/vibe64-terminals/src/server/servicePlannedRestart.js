@@ -131,12 +131,15 @@ function createServicePlannedRestart(
   void reader.start();
 
   /**
-   * The server's recovery of the turns it found, which starts before any chat is told about a notice.
-   * @param {() => Promise<unknown>} recover
+   * The server's recovery of the turns it found, which starts before any chat is told about a notice. Its options
+   * reach the recovery unchanged.
+   * @template {unknown[]} A
+   * @param {(...options: A) => Promise<unknown>} recover
+   * @returns {(...options: A) => Promise<unknown>}
    */
   function afterRecoveryStarts(recover) {
-    return () => {
-      const recovering = recover();
+    return (...options) => {
+      const recovering = recover(...options);
       serverReady.resolve();
       return recovering;
     };

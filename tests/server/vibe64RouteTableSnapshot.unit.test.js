@@ -145,6 +145,7 @@ GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/targets public ap
 GET /api/studio/health public app - vibe64.studio-health.read
 GET /api/studio/health/crashes public app - vibe64.studio-health.crashes.list
 GET /api/studio/health/crashes/summary public app - vibe64.studio-health.crashes.summary
+GET /api/studio/health/planned-restart public app - vibe64.studio-health.planned-restart.read
 GET /api/studio/health/tools public app - vibe64.studio-health.tools
 GET /api/vibe64/accounts public app - vibe64.accounts.read
 GET /api/vibe64/accounts/auth/:sessionId public app - vibe64.accounts.auth-session.read
