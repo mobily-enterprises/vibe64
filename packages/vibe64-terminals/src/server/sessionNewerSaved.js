@@ -5,7 +5,7 @@
 
 import { newerSavedFacts, newerSavedMessage } from "@local/vibe64-core/shared";
 import { GIT_HISTORY_RECORD_FORMAT, parseGitHistoryRecords } from "./gitRecords.js";
-import { countCommitsBetween, git, saveError } from "./sessionWorkGit.js";
+import { countAheadBehind, git, saveError } from "./sessionWorkGit.js";
 
 const INCOMING_VERSION_LIMIT = 5;
 const SAVE_UPDATE_REQUIRED = "vibe64_session_save_update_required";
@@ -48,8 +48,8 @@ async function incomingFileCount(runCommand, context, sessionHead, canonicalComm
  *   incomingVersionsTruncated: boolean }>}
  */
 async function readNewerSaved(runCommand, context, sessionHead, canonicalCommit, options = {}) {
-  const [behind, incoming, fileCount] = await Promise.all([
-    countCommitsBetween(runCommand, context, sessionHead, canonicalCommit, options),
+  const [{ behind }, incoming, fileCount] = await Promise.all([
+    countAheadBehind(runCommand, context, canonicalCommit, sessionHead, options),
     incomingVersionsBetween(runCommand, context, sessionHead, canonicalCommit, options),
     incomingFileCount(runCommand, context, sessionHead, canonicalCommit, options)
   ]);
