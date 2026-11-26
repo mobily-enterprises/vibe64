@@ -1,5 +1,5 @@
 <template>
-  <!-- Above the app bar on every page while the host's planned restart is near, and once after it. -->
+  <!-- Above the app bar on every page while the host's planned restart is near (amber), and once after it (green). -->
   <v-layout-item
     v-if="active || restarted"
     class="vibe64-planned-restart-banner-item"
@@ -15,12 +15,15 @@
         :data-testid="active ? 'vibe64-planned-restart-banner' : 'vibe64-planned-restart-after'"
         density="compact"
         rounded="0"
-        :type="active ? 'warning' : 'info'"
+        :type="active ? 'warning' : 'success'"
         variant="flat"
       >
         <div class="vibe64-planned-restart-banner__body">
           <p class="vibe64-planned-restart-banner__text" role="status">{{ text }}</p>
-          <v-btn v-if="!active" size="small" variant="outlined" @click="dismissRestarted">Dismiss</v-btn>
+          <div v-if="!active" class="vibe64-planned-restart-banner__actions">
+            <v-btn v-if="clientChanged" size="small" variant="outlined" @click="reload">Reload</v-btn>
+            <v-btn size="small" variant="outlined" @click="dismissRestarted">Dismiss</v-btn>
+          </div>
         </div>
       </v-alert>
     </div>
@@ -34,7 +37,8 @@ import { plannedRestartAfterText, plannedRestartHeadline } from "@/lib/vibe64Pla
 
 // Every open editor shows the restart's time, a countdown and its reason; after the restart, once, what it stopped.
 usePlannedRestartWatch();
-const { active, dismissRestarted, notice, now, restarted } = usePlannedRestart();
+const { active, clientChanged, dismissRestarted, notice, now, restarted } = usePlannedRestart();
+const reload = () => globalThis.location?.reload();
 
 const text = computed(() => {
   if (active.value) return plannedRestartHeadline(notice.value, now.value);
@@ -64,6 +68,12 @@ onBeforeUnmount(() => observer?.disconnect());
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
   justify-content: space-between;
+}
+
+.vibe64-planned-restart-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .vibe64-planned-restart-banner__text {

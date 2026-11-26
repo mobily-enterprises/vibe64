@@ -2,6 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
 import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
+import { readServedClientBuildId } from "@jskit-ai/kernel/server/support";
 
 import {
   crashesAcknowledgeInputValidator,
@@ -73,7 +74,17 @@ function healthSummaryForAssistant(result) {
  * @param {StudioHealthService} dependencies.studioHealth
  * @param {CrashService} dependencies.crashes
  */
-function createStudioHealthActions({ studioHealth, crashes }) {
+/**
+ * The planned restart's state for the banner, with the client build this server serves now: after a restart the page
+ * offers Reload only when that build is not the one it runs.
+ * @param {string} appRoot
+ */
+async function plannedRestartStatus(appRoot) {
+  const clientBuildId = await readServedClientBuildId({ appRoot }).catch(() => "");
+  return { ok: true, ...plannedRestart().status(), clientBuildId };
+}
+
+function createStudioHealthActions({ studioHealth, crashes, appRoot }) {
   return Object.freeze([
     Object.freeze({
       ...VIBE64_QUERY,
@@ -115,7 +126,7 @@ function createStudioHealthActions({ studioHealth, crashes }) {
       id: ACTION_READ_PLANNED_RESTART,
       input: studioHealthQueryInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
-      execute: () => ({ ok: true, ...plannedRestart().status() })
+      execute: () => plannedRestartStatus(appRoot)
     }),
     // Crash records stay off the assistant's tools: an error's message and stack may hold what no AI should read.
     Object.freeze({

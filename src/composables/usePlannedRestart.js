@@ -1,5 +1,6 @@
 import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { pageClientBuildId } from "@jskit-ai/kernel/shared/support/clientBuild";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { STUDIO_PLANNED_RESTART_ENDPOINT } from "@/lib/studioGateApi.js";
@@ -81,8 +82,15 @@ function usePlannedRestart() {
       // Without storage the banner goes for this page only.
     }
   }
+  // The page runs another client build than the server serves now: only then does the message offer Reload.
+  const clientChanged = computed(() => {
+    const page = pageClientBuildId();
+    const served = String(shared.status.value?.clientBuildId || "");
+    return Boolean(page && served && page !== served);
+  });
   return {
     active: computed(() => Boolean(notice.value)),
+    clientChanged,
     dismissRestarted,
     notice,
     now: shared.now,

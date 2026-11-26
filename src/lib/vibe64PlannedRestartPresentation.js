@@ -36,18 +36,18 @@ function plannedRestartPausedLabel(active) {
 }
 
 /**
- * The banner's sentence once after the restart.
- * @param {{ restartedAt: string, reason: string, sessions: number, stopped: Array<{ label: string, sessionName: string }> }} restarted
+ * The calm message once after the restart: when, that nothing was lost, the AI that picked up where it left off, and
+ * what else the restart stopped.
+ * @param {{ restartedAt: string, sessions: number, stopped: Array<{ label: string, sessionName: string }> }} restarted
  */
 function plannedRestartAfterText(restarted) {
-  const reason = String(restarted.reason || "").trim().replace(/[.\s]+$/u, "");
   const stopped = restarted.stopped.map(({ label, sessionName }) => (sessionName ? `${label} (${sessionName})` : label));
-  const resumed = restarted.sessions === 1 ? "The AI that was working picks up where it left off."
-    : restarted.sessions > 1 ? `The ${restarted.sessions} sessions whose AI was working pick up where they left off.` : "";
+  const resumed = restarted.sessions === 1 ? "The AI that was working picked up where it left off."
+    : restarted.sessions > 1 ? `The AI in the ${restarted.sessions} sessions that were working picked up where it left off.` : "";
   return [
-    `This workspace restarted at ${plannedRestartClock(restarted.restartedAt)}${reason ? ` (${reason})` : ""}.`,
-    stopped.length ? `Stopped: ${stopped.join("; ")}.` : "Nothing else was running.",
-    resumed
+    `Restarted for an update at ${plannedRestartClock(restarted.restartedAt)}. Nothing was lost.`,
+    resumed,
+    stopped.length ? `Stopped then: ${stopped.join("; ")}.` : ""
   ].filter(Boolean).join(" ");
 }
 
