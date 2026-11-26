@@ -131,8 +131,10 @@ streamed or in one frame, is an assistant message with that input's identity,
 even when a tool call follows it. The transcript saves it as the reply of the
 steer's turn, so the progress after it goes to turns of its own. Narration
 after the reply, and text in a loop the message starts itself after the running
-loop's result, stay commentary. Codex and OpenCode keep the model's own
-classification of a mid-turn answer: commentary.
+loop's result, stay commentary. Codex records a steer as a user item of its
+running turn; JSKIT's Codex live items write the next agent message after it,
+when Codex calls it commentary, as that turn's reply in the same way. OpenCode
+keeps the model's own classification of a mid-turn answer: commentary.
 What a finished turn leaves to routing (`afterTurn`, a reported outcome) queues
 for the lock again while such a write holds it, instead of giving up after the
 usual minute; everything else, `reconcile` included, still gives up after it.

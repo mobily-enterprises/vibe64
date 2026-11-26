@@ -119,14 +119,13 @@ unavailable while Stop is being confirmed. Already dispatched requests retain
 their delivery status; inspect them before deciding whether to send again.
 
 A message you send while the agent works (**Steer**) joins its running turn,
-such as a question about where the work has got to. Claude Code reads it once
-the command it is running returns, answers it and carries on: its answer
-appears under your message as an ordinary reply, in full, and what it does next
-stays in the turn's progress updates until its final reply. In Codex and
-OpenCode the answer is part of the agent's progress. It shows as an ordinary
-message, except with Codex through a key provider (DeepSeek, GLM or a custom
-endpoint), whose progress shows under **Show all … progress updates**. Desktop
-and mobile behave the same; Colleague can explain this.
+such as a question about where the work has got to. Claude Code and Codex read
+it at their next step, once the command they are running returns, answer it and
+carry on: the answer appears under your message as an ordinary reply, in full,
+and what the agent does next stays in the turn's progress updates until its
+final reply. In OpenCode the answer is part of the agent's progress, which
+shows as an ordinary message too. Desktop and mobile behave the same; Colleague
+can explain this.
 
 Codex, Claude and OpenCode share the project-format check before refreshing
 skills and agent guidance. This check reads the format marker without scanning
