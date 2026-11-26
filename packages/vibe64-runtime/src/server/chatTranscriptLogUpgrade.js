@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState";
 import { publishStateUpgradeFiles, stateUpgradeRunBackupRoots } from "@local/vibe64-core/server/stateUpgradeFiles";
+import { projectSessionRoots } from "./projectSessionRoots.js";
 import { createVibe64SessionStore } from "./sessionStore.js";
 
 /**
@@ -38,16 +39,20 @@ async function upgradeChatTranscriptLogs(context) {
   return publishStateUpgradeFiles({
     ...context,
     backupRoot,
-    async prepareUpdates(temporaryRoot) {
+    inputs: () => projectSessionRoots(context.systemRoot),
+    async prepareUpdates(temporaryRoot, { stage }) {
       const updates = [];
+      let perTurnLayouts = 0;
       for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {
         const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
-        const prepared = await store.prepareChatTranscriptLogUpgrade({ temporaryRoot, apply: context.apply, publishedEarlier });
+        const prepared = await store.prepareChatTranscriptLogUpgrade({ temporaryRoot, apply: context.apply, stage, publishedEarlier });
         context.report("info", `${path.basename(projectRuntimeRoot)}: ${prepared.chats} chat(s) to convert to appended transcripts${
           prepared.perTurnLayouts ? `; ${prepared.perTurnLayouts} more in the per-turn layout, which 20261002-session-conversations converts first` : ""}.`);
         updates.push(...prepared.updates);
+        perTurnLayouts += prepared.perTurnLayouts;
       }
-      return updates;
+      // A check accepts a chat in the per-turn layout, which an apply refuses: such a check's preparation is not the apply's.
+      return { updates, reusable: perTurnLayouts === 0 };
     }
   });
 }

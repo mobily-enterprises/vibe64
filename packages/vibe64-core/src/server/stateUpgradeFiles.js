@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { isPlainObject } from "./isPlainObject.js";
@@ -88,10 +88,86 @@ export async function stateUpgradeRunBackupRoots(backupRoot) {
 }
 
 /**
+ * What everything below some state folders is now: each entry's path, type and mode, identity (device and inode), size,
+ * and modification and change times to the nanosecond, as lstat gives them, never following a link. Any write, rename,
+ * new or removed entry or change of mode below one changes it; reading changes nothing. One lstat per entry, far less
+ * than reading what the entries hold.
+ * @param {string} systemRoot
+ * @param {string[]} folders absolute folders inside systemRoot, outside its upgrades folder
+ */
+async function stateFingerprint(systemRoot, folders) {
+  const hash = createHash("sha256");
+  const line = (entryPath, info) => hash.update(info
+    ? `${entryPath}\0${info.mode}\0${info.dev}\0${info.ino}\0${info.size}\0${info.mtimeNs}\0${info.ctimeNs}\n`
+    : `${entryPath}\0missing\n`);
+  const status = (entryPath) => lstat(entryPath, { bigint: true }).catch((error) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  const visit = async (directory) => {
+    const names = (await readdir(directory)).sort();
+    const infos = await Promise.all(names.map((name) => status(path.join(directory, name))));
+    for (const [index, name] of names.entries()) line(path.join(directory, name), infos[index]);
+    for (const [index, name] of names.entries()) if (infos[index]?.isDirectory()) await visit(path.join(directory, name));
+  };
+  for (const folder of folders) {
+    const relative = path.relative(systemRoot, folder || "");
+    if (!path.isAbsolute(folder || "") || !relative || relative.startsWith("..") || path.isAbsolute(relative) ||
+        relative === "upgrades" || relative.startsWith(`upgrades${path.sep}`)) {
+      throw new Error("A state upgrade's inputs must be folders of its own state.");
+    }
+    const info = await status(folder);
+    line(folder, info);
+    if (info?.isDirectory()) await visit(folder);
+  }
+  return hash.digest("hex");
+}
+
+/**
+ * One upgrade's hand-over from its check to its apply inside one apply (runStateUpgrades): the preparation its check
+ * made, kept for an apply whose inputs have not changed since, so the apply publishes it instead of reading everything
+ * again. Whatever is not taken goes with discard().
+ */
+export function createStateUpgradePlan() {
+  const kept = new Map();
+  const remove = (preparation) => rm(preparation.temporaryRoot, { recursive: true, force: true });
+  async function keep(backupRoot, preparation) {
+    if (kept.has(backupRoot)) await remove(kept.get(backupRoot));
+    kept.set(backupRoot, preparation);
+  }
+  function take(backupRoot) {
+    const preparation = kept.get(backupRoot) || null;
+    kept.delete(backupRoot);
+    return preparation;
+  }
+  async function discard() {
+    const preparations = [...kept.values()];
+    kept.clear();
+    for (const preparation of preparations) await remove(preparation);
+  }
+  return Object.freeze({
+    keep,
+    take,
+    discard
+  });
+}
+
+/**
  * A single upgrade-owned manifest retains both sides of every file replacement.
  * This is intentionally separate from the general runner's lock and ledger.
+ *
+ * `prepareUpdates(temporaryRoot, { stage })` returns the updates, or `{ updates, reusable }`. `stage` is false only for a
+ * check whose preparation nothing publishes (a standalone check): the upgrade still reads and inspects everything an
+ * apply would, refusing what an apply refuses, but may leave a replacement it would only discard unbuilt (an archive's
+ * repacking), as `{ filePath, unstaged: true }`, which is counted and never published. An upgrade that names its `inputs`
+ * (an async function giving the folders of its state its preparation reads, and nothing else) and is given a `plan`
+ * (the runner gives one to the check and the apply of each upgrade it applies) prepares once: its check keeps what it
+ * prepared with a fingerprint of those folders, and its apply publishes that when the fingerprint is unchanged (an
+ * earlier upgrade of the same apply changed nothing there). It prepares again when they changed, or when its check's
+ * preparation said `reusable: false` (it accepted, for the check, a state an apply refuses). Either way the apply
+ * re-verifies each file it changes against what the check read, and backs it up, before the first change.
  */
-export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, report, prepareUpdates }) {
+export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, report, prepareUpdates, inputs = null, plan = null }) {
   const manifestPath = path.join(backupRoot, "manifest.json");
   await verifyUpgradeParents(systemRoot, manifestPath);
   let manifest = parse(await readUpgradeFile(manifestPath), "State upgrade backup manifest");
@@ -101,11 +177,19 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
         relative.startsWith(`upgrades${path.sep}`)) throw new Error("State upgrade contains a path outside its owned state.");
     return relative;
   };
-  if (!manifest) {
+  const handsOver = typeof inputs === "function" && Boolean(plan);
+  const fingerprint = async () => stateFingerprint(systemRoot, await inputs());
+  async function prepare(withFingerprint) {
+    const read = withFingerprint ? await fingerprint() : null;
     const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-state-upgrade-"));
     try {
-      const updates = await prepareUpdates(temporaryRoot);
-      const changed = updates.filter((entry) => entry.replacementPath || entry.original !== entry.contents);
+      const stage = apply || handsOver;
+      const prepared = await prepareUpdates(temporaryRoot, { stage });
+      const { updates, reusable = true } = Array.isArray(prepared) ? { updates: prepared } : prepared;
+      const changed = updates.filter((entry) => entry.replacementPath || entry.unstaged || entry.original !== entry.contents);
+      if (stage && changed.some((entry) => entry.unstaged)) {
+        throw new Error("A state upgrade left a file unstaged for a preparation that is published.");
+      }
       report("info", `${changed.length} state file(s) to change.`);
       for (const update of changed) {
         update.relative = relativeFile(update.filePath);
@@ -120,6 +204,36 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
         if (saved && saved !== update.before) {
           throw new Error(`State backup differs from the original: ${update.relative}. Inspect it before retrying.`);
         }
+      }
+      return { changed, fingerprint: read, reusable: reusable !== false, temporaryRoot };
+    } catch (error) {
+      await rm(temporaryRoot, { recursive: true, force: true });
+      throw error;
+    }
+  }
+  if (!manifest) {
+    let preparation = null;
+    if (handsOver && apply) {
+      const checked = plan.take(backupRoot);
+      if (checked) {
+        if (checked.fingerprint === await fingerprint()) {
+          preparation = checked;
+          report("info", `Publishing the ${checked.changed.length} state file(s) the check prepared: nothing it read has changed since.`);
+        } else {
+          await rm(checked.temporaryRoot, { recursive: true, force: true });
+          report("info", "What the check read has changed since (an earlier upgrade wrote there): preparing again.");
+        }
+      }
+    }
+    preparation ||= await prepare(handsOver && !apply);
+    const { changed, temporaryRoot } = preparation;
+    try {
+      if (!apply && handsOver && preparation.reusable) {
+        // Each file's digest stands for what the check read of it from here on.
+        for (const update of changed) delete update.original;
+        await plan.keep(backupRoot, preparation);
+        preparation = null;
+        return;
       }
       if (!apply || !changed.length) return;
       // No application file changes before every before/after copy is durable.
@@ -154,7 +268,8 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
       await writeFile(stagedManifest, json(manifest), { mode: 0o600 });
       await atomicCopy(stagedManifest, manifestPath);
     } finally {
-      await rm(temporaryRoot, { recursive: true, force: true });
+      // A preparation kept for the apply stays until the apply takes it or the runner discards it.
+      if (preparation) await rm(temporaryRoot, { recursive: true, force: true });
     }
   }
   if (manifest.version !== 1 || !Array.isArray(manifest.files) || !manifest.files.length ||

@@ -2,6 +2,7 @@ import { lstat, mkdir, readdir, readFile, realpath, rm } from "node:fs/promises"
 import path from "node:path";
 import { writeJsonFileAtomic } from "./atomicFile.js";
 import { acquireUpgradeLock } from "./stateUpgradeLock.js";
+import { createStateUpgradePlan } from "./stateUpgradeFiles.js";
 import codexLoginId from "./stateUpgrades/20260923-codex-login-id.js";
 import routingV2 from "./stateUpgrades/20260923-routing-v2.js";
 import nativeConversationLifecycle from "./stateUpgrades/20260925-native-conversation-lifecycle.js";
@@ -290,6 +291,9 @@ async function runStateUpgrades({
     const ledger = await readLedger(ledgerPath);
     const pending = upgrades.slice(ledger.applied.length);
     report("info", `${pending.length} pending state upgrade(s).`);
+    // An apply's check and apply of one upgrade share its plan: an upgrade that names its inputs publishes what its
+    // check prepared when nothing it read has changed since (stateUpgradeFiles.js), instead of reading it all again.
+    const plans = new Map(apply ? pending.map(upgrade => [upgrade.id, createStateUpgradePlan()]) : []);
     const run = (upgrade, write, backupSuffix = "") => upgrade.run({
       ...operations,
       systemRoot,
@@ -297,6 +301,7 @@ async function runStateUpgrades({
       managedSourceRoot,
       apply: write,
       backupRoot: path.join(upgradeRoot, "backups", upgrade.id, backupSuffix),
+      ...(plans.has(upgrade.id) && !backupSuffix ? { plan: plans.get(upgrade.id) } : {}),
       report: (level, message) => report(level, `${upgrade.id}: ${message}`)
     }).catch(error => {
       throw new Error(`${upgrade.id}: ${error.message}${ledgerMissingHint}`, { cause: error });
@@ -314,18 +319,24 @@ async function runStateUpgrades({
       );
       return { pending: pending.map(upgrade => upgrade.id), applied: [] };
     }
-    // Check all pending work before the first mutation. Apply re-reads each input.
-    for (const upgrade of pending) await run(upgrade, false);
-    if (!apply) return { pending: pending.map(upgrade => upgrade.id), applied: [] };
-    const applied = [];
-    for (const upgrade of pending) {
-      await run(upgrade, true);
-      ledger.applied.push({ id: upgrade.id, completedAt: new Date().toISOString() });
-      await writeLedger(ledgerPath, ledger);
-      applied.push(upgrade.id);
-      report("info", `${upgrade.id}: completed and recorded.`);
+    try {
+      // Check all pending work before the first mutation. Apply re-reads each input, unless its upgrade's check kept
+      // what it prepared and nothing it read has changed since.
+      for (const upgrade of pending) await run(upgrade, false);
+      if (!apply) return { pending: pending.map(upgrade => upgrade.id), applied: [] };
+      const applied = [];
+      for (const upgrade of pending) {
+        await run(upgrade, true);
+        await plans.get(upgrade.id).discard();
+        ledger.applied.push({ id: upgrade.id, completedAt: new Date().toISOString() });
+        await writeLedger(ledgerPath, ledger);
+        applied.push(upgrade.id);
+        report("info", `${upgrade.id}: completed and recorded.`);
+      }
+      return { pending: [], applied };
+    } finally {
+      for (const plan of plans.values()) await plan.discard();
     }
-    return { pending: [], applied };
   };
   if (!apply) return upgradeState();
   await mkdir(upgradeRoot, { recursive: true, mode: 0o700 });
