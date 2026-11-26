@@ -793,7 +793,7 @@ test("turns that run nothing after them never say the work continues", async t =
   ]) assert.ok(!message.includes(CONTINUES), message);
 });
 
-// The owner's messages in Auto chats with what Router decided for each (mercbot-online, 2026-11-12; mobilynet,
+// The owner's messages in Auto chats with what Router decided for each (another project's chats, 2026-11-12; mobilynet,
 // 2026-11-23, after a question Junior answered), and a plan as Junior drafted it; "…" stands for text the record elides.
 const PLAN_REQUESTS_ROUTED_TO_JUNIOR = [
   ["conversation", "[1] Yes, make a plan from it [2] … IN THE SAME PLAN: …"],

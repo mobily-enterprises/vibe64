@@ -1005,6 +1005,43 @@ test("learning construction cannot be enabled by caller metadata or source provi
   });
 });
 
+test("a session's prompt gives Genesis its connected copies' roots, which a pass over the whole app covers too", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const rendered = [];
+    const runtime = new Vibe64SessionRuntime({
+      inspectSourceByDefault: false,
+      projectContextRoot: targetRoot,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot),
+      sessionPromptEnvironment: async () => ({ environment: {}, pendingResources: [] }),
+      promptRenderer: async ({ connectedRoots, projectRoot }) => {
+        rendered.push({ connectedRoots, projectRoot });
+        return { prompt: "Composed" };
+      }
+    });
+    const source = sourcePath(targetRoot, "connected-copies");
+    const roots = ["ui-kit", "billing"].map((name) => path.join(path.dirname(source), "connected", name));
+    const commit = "a".repeat(40);
+    await runtime.store.createSession({
+      metadata: {
+        ...sourceMetadata(targetRoot, "connected-copies"),
+        connected_copies: JSON.stringify(Object.fromEntries(roots.map((root) => [path.basename(root), {
+          repository: `example/${path.basename(root)}`, branch: "main", path: root, baseCommit: commit, canonicalCommit: commit
+        }])))
+      },
+      runtimeKind: "genesis",
+      sessionId: "connected-copies"
+    });
+    await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, "own-source"), runtimeKind: "genesis", sessionId: "own-source" });
+    for (const id of ["connected-copies", "own-source"]) await mkdir(sourcePath(targetRoot, id), { recursive: true });
+    await runtime.renderPrompt("connected-copies", { task: "security-pass", request: "Security pass the whole app deeply." });
+    await runtime.renderPrompt("own-source", { task: "security-pass", request: "Security pass the whole app deeply." });
+    assert.deepEqual(rendered, [
+      { connectedRoots: roots, projectRoot: source },
+      { connectedRoots: [], projectRoot: sourcePath(targetRoot, "own-source") }
+    ]);
+  });
+});
+
 test("source-bearing Learning uses the original source creator, Genesis environment and retained conversation", async () => {
   await withTemporaryRoot(async root => {
     const scope = practiceLessonScope();

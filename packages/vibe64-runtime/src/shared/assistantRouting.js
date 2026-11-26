@@ -383,17 +383,36 @@ function assistantRoutingPrompt({ message, messages = [], attachments = [], plan
   return render();
 }
 
+// The turns that run a pass: Deslop, the UI pass and every other pass Genesis offers.
+const PASS_TURNS = Object.freeze(["deslop", "ui_pass", "pass"]);
+
+/**
+ * What a pass covers when the app is built from connected repositories too: this session's own copies of them,
+ * named, which the pass's scope takes in as it does this repository, and its report says which it covered.
+ * @param {string[]} names the copies' names, each at ../connected/<name>
+ */
+function connectedPassScope(names) {
+  const copies = names.map((name) => `\`../connected/${name}\``);
+  const named = copies.length > 1 ? `${copies.slice(0, -1).join(", ")} and ${copies.at(-1)}` : copies[0];
+  return `This app is built from this repository and its connected repositories, this session's own copies at ${named}, ` +
+    "which you edit like this source and Save covers. This pass's scope takes in each of them as it does this repository: " +
+    "a run over the whole app or a section of it reads and fixes that code wherever it is, here or in a copy, for what the " +
+    "app takes from each; a run over changes reads the changes made in the copies too. Say in your final reply which " +
+    "repositories it covered.";
+}
+
 /**
  * @param {string} mode the role that works
  * @param {string} message
- * @param {{ planInstructions?: string, intent?: string, browserReview?: boolean, rework?: "junior" | "self" | "report" }} [options]
+ * @param {{ planInstructions?: string, intent?: string, browserReview?: boolean, rework?: "junior" | "self" | "report",
+ *   connected?: string[] }} [options]
  *   rework: where a review sends substantial rework. Auto's review hands it back to Junior,
  *   a direct chat's review (one upgraded in flight) returns to its own implementation, and a review outside
- *   a workflow reports it.
+ *   a workflow reports it. connected: the names of the session's connected copies, which a pass's scope takes in.
  */
 function assistantModePrompt(mode, message, options = {}) {
   let { planInstructions = "", intent = "", browserReview = false } = options;
-  const { rework = "junior" } = options;
+  const { rework = "junior", connected = [] } = options;
   const direct = "Work directly from the user's request and conversation, answering questions or implementing changes as requested. You may edit application files when requested. Make ordinary local choices using established project patterns, ask about unresolved scope or design decisions, preserve unrelated work, and verify changes with relevant checks.";
   const instructions = {
     custom: direct,
@@ -469,6 +488,7 @@ function assistantModePrompt(mode, message, options = {}) {
         "The plan's Passes section lists the passes Vibe64 runs after Senior's review, each in its own turn; never start a pass on your own in this turn.";
       break;
   }
+  if (PASS_TURNS.includes(intent || mode) && connected.length) instruction += ` ${connectedPassScope(connected)}`;
   if (!planInstructions && intent !== "conversation") {
     planInstructions = "This direct request is independent of the current Auto plan unless the user explicitly refers to it. Senior may use vibe64-helper plan to manage it; Junior may update Progress and existing checklist ticks after reading both documents, never change scope or mark the plan completed.";
   }

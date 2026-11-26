@@ -60,6 +60,7 @@
   },
   "dependencies": {
     "@jskit-ai/assistant-core": "0.2.82",
+    "@local/vibe64-atomic-file": "0.1.0",
     "genesis-compiler": "^1.10.29",
     "genesis-stack": "^1.4.14"
   }

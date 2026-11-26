@@ -318,7 +318,7 @@ describe("useVibe64RepositoryWorkspace", () => {
       requestSaveWork,
       sessionId: "session-1",
       sessionsApiPath: "/api/app/sample/vibe64/sessions",
-      workState: { pinsToRecord: [{ commit: "b".repeat(40), fullName: "example/mercbot" }], unsaved: true }
+      workState: { pinsToRecord: [{ commit: "b".repeat(40), fullName: "example/shop" }], unsaved: true }
     });
     const workspace = useVibe64RepositoryWorkspace(context, { view: ref("changes") });
 

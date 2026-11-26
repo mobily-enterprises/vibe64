@@ -2558,8 +2558,7 @@ test("a Claude account change goes through the terminals service without touchin
         "the refusal itself names why, so the person sees it instead of a generic failure");
       assert.equal(requests.length, 1, "a refused change does not start a login");
     } finally {
-      // The terminals service writes its server run's record in the background as it starts; its close waits for that
-      // write, so the temporary folder is never removed while the record is still being written into it.
+      // The service writes this run's record in the system folder as it starts: it finishes before the folder goes.
       await terminals.close();
     }
   });

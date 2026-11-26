@@ -225,11 +225,11 @@ describe("useVibe64SessionPanel", () => {
   });
 
   it("shows a pin Update left behind the copy as work to save, and says the pin moves", () => {
-    const pinsToRecord = [{ commit: "05a1ec9".padEnd(40, "0"), fullName: "example/mercbot" }];
+    const pinsToRecord = [{ commit: "05a1ec9".padEnd(40, "0"), fullName: "example/shop" }];
     const repositoryWorkState = sessionRepositoryWorkState({ changedPaths: [], checkedAt: "now", pinsToRecord, unsaved: true });
     expect(repositoryWorkState).toEqual({ changedCount: 0, checkedAt: "now", pinsToRecord, state: "unsaved", updateAvailable: false });
     expect(repositoryWorkStateDescription({ repositoryWorkState }))
-      .toBe("Unsaved changes: Save pins example/mercbot at 05a1ec900000 in vibe64.connections.lock.json");
+      .toBe("Unsaved changes: Save pins example/shop at 05a1ec900000 in vibe64.connections.lock.json");
   });
 
   it("keeps an unresolved Update conflict as needs help with its stored reason and next step", () => {

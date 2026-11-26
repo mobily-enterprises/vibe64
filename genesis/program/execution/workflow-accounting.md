@@ -18,6 +18,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/engines/terminalSessionClosing.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessionRegistry.js`
 - `packages/vibe64-execution/src/host/managedWorkflows.js`
+- `tooling/proof/systemd-workflow/run.sh`
 - `packages/vibe64-execution/src/host/stagingAccess.js`
 - `packages/vibe64-execution/src/host/hostFiles.js`
 - `packages/vibe64-execution/src/host/personRegistry.js`
@@ -578,8 +579,11 @@ project's one `ssh-ed25519` public key as a root-owned key file for the
 account in the key folder its settings name (loopback only, no forwarding, and
 the login's forced command, `staging-shell`, named in the key itself, so sshd
 confines the account on a host without host setup's SSH policy; where that
-policy names the same command, sshd runs the policy's), a
-`visudo`-checked sudoers rule of its own (`stagingSudoersPath`, in the sudo rule folder its settings name) that lets
+policy names the same command, sshd runs the policy's), `0644` whatever the
+helper's umask, in folders it makes `0755`, as sshd reads the key as the
+account, which neither owns it nor is in its group (the managed umask `0007`
+once left it `0640`, and every staging login was refused), a
+`visudo`-checked sudoers rule of its own, `0440` whatever the umask (`stagingSudoersPath`, in the sudo rule folder its settings name) that lets
 the account run exactly `vibe64-exec-helper staging-service *` (by the command
 its settings name), and the
 login shell `/bin/sh`, which the account check accepts only while that key
@@ -859,6 +863,17 @@ and after configured/effective limits, and limiting-ancestor readings. Missing
 or inconsistent readings are not treated as successful changes. A refusal at a
 target or ancestor names that group, the limiting field, its observed maximum
 and the requested allowance so the provider can explain the actual constraint.
+
+These workflow actions are proved on a real systemd only by the real-host case
+of `tests/server/vibe64ManagedWorkflow.unit.test.js`, which every ordinary run
+skips (it needs root's systemd, `sudo -n` and a workspace account).
+`tooling/proof/systemd-workflow/run.sh` runs it in a disposable Incus VM it
+deletes by exact name on every exit: a sudo-capable operator drives the helper
+for a hand-made workspace account, which stands in for the one a managed host's
+account step makes (mobilynet's accounts work-area, proved by mobilynet's own
+tests), under a hand-made work slice with a 2 GiB MemoryMax, which stands in
+for host setup's. It proves the helper's workflow groups, their limits, the
+`sudo -n` units, growth and its refusals, not how a host makes either.
 
 A failure reports `unchanged`, `partial` or `unknown` for this invocation. A
 failed write is not proof of no effect; only complete readback equal to the

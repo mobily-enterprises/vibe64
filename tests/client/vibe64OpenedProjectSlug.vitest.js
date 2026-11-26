@@ -7,7 +7,7 @@ import {
 } from "../../src/composables/useVibe64ProjectScope.js";
 
 async function projectSlugs({ opened }) {
-  const route = reactive({ params: { slug: "mercbot" }, query: {} });
+  const route = reactive({ params: { slug: "shop" }, query: {} });
   let inside = null;
   const Child = defineComponent({
     setup() {
@@ -22,16 +22,16 @@ async function projectSlugs({ opened }) {
     }
   });
   await renderToString(createSSRApp(Parent));
-  route.params.slug = "mercbot-inspector";
+  route.params.slug = "shop-inspector";
   return inside.value;
 }
 
 describe("opened project slug", () => {
   it("keeps an opened project's view on its project while the route names the next one", async () => {
-    expect(await projectSlugs({ opened: true })).toBe("mercbot");
+    expect(await projectSlugs({ opened: true })).toBe("shop");
   });
 
   it("follows the route outside an opened project view", async () => {
-    expect(await projectSlugs({ opened: false })).toBe("mercbot-inspector");
+    expect(await projectSlugs({ opened: false })).toBe("shop-inspector");
   });
 });

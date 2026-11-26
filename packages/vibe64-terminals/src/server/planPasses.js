@@ -5,6 +5,7 @@ import { AFTER_PLAN_PASS_TITLES, ASSISTANT_FINISHING_DEFAULTS, inAfterPlanOrder 
 import { ASSISTANT_ROUTING_METADATA, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { uiPassScope } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { sessionConnectedRoots } from "@local/vibe64-core/server/projectRepository";
 import { workPlanAtPasses, workPlanPassItems, withWorkPlanPasses, withWorkPlanPassesUnticked } from "../shared/assistantWorkPlan.js";
 import { manageWorkPlan, readWorkPlan } from "./assistantWorkPlan.js";
 import { afterPlanBase, rememberAfterPlanBase } from "./afterPlanBase.js";
@@ -14,7 +15,7 @@ import { planError } from "./assistantWorkPlanFiles.js";
 // After a plan: the changes since the session's after-plan base, read when the pass runs.
 const PLAN_CHANGES = "the plan's changes";
 const DEEPLY = ", deeply";
-// The runs Genesis offers for every pass, by their run id.
+// The runs Genesis offers for every pass, by their run id: the pass's own runs, which Genesis records.
 const RUN_SCOPES = Object.freeze({ whole: "whole app", "since-last": "since last completed", deep: "deep" });
 const SINCE_COMMIT = /^the changes since ([a-f0-9]{7,64})$/u;
 const SECTION = /^this section of the app: (.+)$/u;
@@ -53,15 +54,30 @@ function unknownPlanPassesError(items, listing) {
 }
 
 /**
+ * Genesis's passes for a session: over its source and its connected copies, the repositories its app is built from,
+ * which a deep run is sized over and a run over the whole app covers. Every listing of a session's passes is this one.
+ * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} listPasses
+ * @param {object} session
+ */
+function listSessionPasses(listPasses, session) {
+  return listPasses({ projectRoot: sessionSourcePath(session), connectedRoots: sessionConnectedRoots(session) });
+}
+
+/**
  * Genesis's pass list for a plan command, read at most once and only when asked: for a new plan's After a
  * plan passes, or a Passes item a write adds or changes.
  * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} listPasses
- * @param {string} projectRoot the session's source
+ * @param {{ store: object, sessionId: string, descriptor: object }} command the session's store and source descriptor,
+ *   with which its connected copies' record is read once the listing is asked for
  * @returns {() => Promise<{ passes: object[] }>}
  */
-function planPassListing(listPasses, projectRoot) {
+function planPassListing(listPasses, { store, sessionId, descriptor }) {
   let listing = null;
-  return () => (listing ??= listPasses({ projectRoot }));
+  return () => (listing ??= (async () => listSessionPasses(listPasses, {
+    ...descriptor,
+    sessionId,
+    metadata: { ...descriptor.metadata, connected_copies: await store.readMetadataValue(sessionId, "connected_copies") }
+  }))());
 }
 
 /**
@@ -171,7 +187,7 @@ async function nextPlanPass(context, plan, listPasses) {
   const last = items.slice(index + 1).every((entry) => entry.checked);
   let listing;
   try {
-    listing = await listPasses({ projectRoot: sessionSourcePath(context.session) });
+    listing = await listSessionPasses(listPasses, context.session);
   } catch (error) {
     return { title: items[index].title, item: items[index].text, last, problem: error.message };
   }
@@ -308,7 +324,7 @@ async function readPassRequest(input, context, listPasses, { typed = true } = {}
   }
   let listing;
   try {
-    listing = await listPasses({ projectRoot: sessionSourcePath(context.session) });
+    listing = await listSessionPasses(listPasses, context.session);
   } catch (error) {
     if (fields) throw error;
     return { listing: null, request: null };
@@ -424,10 +440,12 @@ function planPassesView(plan, request, listing) {
 }
 
 export {
+  RUN_SCOPES,
   applyPlanPasses,
   nextPlanPass,
   passesInMessage,
   planPassItemsCheck,
+  listSessionPasses,
   planPassListing,
   planPassRequest,
   planPassesView,

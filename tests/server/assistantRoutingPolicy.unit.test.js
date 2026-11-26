@@ -279,7 +279,7 @@ test("Auto distinguishes plan execution and confirmations from planning while pr
 });
 
 // The owner's messages in Auto chats that Router labelled conversation or implementation and sent to
-// Junior (mercbot-online, 2026-11-12; mobilynet, 2026-11-23, after a question Junior answered);
+// Junior (another project's chats, 2026-11-12; mobilynet, 2026-11-23, after a question Junior answered);
 // "…" stands for text the record elides.
 const PLAN_REQUESTS_ROUTED_TO_JUNIOR = [
   "[1] Yes, make a plan from it [2] … IN THE SAME PLAN: …",
@@ -440,6 +440,23 @@ test("task intent sets permissions independently of the selected role", () => {
   assert.match(assistantModePrompt("senior", text, { intent: "ui_pass" }), /^\[Vibe64 role: Senior\.[^\n]*\]\nPerform the UI pass directly/u);
   assert.doesNotMatch(assistantModePrompt("senior", text, { intent: "ui_pass" }), /Ready to try/);
   assert.ok(assistantModePrompt("ui_pass", text).endsWith(text));
+});
+
+test("a pass turn's scope takes in the session's connected copies, each named, and its reply says which it covered; no other turn's does", () => {
+  const request = "Run the UI pass on the whole app.";
+  const connected = ["ui-kit", "billing"];
+  // A plan's pass is its purpose's own turn; a pass the person starts keeps Senior's role with the pass as intent.
+  for (const [mode, intent] of [["pass", "pass"], ["ui_pass", "ui_pass"], ["senior", "ui_pass"], ["senior", "deslop"], ["deslop", ""]]) {
+    const prompt = assistantModePrompt(mode, request, { intent, connected });
+    assert.match(prompt, /This app is built from this repository and its connected repositories, this session's own copies at `\.\.\/connected\/ui-kit` and `\.\.\/connected\/billing`, which you edit like this source and Save covers\./u, `${mode} ${intent}`);
+    assert.match(prompt, /a run over the whole app or a section of it reads and fixes that code wherever it is, here or in a copy, for what the app takes from each; a run over changes reads the changes made in the copies too\. Say in your final reply which repositories it covered\./u);
+    assert.ok(prompt.endsWith(`\n\n${request}`), "Genesis's request stays the message's last paragraph");
+  }
+  assert.match(assistantModePrompt("pass", request, { intent: "pass", connected: ["ui-kit"] }), /own copies at `\.\.\/connected\/ui-kit`, which/u);
+  for (const [mode, intent] of [["senior", "implementation"], ["senior", "planning"], ["review", ""], ["senior", "checks"], ["senior", ""]]) {
+    assert.doesNotMatch(assistantModePrompt(mode, request, { intent, connected }), /connected repositories/u, `${mode} ${intent}`);
+  }
+  assert.doesNotMatch(assistantModePrompt("ui_pass", request), /connected repositories/u, "a session without copies");
 });
 
 test("routing receipts and reviewer identity survive transcript storage and reload", async (t) => {
@@ -1096,7 +1113,9 @@ test("Senior's review of a plan verifies every item and leaves a plan with passe
   assert.match(framing, /Fix what you find within this pass's scope, each fix proven by a test that failed first/);
   assert.match(framing, /Deslop keeps its cleanups behaviour-neutral but fixes a real defect it finds as a separate fix with its own test/);
   // A pass runs no whole-project checks, whatever its guidance says: the person is asked about them once the plan is finished.
-  assert.match(framing, /Run no whole-project checks, such as one whole run of the test suite, even where this pass's guidance asks for one: run the focused tests for what you changed\. Once the plan is finished and saved, Vibe64 asks the person whether to run them once\./);
+  assert.match(framing, /Run no whole-project checks, such as one whole run of the test suite, even where this pass's guidance asks for one: run the focused tests for what you changed\. Once the plan is finished and saved, Vibe64 asks the person whether to run them once, so never ask about them yourself, and never take this pass's PASS RECORD step: the turn the person's Yes starts records the plan's passes once every check passes\./);
+  // A failure is explained, never waved through as pre-existing or environmental, and no check outlives the session.
+  assert.match(framing, /Explain every failure; never call one pre-existing or environmental: a missing tool or an environment's refusal is a defect to fix, reported with what is missing\. Never detach a check to outlive the session\./);
   assert.match(ASSISTANT_PLAN_COMPLETION_MESSAGE, /This review is a review: run no whole-project checks/);
   assert.match(framing, /In Plan change only this item's tick/);
   assert.match(framing, /Done: everything within the scope is fixed and proven; full-tick \(- \[x\]\) this item, then report complete\. Needs you: numbered questions/);

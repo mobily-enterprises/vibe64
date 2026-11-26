@@ -6,7 +6,12 @@ import { assistantRoutingNotice } from "@local/vibe64-runtime/shared/assistantRo
 
 // Loaded so that, without the module, each test fails on its own check rather than the file failing to load.
 const wholeChecks = await import("@local/vibe64-runtime/shared/assistantWholeChecks").catch(() => ({}));
-const { ASSISTANT_WHOLE_CHECKS_INSTRUCTION, WHOLE_CHECKS_OFFERED_NOTE, WHOLE_CHECKS_QUESTION, WHOLE_CHECKS_YES_MESSAGE } = wholeChecks;
+const {
+  ASSISTANT_WHOLE_CHECKS_INSTRUCTION, WHOLE_CHECKS_OFFERED_NOTE, WHOLE_CHECKS_QUESTION, WHOLE_CHECKS_YES_MESSAGE,
+  assistantWholeChecksDeclinedNotice, assistantWholeChecksInstructions
+} = wholeChecks;
+const serverChecks = await import("../../packages/vibe64-terminals/src/server/assistantWholeChecks.js").catch(() => ({}));
+const { answerWholeChecks, askWholeChecks } = serverChecks;
 
 // No step of a plan runs the whole-project checks, Senior's review included. Once the plan is finished (completed,
 // archived and, with Automatically save changes on, saved), Vibe64 asks the person once whether to run them: Yes runs
@@ -186,4 +191,40 @@ test("an item that asks for the whole run, in a plan made before this rule: Seni
   assert.equal(await readWorkPlan(f.context), null);
   assert.equal(f.sends.length, 3, "the review ran no whole run, and nothing else did");
   assert.equal(f.state().wholeChecks.status, "asked", "the person is asked about it instead");
+});
+
+// Genesis records a pass only after its whole-suite run passed with the person's OK, so the plan's passes that
+// Genesis records (over the whole app, since their last completion or deeply) wait for the person's answer: the Yes's
+// turn records them once every check passes, and after No they stay unrecorded. A pass over the plan's changes or a
+// section is never recorded, and an unfinished pass is not either.
+test("the plan's passes Genesis records wait for the person's answer: the Yes records them once every check passes, No leaves them unrecorded", () => {
+  const plan = { title: "Tidy", text: "Status: completed\n# Tidy\n\n- [x] Tidy the forms\n\n## Passes\n\n" +
+    "- [x] Review: the plan's changes\n- [x] Security pass: whole app\n- [x] Deslop: deep\n- [x] Visual identity: since last completed\n" +
+    "- [x] Data pass: this section of the app: billing\n- [ ] UI pass: whole app\n" };
+  const state = {};
+  askWholeChecks(state, plan);
+  assert.deepEqual(state.wholeChecks, { status: "asked", plan: "Tidy", passes: ["security-pass", "deslop", "identity-pass"] });
+  // A plan with none of them asks as before.
+  const none = {};
+  askWholeChecks(none, { title: "Small", text: "# Small\n\n- [x] One\n\n## Passes\n\n- [x] Review: the plan's changes\n" });
+  assert.deepEqual(none.wholeChecks, { status: "asked", plan: "Small" });
+  // The Yes's turn carries them; a message typed instead does not.
+  const saved = { messageId: "finished", status: "complete", wholeChecks: state.wholeChecks };
+  assert.deepEqual(answerWholeChecks(saved, { messageId: "yes", wholeChecks: "run" }).fields.wholeChecks,
+    { status: "run", plan: "Tidy", passes: ["security-pass", "deslop", "identity-pass"] });
+  assert.deepEqual(answerWholeChecks(saved, { messageId: "other" }).fields.wholeChecks, { status: "offered", plan: "Tidy" });
+  // The Yes's turn records them only once every check passes, and reports the records as changed files.
+  const instructions = assistantWholeChecksInstructions({ autoSave: true, passes: ["security-pass", "deslop"] });
+  assert.match(instructions, /Once every check passes, record the plan's passes Security pass and Deslop, which waited for this run: take the Genesis `passes done` operation for `security-pass`, `deslop`, one pass each, invoked as each pass's skill says, and leave the records with your other changes\. Record none while a check fails\./u);
+  assert.match(instructions, /handoff: you fixed what the checks found or recorded the plan's passes \(files changed\); Vibe64 then saves the fixes\./u);
+  assert.doesNotMatch(assistantWholeChecksInstructions({ autoSave: true }), /passes done|record the plan's/u);
+  // No: the note says which passes stay unrecorded.
+  assert.equal(assistantWholeChecksDeclinedNotice("turn-1", { passes: ["deslop"] }).text,
+    "Whole-project checks not run. Vibe64 won't ask again for this plan. Deslop stays unrecorded as completed, since the whole-project checks didn't run.");
+  assert.equal(assistantWholeChecksDeclinedNotice("turn-1").text, DECLINED);
+});
+
+test("the whole-project checks run in the session, and every failure is explained, never called pre-existing or environmental", () => {
+  assert.match(ASSISTANT_WHOLE_CHECKS_INSTRUCTION, /through its own verification command, in this session, never detached to outlive it\./u);
+  assert.match(ASSISTANT_WHOLE_CHECKS_INSTRUCTION, /Explain every failure; never call one pre-existing or environmental: a missing tool or an environment's refusal is a defect to fix, reported with what is missing\./u);
 });

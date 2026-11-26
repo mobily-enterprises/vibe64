@@ -85,6 +85,13 @@ async function withPracticeTest(callback) {
   });
 }
 
+// The tar run that writes a project's namespace archive (source.tgz, through the atomic writer's temporary file): it
+// archives from the catalogue folder, where the state archive archives from the runtime roots' folder.
+function namespaceArchiveRun(input, projectsRoot) {
+  const args = input.args.map(String);
+  return input.command === "tar" && args.includes("-czf") && path.resolve(args[args.indexOf("-C") + 1]) === path.resolve(projectsRoot);
+}
+
 // An ordinary catalogue project named like a practice project: created before
 // the name was reserved (moved into place, since creation now refuses it).
 async function createLegacyPracticeNamedProject(projectContext) {
@@ -122,7 +129,7 @@ test("project deletion resumes after namespace removal failure without repeating
       },
       // The namespace archive is created once: count its tar runs.
       runCommand: async (input) => {
-        if (input.args.some((entry) => String(entry).endsWith(`${path.sep}source.tgz.partial`))) {
+        if (namespaceArchiveRun(input, projectContext.projectsRoot)) {
           archiveInspections += 1;
         }
         return runVibe64Command(input);
@@ -238,7 +245,7 @@ test("the namespace archive leaves out rebuildable output at each session source
       closeProjectRuntime: async () => ({ ok: true }),
       projectContext,
       runCommand: async (input) => {
-        if (input.args.some((entry) => String(entry).endsWith(`${path.sep}source.tgz.partial`))) createArgs = input.args;
+        if (namespaceArchiveRun(input, projectContext.projectsRoot)) createArgs = input.args;
         return runVibe64Command(input);
       }
     });

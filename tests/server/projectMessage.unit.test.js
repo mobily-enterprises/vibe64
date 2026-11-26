@@ -245,14 +245,14 @@ test("project-preview returns the other project's current Preview URL through th
   const prepared = await prepareAgentSessionCommand({ commandService: service, sessionId: "source", wrapperHostDir: root });
   await prepareAgentHelperCommand({ env: process.env, wrapperHostDir: root });
   const env = { PATH: process.env.PATH, VIBE64_SESSION_RENAME_CONTROL: prepared.env.VIBE64_SESSION_RENAME_CONTROL };
-  const result = await promisify(execFile)(path.join(root, "vibe64-helper"), ["session", "project-preview", "mercbot"], { env });
+  const result = await promisify(execFile)(path.join(root, "vibe64-helper"), ["session", "project-preview", "shop"], { env });
   assert.equal(result.stdout, "https://v64preview-abc.example.test/?vibe64_preview_token=t\n");
-  await promisify(execFile)(path.join(root, "vibe64-helper"), ["session", "project-preview", "mercbot", "--session", "s-2"], { env });
+  await promisify(execFile)(path.join(root, "vibe64-helper"), ["session", "project-preview", "shop", "--session", "s-2"], { env });
   assert.deepEqual(calls, [
-    { projectSlug: "mercbot", sourceProject: "inspector", sourceSession: "source", actor: { username: "owner" } },
-    { projectSlug: "mercbot", destinationSessionId: "s-2", sourceProject: "inspector", sourceSession: "source", actor: { username: "owner" } }
+    { projectSlug: "shop", sourceProject: "inspector", sourceSession: "source", actor: { username: "owner" } },
+    { projectSlug: "shop", destinationSessionId: "s-2", sourceProject: "inspector", sourceSession: "source", actor: { username: "owner" } }
   ]);
-  await assert.rejects(promisify(execFile)(path.join(root, "vibe64-helper"), ["session", "project-preview", "mercbot", "--session"], { env }), /Usage:/);
+  await assert.rejects(promisify(execFile)(path.join(root, "vibe64-helper"), ["session", "project-preview", "shop", "--session"], { env }), /Usage:/);
   assert.equal(calls.length, 2, "Malformed addressing never reaches the command service");
 });
 
@@ -261,10 +261,10 @@ test("readProjectPreview re-reads the Preview, never waits past its bound and re
   let open = true, session = { sessionId: "mb-1", status: "active" }, statuses = [];
   const launched = [];
   const dependencies = {
-    authorize: async (identity, slug) => { assert.equal(identity, actor); assert.equal(slug, "mercbot"); return actor; },
+    authorize: async (identity, slug) => { assert.equal(identity, actor); assert.equal(slug, "shop"); return actor; },
     assertOpen: () => {},
     project: {
-      runInProjectContext: async (slug, operation, options) => { assert.equal(slug, "mercbot"); assert.equal(options.vibe64User, actor); return operation(); },
+      runInProjectContext: async (slug, operation, options) => { assert.equal(slug, "shop"); assert.equal(options.vibe64User, actor); return operation(); },
       readCurrentProject: async () => ({ runtime: { open } }),
       createRuntime: async () => ({
         listSessionSummaries: async () => session ? [{ sessionName: session.sessionId, metadata: {}, ...session }] : [],
@@ -276,10 +276,10 @@ test("readProjectPreview re-reads the Preview, never waits past its bound and re
     waitMs: 60,
     pollMs: 5
   };
-  const input = { projectSlug: "mercbot", sourceProject: "inspector", sourceSession: "source", actor };
+  const input = { projectSlug: "shop", sourceProject: "inspector", sourceSession: "source", actor };
   statuses = [{ previewTarget: {} }, { previewTarget: { href: "http://127.0.0.1:49200/?vibe64_preview_token=a" } }];
   assert.deepEqual(await readProjectPreview(input, dependencies),
-    { ok: true, projectSlug: "mercbot", sessionId: "mb-1", url: "http://127.0.0.1:49200/?vibe64_preview_token=a" });
+    { ok: true, projectSlug: "shop", sessionId: "mb-1", url: "http://127.0.0.1:49200/?vibe64_preview_token=a" });
   statuses = [{ previewTarget: { href: "http://127.0.0.1:49201/?vibe64_preview_token=b" } }];
   assert.equal((await readProjectPreview(input, dependencies)).url, "http://127.0.0.1:49201/?vibe64_preview_token=b", "A restarted Preview is read fresh");
   statuses = [];
@@ -299,7 +299,7 @@ test("readProjectPreview re-reads the Preview, never waits past its bound and re
   session = null;
   await assert.rejects(readProjectPreview(input, dependencies), { code: "vibe64_project_preview_session_unavailable" });
   session = { sessionId: "source", status: "active" };
-  await assert.rejects(readProjectPreview({ ...input, sourceProject: "mercbot" }, dependencies), { code: "vibe64_project_preview_self" });
+  await assert.rejects(readProjectPreview({ ...input, sourceProject: "shop" }, dependencies), { code: "vibe64_project_preview_self" });
   assert.equal(launched.length, before, "Closed, inactive and own sessions never read or start a Preview");
 });
 

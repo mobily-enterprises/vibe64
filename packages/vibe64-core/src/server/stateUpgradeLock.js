@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { link, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { link, readFile, rename, rm } from "node:fs/promises";
 
 import { linuxProcessStat, processEnded } from "@local/vibe64-execution/server/processEnded";
+
+import { writeFileAtomic } from "./atomicFile.js";
 
 // upgrades/apply.lock names the process that holds it: its pid and, on Linux, the boot it runs in and its start time
 // (/proc), so a lock whose holder is provably gone is taken over instead of refusing every later apply. A power cut
@@ -106,32 +108,20 @@ async function removeGoneLock(lockPath) {
  */
 async function acquireUpgradeLock(lockPath) {
   const contents = `${JSON.stringify(await currentHolder())}\n`;
-  // Written whole first, so the lock never exists without its holder.
-  const staged = `${lockPath}.${randomUUID()}.tmp`;
-  const handle = await open(staged, "wx", 0o600);
-  try {
-    await writeFile(handle, contents);
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  try {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        await link(staged, lockPath);
-        return async () => {
-          // Only this process's lock is removed.
-          if (await readOptionalText(lockPath) === contents) await rm(lockPath);
-        };
-      } catch (error) {
-        if (error.code !== "EEXIST") throw error;
-      }
-      if (!await removeGoneLock(lockPath)) return null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      // Written whole first and linked into place only where no lock is, so the lock never exists without its holder.
+      await writeFileAtomic(lockPath, contents, { createDirectory: false, exclusive: true, createMode: 0o600 });
+      return async () => {
+        // Only this process's lock is removed.
+        if (await readOptionalText(lockPath) === contents) await rm(lockPath);
+      };
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
     }
-    return null;
-  } finally {
-    await rm(staged, { force: true });
+    if (!await removeGoneLock(lockPath)) return null;
   }
+  return null;
 }
 
 export { acquireUpgradeLock };

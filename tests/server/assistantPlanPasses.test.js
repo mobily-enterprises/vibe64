@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import path from "node:path";
 import test from "node:test";
 import { fixture, planCommands, publishPlanFixture, reportOutcome } from "../fixtures/assistantRouting.js";
 import { GENESIS_PASSES } from "../fixtures/genesisPasses.js";
@@ -138,9 +139,11 @@ test("Senior's review leaves a plan with passes active; each Passes item runs in
   assert.ok(notices.indexOf(SAVE_STARTED) < notices.indexOf("Saved automatically."));
   // No pass ran the whole-project checks: once the plan is finished and saved, Vibe64 asks whether to run them.
   assert.match(notices.at(-1), /^The plan is finished\. Run the whole-project checks once now, on the finished plan's work\?/u);
-  assert.deepEqual(f.state().wholeChecks, { status: "asked", plan: "Required-field validation" });
+  // Genesis records only the whole-app run, and only after the whole-project checks pass: it waits for the answer.
+  assert.deepEqual(f.state().wholeChecks, { status: "asked", plan: "Required-field validation", passes: ["ux-pass"] });
   for (const send of f.sends.slice(2)) {
     assert.match(send.input.message, /Run no whole-project checks, such as one whole run of the test suite, even where this pass's guidance asks for one: run the focused tests for what you changed\./u);
+    assert.match(send.input.message, /never take this pass's PASS RECORD step: the turn the person's Yes starts records the plan's passes once every check passes\./u);
   }
 });
 
@@ -275,6 +278,55 @@ test("Run in Passes with no open plan makes a small plan of its own and runs it 
   assert.equal(typed.title, `Passes: Security pass and Data pass, since ${base.slice(0, 7)}`);
   assert.deepEqual(workPlanPassItems(typed.text).map(({ text }) => text), [`Security pass: the changes since ${base}`, `Data pass: the changes since ${base}`]);
   assert.equal(requestOf(f.sends.at(-1)), since("Security pass", base));
+});
+
+test("a pass in a session with connected repositories covers them: its turn names each copy and asks which repositories it covered", async (t) => {
+  const f = await fixture(t, { mode: "senior" }, { readyPlan: false, source: true });
+  const commit = "a".repeat(40);
+  f.metadata.connected_copies = JSON.stringify(Object.fromEntries(["ui-kit", "billing"].map((name) => [name, {
+    repository: `example/${name}`, branch: "main", path: path.join(path.dirname(f.source.source), "connected", name),
+    baseCommit: commit, canonicalCommit: commit
+  }])));
+  await f.service.send("session-1", { ...request, genesisTask: "security-pass", passRun: "whole", message: "Security pass the whole app." }, f.context);
+  const { message } = f.sends[0].input;
+  assert.match(message, /this session's own copies at `\.\.\/connected\/ui-kit` and `\.\.\/connected\/billing`, which you edit like this source and Save covers\./u);
+  assert.match(message, /Say in your final reply which repositories it covered\./u);
+  assert.equal(requestOf(f.sends[0]), "Security pass the whole app.");
+});
+
+test("every listing of a session's passes gives Genesis its connected copies' roots, so a deep run is sized over them too", async (t) => {
+  const commit = "a".repeat(40);
+  const connected = async (copies) => {
+    const f = await fixture(t, { mode: "senior" }, { readyPlan: false, source: true });
+    const roots = copies.map((name) => path.join(path.dirname(f.source.source), "connected", name));
+    if (roots.length) {
+      f.metadata.connected_copies = JSON.stringify(Object.fromEntries(roots.map((root) => [path.basename(root), {
+        repository: `example/${path.basename(root)}`, branch: "main", path: root, baseCommit: commit, canonicalCommit: commit
+      }])));
+    }
+    // Each step must list the passes, and every listing carries the copies' roots.
+    const listed = async (step, label) => {
+      const before = f.passReads.options.length;
+      await step();
+      assert.ok(f.passReads.options.length > before, `${label} lists the passes`);
+      assert.deepEqual(f.passReads.options.map(({ connectedRoots }) => connectedRoots), f.passReads.options.map(() => roots), label);
+    };
+    return { f, listed };
+  };
+  // A Senior turn's plan instructions name the pass titles.
+  const turn = await connected(["ui-kit", "billing"]);
+  await turn.listed(() => turn.f.service.send("session-1", request, turn.f.context), "a Senior turn");
+  // A pass the request names, by its fields.
+  const explicit = await connected(["ui-kit", "billing"]);
+  await explicit.listed(() => explicit.f.service.send("session-1", { ...request, genesisTask: "security-pass", passRun: "deep", message: "Security pass the whole app deeply." }, explicit.f.context), "a named pass");
+  // Several passes the request names, which become a plan's Passes, then the plan's next pass once the first is done.
+  const plan = await connected(["ui-kit"]);
+  await plan.listed(() => plan.f.service.send("session-1", { ...request, message: "Run Data pass and Security pass deeply.", passes: ["data-pass", "security-pass"], passRun: "deep" }, plan.f.context), "the passes a request names");
+  await plan.listed(() => passDone(plan.f), "the plan's next pass");
+  assert.equal(plan.f.state().pass.id, "data-pass");
+  // A session without connected repositories gives Genesis none.
+  const own = await connected([]);
+  await own.listed(() => own.f.service.send("session-1", request, own.f.context), "a Senior turn without copies");
 });
 
 test("passes asked for while the plan is still being worked on join its Passes, and Senior says so without running one", async (t) => {

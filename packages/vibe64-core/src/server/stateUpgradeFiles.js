@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, copyFile, lstat, mkdir, mkdtemp, open, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { syncDirectory } from "./atomicFile.js";
+import { syncDirectory, writeFileAtomic } from "./atomicFile.js";
 import { isPlainObject } from "./isPlainObject.js";
 import { sha256Hex } from "./sha256Hex.js";
 
@@ -61,27 +61,13 @@ async function fileDigest(filePath) {
 async function atomicCopy(source, destination) {
   const folder = path.dirname(destination);
   const made = await mkdir(folder, { recursive: true, mode: 0o700 });
-  const temporary = `${destination}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, "", { flag: "wx", mode: 0o600 });
-    await copyFile(source, temporary);
-    await chmod(temporary, 0o600);
-    const copy = await open(temporary, "r");
-    try {
-      await copy.sync();
-    } finally {
-      await copy.close();
-    }
-    await rename(temporary, destination);
-  } finally {
-    await rm(temporary, { force: true });
-  }
-  await syncFolders(folder, made);
+  // The writer syncs the copy before its rename and its folder after.
+  await writeFileAtomic(destination, (temporaryPath) => copyFile(source, temporaryPath), { directoryMode: 0o700, fileMode: 0o600 });
+  await syncMadeFolders(folder, made);
 }
 
-/** Syncs folder, and each parent holding a folder mkdir just made (made: the first it made, or undefined). */
-async function syncFolders(folder, made) {
-  await syncDirectory(folder);
+/** Syncs each parent holding a folder mkdir just made (made: the first it made, or undefined). */
+async function syncMadeFolders(folder, made) {
   if (made) for (let child = folder; child.startsWith(made); child = path.dirname(child)) await syncDirectory(path.dirname(child));
 }
 
@@ -346,7 +332,7 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
     if (await fileDigest(destination) === entry.after) continue;
     if (entry.after === null) {
       await rm(destination);
-      await syncFolders(path.dirname(destination));
+      await syncDirectory(path.dirname(destination));
     } else {
       await atomicCopy(path.join(backupRoot, "after", entry.path), destination);
     }

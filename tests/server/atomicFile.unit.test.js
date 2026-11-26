@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
-import { watch } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { readFileSync, watch } from "node:fs";
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import test from "node:test";
 
-import { serializeByKey, writeFileAtomic, writeJsonFileAtomic } from "../../packages/vibe64-core/src/server/atomicFile.js";
+import {
+  serializeByKey,
+  writeFileAtomic,
+  writeFileAtomicSync,
+  writeJsonFileAtomic
+} from "../../packages/vibe64-core/src/server/atomicFile.js";
 import { readEnvUserValues, saveEnvUserValues } from "../../packages/vibe64-core/src/server/envUserValues.js";
 import { assertDurablyReplaced, traceDurableWrites } from "./durableWriteTrace.js";
 
@@ -33,6 +39,22 @@ test("atomic writes publish the exact mode and never leave a temporary file", as
   await writeFile(path.join(blocked, "occupied", "keep"), "");
   await assert.rejects(writeFileAtomic(path.join(blocked, "occupied"), "text"));
   assert.deepEqual(await readdir(blocked), ["occupied"], "a failed rename removes its temporary file");
+});
+
+test("createMode is the mode a new file is created with, narrowed by the umask, in both writers; fileMode stays exact", async (t) => {
+  const root = await temporaryRoot(t);
+  const previous = process.umask(0o007);
+  try {
+    await writeFileAtomic(path.join(root, "created"), "text", { createMode: 0o644 });
+    writeFileAtomicSync(path.join(root, "created-sync"), "text", { createMode: 0o600 });
+    await writeFileAtomic(path.join(root, "default"), "text");
+    await writeFileAtomic(path.join(root, "exact"), "text", { createMode: 0o600, fileMode: 0o644 });
+  } finally {
+    process.umask(previous);
+  }
+  const modes = {};
+  for (const name of ["created", "created-sync", "default", "exact"]) modes[name] = (await stat(path.join(root, name))).mode & 0o777;
+  assert.deepEqual(modes, { created: 0o640, "created-sync": 0o600, default: 0o660, exact: 0o644 });
 });
 
 test("an atomic write is durable: its data reaches the disk before the rename, and its folder after", async (t) => {
@@ -89,6 +111,74 @@ test("an exclusive atomic write creates a missing file whole and refuses an exis
   await assert.rejects(writeFileAtomic(filePath, "second\n", { exclusive: true }), { code: "EEXIST" });
   assert.equal(await readFile(filePath, "utf8"), "first\n");
   assert.deepEqual(await readdir(path.dirname(filePath)), ["new.md"]);
+});
+
+test("the synchronous writer publishes the exact mode durably, refuses a missing folder when asked, and creates exclusively", async (t) => {
+  const root = await temporaryRoot(t);
+  const filePath = path.join(root, "registry", "person.json");
+  const events = await traceDurableWrites(t);
+  const previous = process.umask(0o077);
+  try {
+    writeFileAtomicSync(filePath, "{}\n", { directoryMode: 0o700, fileMode: 0o644 });
+  } finally {
+    process.umask(previous);
+  }
+  assertDurablyReplaced(events, filePath);
+  assert.equal((await stat(filePath)).mode & 0o777, 0o644);
+  assert.equal((await stat(path.dirname(filePath))).mode & 0o777, 0o700);
+
+  writeFileAtomicSync(filePath, Buffer.from("[]\n"), { durable: false });
+  assert.equal(await readFile(filePath, "utf8"), "[]\n");
+  assert.throws(() => writeFileAtomicSync(path.join(root, "missing", "result.json"), "{}", { createDirectory: false }),
+    { code: "ENOENT" });
+  assert.throws(() => writeFileAtomicSync(filePath, "second", { exclusive: true }), { code: "EEXIST" });
+  assert.equal(await readFile(filePath, "utf8"), "[]\n");
+  assert.deepEqual(await readdir(path.dirname(filePath)), ["person.json"]);
+  assert.deepEqual(await readdir(root), ["registry"]);
+});
+
+test("a check before publishing sees the complete content: false keeps the file as it was, a throw fails the write", async (t) => {
+  const root = await temporaryRoot(t);
+  const filePath = path.join(root, "sudoers", "rule");
+  await mkdir(path.dirname(filePath));
+  await writeFile(filePath, "old\n");
+  const checked = [];
+  const check = (candidate) => {
+    checked.push([path.dirname(candidate) === path.dirname(filePath), readFileSync(candidate, "utf8")]);
+    return false;
+  };
+  assert.equal(writeFileAtomicSync(filePath, "declined\n", { beforePublish: check }), null);
+  assert.equal(await writeFileAtomic(filePath, "declined too\n", { beforePublish: check }), null);
+  assert.deepEqual(checked, [[true, "declined\n"], [true, "declined too\n"]]);
+  assert.throws(() => writeFileAtomicSync(filePath, "bad\n", { beforePublish: () => { throw new Error("parse error"); } }),
+    /parse error/u);
+  await assert.rejects(writeFileAtomic(filePath, "bad\n", { beforePublish: async () => { throw new Error("checksum"); } }),
+    /checksum/u);
+  assert.equal(await readFile(filePath, "utf8"), "old\n");
+  assert.deepEqual(await readdir(path.dirname(filePath)), ["rule"]);
+  const published = await writeFileAtomic(filePath, "new\n", { beforePublish: () => true });
+  assert.equal(await readFile(filePath, "utf8"), "new\n");
+  assert.equal(published.ino, (await stat(filePath, { bigint: true })).ino);
+});
+
+test("a producer fills the temporary file itself, and a stream is written whole, both published by rename", async (t) => {
+  const root = await temporaryRoot(t);
+  const source = path.join(root, "source.bin");
+  await writeFile(source, "copied\n");
+  const copied = path.join(root, "copies", "copy.bin");
+  const events = await traceDurableWrites(t);
+  await writeFileAtomic(copied, (temporaryPath) => copyFile(source, temporaryPath), { durable: false, fileMode: 0o600 });
+  assert.equal(await readFile(copied, "utf8"), "copied\n");
+  assert.equal((await stat(copied)).mode & 0o777, 0o600);
+  assert.match(path.basename(events.find((event) => event.op === "rename" && event.to === copied).from),
+    /^\.vibe64-write-[0-9a-f-]{36}\.tmp$/u);
+  const streamed = path.join(root, "copies", "streamed.txt");
+  await writeFileAtomic(streamed, Readable.from(["one ", "two\n"]), { durable: false });
+  assert.equal(await readFile(streamed, "utf8"), "one two\n");
+  await assert.rejects(writeFileAtomic(path.join(root, "copies", "failed.bin"), async () => {
+    throw new Error("tar failed");
+  }), /tar failed/u);
+  assert.deepEqual((await readdir(path.join(root, "copies"))).sort(), ["copy.bin", "streamed.txt"]);
 });
 
 test("removeStale clears the folder's temporary files a killed write left over a minute ago, and only when asked", async (t) => {

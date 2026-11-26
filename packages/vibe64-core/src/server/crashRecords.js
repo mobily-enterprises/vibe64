@@ -17,12 +17,10 @@
 // acknowledged it. This file imports only Node, so a host's tool can read the records under a small memory bound.
 
 import { randomBytes } from "node:crypto";
-import {
-  closeSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, writeSync
-} from "node:fs";
-import { readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { readFileSync, readdirSync, rmSync } from "node:fs";
+import { readFile, readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { serializeByKey, writeJsonFileAtomic } from "./atomicFile.js";
+import { serializeByKey, writeFileAtomic, writeFileAtomicSync, writeJsonFileAtomic } from "./atomicFile.js";
 
 const CRASHES_DIR = "crashes";
 const RECORDS_DIR = "records";
@@ -70,28 +68,7 @@ function isMissing(error) {
 
 /** The value written whole as JSON, synced, before this returns; what the dying process uses. */
 function writeJsonFileAtomicSync(filePath, value) {
-  const text = `${JSON.stringify(value, null, 2)}\n`;
-  const directory = path.dirname(filePath);
-  mkdirSync(directory, { recursive: true, mode: DIRECTORY_MODE });
-  const temporary = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
-  try {
-    const descriptor = openSync(temporary, "wx", FILE_MODE);
-    try {
-      writeSync(descriptor, text);
-      fsyncSync(descriptor);
-    } finally {
-      closeSync(descriptor);
-    }
-    renameSync(temporary, filePath);
-  } finally {
-    rmSync(temporary, { force: true });
-  }
-  const folder = openSync(directory, "r");
-  try {
-    fsyncSync(folder);
-  } finally {
-    closeSync(folder);
-  }
+  writeFileAtomicSync(filePath, `${JSON.stringify(value, null, 2)}\n`, { directoryMode: DIRECTORY_MODE, createMode: FILE_MODE });
 }
 
 function readRemovedSync(systemRoot) {
@@ -318,16 +295,12 @@ function writeRunningMarkerSync({ systemRoot, marker }) {
  */
 async function rewriteRunningMarker({ systemRoot, marker }) {
   const file = path.join(runningFolder(systemRoot), `${marker.pid}-${marker.instance}.json`);
-  const temporary = `${path.join(path.dirname(file), `.${path.basename(file)}`)}.${randomBytes(4).toString("hex")}.tmp`;
   try {
-    await writeFile(temporary, JSON.stringify(marker), { flag: "wx", mode: FILE_MODE });
-    await rename(temporary, file);
+    await writeFileAtomic(file, JSON.stringify(marker), { createDirectory: false, durable: false, createMode: FILE_MODE });
     return true;
   } catch (error) {
     if (isMissing(error)) return false;
     throw error;
-  } finally {
-    await rm(temporary, { force: true });
   }
 }
 

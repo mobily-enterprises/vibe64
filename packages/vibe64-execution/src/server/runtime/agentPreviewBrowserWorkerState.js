@@ -1,6 +1,7 @@
 // The browser worker program's state: its browser, the process groups it
 // started and tracks, its metadata file and the browser's lifecycle. Text of
 // the program agentPreviewBrowserWorkerSource writes, not code run here.
+import { writeFileAtomic } from "@local/vibe64-atomic-file";
 import { embeddedFunctions } from "../../shared/embeddedFunctions.js";
 import { linuxProcessStat, processEnded } from "./processEnded.js";
 
@@ -162,9 +163,10 @@ function processGroupAlive(groupId) {
 }
 
 // Whether a process has ended, and the /proc stat reading it takes: the one
-// rule every check of a process uses (processEnded.js beside it), as its text,
-// bound by name since a minified release renames the functions themselves.
-${embeddedFunctions({ linuxProcessStat, processEnded })}
+// rule every check of a process uses (processEnded.js beside it), and Vibe64's
+// one atomic file writer, which writes the metadata file, as their text, bound
+// by name since a minified release renames the functions themselves.
+${embeddedFunctions({ linuxProcessStat, processEnded, writeFileAtomic })}
 function normalizedBrowserProcessGroups(value = []) {
   const groups = new Map();
   for (const entry of Array.isArray(value) ? value : []) {
@@ -206,9 +208,7 @@ async function createWorkerMetadata() {
     workerScriptPath: path.resolve(process.argv[1] || "")
   };
   metadata.signature = metadataSignature(metadata);
-  const temporaryPath = metadataPath + "." + process.pid + ".tmp";
-  await writeFile(temporaryPath, JSON.stringify(metadata) + "\\n", { mode: 0o600 });
-  await rename(temporaryPath, metadataPath);
+  await writeFileAtomic(metadataPath, JSON.stringify(metadata) + "\\n", { createDirectory: false, durable: false, createMode: 0o600 });
 }
 
 async function writeWorkerMetadata() {
@@ -231,9 +231,7 @@ async function writeWorkerMetadata() {
     browserProcessGroups: normalizedBrowserProcessGroups(browserProcessGroups)
   };
   nextMetadata.signature = metadataSignature(nextMetadata);
-  const temporaryPath = metadataPath + "." + process.pid + ".tmp";
-  await writeFile(temporaryPath, JSON.stringify(nextMetadata) + "\\n", { mode: 0o600 });
-  await rename(temporaryPath, metadataPath);
+  await writeFileAtomic(metadataPath, JSON.stringify(nextMetadata) + "\\n", { createDirectory: false, durable: false, createMode: 0o600 });
   return true;
 }
 

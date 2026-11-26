@@ -367,8 +367,8 @@ test("a missing bucket leaves Outputs runnable in development, while a missing d
       "#### Presentation", "- Kind: `web`", "- Ready when: `GET` `/` returns `200`"] };
   const declaration = (id, kind, bindings) => ({ component: "project", resource: { id, kind, optionalBindings: {},
     environmentAlternatives: [{ allowEmpty: [], bindings, preferred: true }] } });
-  const files = declaration("files", "bucket", { accessKeyId: "MERCBOT_FILES_S3_ACCESS_KEY_ID", bucket: "MERCBOT_FILES_S3_BUCKET",
-    endpoint: "MERCBOT_FILES_S3_ENDPOINT", region: "MERCBOT_FILES_S3_REGION", secretAccessKey: "MERCBOT_FILES_S3_SECRET_ACCESS_KEY" });
+  const files = declaration("files", "bucket", { accessKeyId: "SHOP_FILES_S3_ACCESS_KEY_ID", bucket: "SHOP_FILES_S3_BUCKET",
+    endpoint: "SHOP_FILES_S3_ENDPOINT", region: "SHOP_FILES_S3_REGION", secretAccessKey: "SHOP_FILES_S3_SECRET_ACCESS_KEY" });
   const database = declaration("database", "postgresql", { url: "DATABASE_URL" });
   // Genesis's STACK_RESOURCE_MISSING for a declaration none of whose names is set.
   const missing = ({ component, resource }) => {

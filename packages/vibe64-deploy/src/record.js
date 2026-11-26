@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
+
+import { writeFileAtomicSync } from "@local/vibe64-atomic-file";
 
 // The record: what the engine made for one project's environment, keyed by (environment, kind, name), each item with
 // the provider's id and name for it, how it came to be, and the size it was made or left at (never a service's count,
@@ -172,14 +174,7 @@ function createRecordStore({ root, now = () => new Date() }) {
       );
     }
     const kept = { ...structuredClone(record), revision: current + 1, updatedAt: now().toISOString() };
-    mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-    const temporary = `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
-    try {
-      writeFileSync(temporary, `${JSON.stringify(kept, null, 2)}\n`, { mode: 0o600, flag: "wx" });
-      renameSync(temporary, file);
-    } finally {
-      rmSync(temporary, { force: true });
-    }
+    writeFileAtomicSync(file, `${JSON.stringify(kept, null, 2)}\n`, { directoryMode: 0o700, durable: false, createMode: 0o600 });
     return kept;
   }
 

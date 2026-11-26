@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { cp, lstat, mkdir, readdir, readFile, readlink, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { normalizeProjectTraining, practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 
@@ -307,9 +308,7 @@ export async function resetLearningForLearningSpace({
   if (!apply || !(pending.length + copied.length)) return;
   if (moves.length > saved.length) {
     await mkdir(backupRoot, { recursive: true, mode: 0o700 });
-    const temporary = `${manifestPath}.tmp`;
-    await writeFile(temporary, `${JSON.stringify({ upgrade: UPGRADE_ID, moves }, null, 2)}\n`, { mode: 0o600 });
-    await rename(temporary, manifestPath);
+    await writeJsonFileAtomic(manifestPath, { upgrade: UPGRADE_ID, moves }, { durable: false, createMode: 0o600 });
   }
   const copy = { verifiedRoot: path.join(backupRoot, "verified"), removeTree };
   for (const move of copied) await finishCopy(move, copy);

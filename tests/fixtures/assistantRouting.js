@@ -218,13 +218,15 @@ async function fixture(t, preferences = { mode: "auto" }, {
   const discards = [];
   let dispatchGate = null;
   const writes = createWritesWhileAssistantWorks();
-  // Genesis's pass list for the session's source; a test may change it, count its reads or make them fail.
+  // Genesis's pass list for the session's source; a test may change it, count its reads, read what each asked for or
+  // make them fail.
   const genesis = { unavailable: null, passes: GENESIS_PASSES, master: GENESIS_MASTER_PASS };
-  const passReads = { count: 0, failure: null };
+  const passReads = { count: 0, failure: null, options: [] };
   const routingOptions = { systemRoot: root, allowAuto, serverRun, agent, exclusive, logger: silentLogger, onPlanCompleted, prepareSelection: async () => {},
     writesWhileAssistantWorks: writes,
-    listPasses: async () => {
+    listPasses: async (options) => {
       passReads.count += 1;
+      passReads.options.push(options);
       if (passReads.failure) throw passReads.failure;
       return genesis;
     },

@@ -1,7 +1,8 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { mkdir, open, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { open, readdir } from "node:fs/promises";
 import path from "node:path";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 
 const hash = value => createHash("sha256").update(String(value)).digest("hex");
 const MAX_RECORD_BYTES = 24_000;
@@ -55,8 +56,6 @@ export async function readSourceInterpretation(context, input, cacheKey) {
 
 export async function writeSourceInterpretation(context, input, cacheKey, template, isCurrent) {
   const filePath = recordPath(context, input.range);
-  await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
-  const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
   const record = {
     schemaVersion: 1,
     ...template,
@@ -69,12 +68,12 @@ export async function writeSourceInterpretation(context, input, cacheKey, templa
     cacheIdentity: hash(cacheKey),
     createdAt: new Date().toISOString()
   };
-  try {
-    await writeFile(temporaryPath, JSON.stringify(record), { flag: "wx", mode: 0o600 });
-    if (await isCurrent()) await rename(temporaryPath, filePath);
-  } finally {
-    await rm(temporaryPath, { force: true });
-  }
+  await writeFileAtomic(filePath, JSON.stringify(record), {
+    beforePublish: async () => Boolean(await isCurrent()),
+    directoryMode: 0o700,
+    durable: false,
+    createMode: 0o600
+  });
 }
 
 export async function readSourceInterpretations(context, file, promptVersion) {

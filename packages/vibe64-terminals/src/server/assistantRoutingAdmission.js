@@ -1,6 +1,6 @@
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import { workPlanAtPasses } from "../shared/assistantWorkPlan.js";
-import { applyPlanPasses, nextPlanPass, readPassRequest } from "./planPasses.js";
+import { applyPlanPasses, listSessionPasses, nextPlanPass, readPassRequest } from "./planPasses.js";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
   assistantRoutingRequestCanBeReplaced,
@@ -21,7 +21,6 @@ import {
 } from "./assistantRoutingRequests.js";
 import { answerWholeChecks, declineWholeChecks } from "./assistantWholeChecks.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
-import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 /** Continue's refusal of a step whose plan changed so that it no longer fits. */
 const retainedPlanChanged = () => failure(
@@ -51,7 +50,7 @@ const retainedPlanChanged = () => failure(
  */
 async function explicitPass(input, task, context, listPasses) {
   if (!task) return null;
-  const { passes, master } = await listPasses({ projectRoot: sessionSourcePath(context.session) });
+  const { passes, master } = await listSessionPasses(listPasses, context.session);
   const pass = [...passes, master].find((entry) => entry?.id === task);
   if (!pass) {
     throw Object.assign(

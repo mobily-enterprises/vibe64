@@ -132,9 +132,14 @@ test("standalone execution remains usable but required managed accounting fails 
   await assert.rejects(startVibe64Workflow({}, { VIBE64_MANAGED_EXECUTION_REQUIRED: "1" }), /unavailable/u);
 });
 
+// The real-host proof: root's systemd through `sudo -n`, run by a sudo-capable operator for a workspace's own account
+// (VIBE64_WORKFLOW_TEST_OWNER) and its work slice. tooling/proof/systemd-workflow/run.sh runs it in a disposable VM,
+// where a hand-made account stands in for the one a managed host's account step makes (mobilynet's accounts
+// work-area, which mobilynet's own tests prove) and a hand-made work slice for host setup's: it proves the helper's
+// workflow groups, their limits and the `sudo -n` units, not how a host makes the account or the slice.
 const hostOwner = process.env.VIBE64_WORKFLOW_TEST_OWNER;
 test("real helper retains simultaneous workflow peak and refuses to finish populated descendants", {
-  skip: !hostOwner && "Set VIBE64_WORKFLOW_TEST_OWNER for the bounded local systemd proof."
+  skip: !hostOwner && "Needs root's systemd, sudo -n and a workspace account: tooling/proof/systemd-workflow/run.sh runs it in a disposable VM."
 }, async (t) => {
   assert.match(hostOwner, /^v64d_[a-z][a-z0-9-]+$/u);
   const unique = randomUUID();

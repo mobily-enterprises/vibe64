@@ -175,6 +175,13 @@ verification.
   correct when files are created; never add recursive permission repair after
   Git, agent, package or preview work. See
   [`docs/managed-session-filesystem-contract.md`](docs/managed-session-filesystem-contract.md).
+- Public Vibe64 is every host's editor and names no hosting platform: no
+  platform's system folders, workspace variables, machines, customers,
+  repositories, accounts or pages, and no private project by name, not even as
+  a test fixture (use an example project such as `shop`). Say a machine ("a
+  machine restart"), a workspace and a host.
+  `tests/server/hostNeutrality.unit.test.js` refuses those words and names the
+  neutral one for each.
 - Never deploy unless the user explicitly requests deployment.
 
 ## Deployment Terminology
@@ -322,7 +329,11 @@ overlap a test run already active for this checkout.
   (screenshots, traces, logs) only when it fails, and prints where it is.
 - `npm run test:full` and `npm run verify` are broad verification commands.
   Run them only after the human has confirmed that the feature works and has
-  explicitly approved full verification.
+  explicitly approved full verification: ask once, at the end, after focused
+  checks pass, saying what will run and roughly how long. Run every check in
+  the session, never detached to outlive it. Explain every failure; never call
+  one pre-existing or environmental: a missing tool or an environment's
+  refusal is a defect to fix, reported with what is missing.
 - Focused local tests are not the whole proof. After pushing to `main`, check
   that repository's GitHub CI run (`gh run list`, `gh run watch`) and, if it is
   red, fix it before moving on.

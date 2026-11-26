@@ -2612,7 +2612,23 @@ never a list. Each pass is its own Senior turn (a Custom chat's on its own model
 with `genesisTask` set to the pass id, announced by **<title> started: the plan's
 next pass (<item>)** (`planPassNotice`); `assistantPassInstructions` take the
 plan-instructions slot and its request stays the message's last paragraph, so
-Genesis renders that run. The pass fixes what it finds within its scope, writes
+Genesis renders that run. Every pass turn, a plan's or one the person starts
+(Deslop, the UI pass, any other), covers the connected repositories the app is
+built from: in a session with connected copies, delivery passes their names
+(`connectedCopyNames`, from `sessionConnectedCopies`) to `assistantModePrompt`,
+whose pass instructions (`connectedPassScope`) name each `../connected/<name>`,
+take them into the pass's scope as this repository (a whole-app or section run
+reads and fixes that code wherever it is; a run over changes reads the changes
+made in the copies too) and ask the final reply to say which repositories it
+covered. Genesis gets the copies too: every listing of a session's passes is
+`listSessionPasses` (`planPasses.js`), which gives `listGenesisPasses` the
+copies' roots (`sessionConnectedRoots`, none when their records are unreadable)
+beside the session's source, and the runtime's `renderPrompt` gives
+`renderGenesisPrompt` the same roots, so a Genesis that reads them sizes a Deep
+run and the Master pass over the copies' files and names the copies in a whole
+or deep run's PASS RUN scope, which its checklist follows; an older Genesis
+ignores them (`sessionPassListings.unit.test.js` refuses a listing or prompt
+made anywhere else). The pass fixes what it finds within its scope, writes
 one line in Progress, may change only its own Passes item's tick (plan role
 `pass`, `vibe64_work_plan_pass_item_only`), and reports continue, wait or
 complete; handoff is refused. Complete needs its item ticked
@@ -2636,7 +2652,11 @@ A finished plan then asks the person about the whole-project checks. The shared
 `assistantWholeChecks.js` holds the question's words, notes, turn instructions
 and predicates, and the server's `assistantWholeChecks.js` routing's side of it:
 `finishPlan` sets `state.wholeChecks` to `{ status: "asked", plan: <title> }` on
-the request that finished it (`askWholeChecks`), and after the lock, once the
+the request that finished it (`askWholeChecks`), with `passes`, the ids of the
+plan's finished Passes items over the whole app, since last completed or deep
+(`planPassesToRecord`), when it has any: Genesis records a pass only after its
+whole-suite run passed with the person's OK, so a plan's pass turn never takes
+its `PASS RECORD` step and those passes wait for the answer. After the lock, once the
 save notes are written, routing writes `assistantWholeChecksQuestionNotice` (**The plan is finished. Run the
 whole-project checks once now, on the finished plan's work?**). While `assistantAsksWholeChecks` holds (complete, asked, not
 stopped), `assistantRoutingNotice` gives the composer notice the label **Run the
@@ -2649,11 +2669,15 @@ chat's own agent) with no Router, review, plan or after-plan record, and
 (`ASSISTANT_WHOLE_CHECKS_INSTRUCTION`) and `assistantWholeChecksInstructions` in
 place of the workflow's, labels its follow-ups **Whole-project checks**, and
 `prepareFollowup` continues it as **Continue the whole-project checks.** without
-running them again. Its handoff ends the work and saves like any finished
+running them again. `answerWholeChecks` carries `passes` to the Yes's request
+only, and `assistantWholeChecksInstructions` then has the turn take Genesis's
+`passes done` for each once every check passes, never while one fails. The
+instruction runs them in the session, never detached, and has every failure
+explained, never called pre-existing or environmental. Its handoff ends the work and saves like any finished
 implementation; complete saves nothing. No is the Continue route's direct POST
 with `reviewAction: "skip-checks"` and the finished request's messageId: it sets
 `declined`, writes **Whole-project checks not run. Vibe64 won't ask again for
-this plan.** and starts no turn. Any other new message ends the question as
+this plan.**, naming any `passes` that stay unrecorded, and starts no turn. Any other new message ends the question as
 `offered`, with `WHOLE_CHECKS_OFFERED_NOTE` before the person's words, so a
 typed yes runs them. Admission reads the No through `declineWholeChecks` and a new message through
 `answerWholeChecks`; a Yes or No once nothing is asked is refused
@@ -2705,12 +2729,17 @@ routing request waits for the person's answer or shows questions (needs you,
 with their number), waits for Implement plan, or is otherwise paused. A waiting
 line names the one workflow action the routing notice offers
 (`assistantRoutingNotice`, which both read so they cannot disagree) by its exact
-label: "Plan: paused, Continue implementation to resume" (or "Plan: ready,
-Implement plan to start") only while that button can be pressed; while an answer,
-a message being sent or a spoken message holds it, "Plan: paused · Continue
-implementation is available when this answer ends" (or "once your message is
-sent"); once pressed, the button's own progress ("Plan: paused · Continuing…");
-and with no action on offer, "Plan: paused, send a message to go on". Senior
+label. A paused line first says what is paused: the item ("Paused: item 2 of 6,
+Replies join their thread"), Senior review, changing the plan, or the pass with
+its Passes item's scope (the step's `scope`: "Paused: UI pass (whole app)").
+While the assistant's turn holds the chat (`busy`, the chat's hold the notice
+also takes), the person's own request is what runs, and the line says so ("Your
+request is running now"). Then the action: "Continue implementation to resume"
+(or "Plan: ready, Implement plan to start") only while that button can be
+pressed; while an answer, a message being sent or a spoken message holds it,
+"Continue implementation is available when this answer ends" (or "once your
+message is sent"); once pressed, the button's own progress ("Continuing…"); and
+with no action on offer, "Send a message to go on". Senior
 review reads as such only while a request is working; with nothing running it
 (a Junior chat's built plan, say) the line says it is ready for Senior review and
 asks the person to ask Senior. The plan
@@ -5754,8 +5783,9 @@ description, recommendation hint, `lastRun`, Genesis's committed record of
 its last completed run in the project, `runs`, the runs Genesis offers for it
 now, `sinceBase`, the request for the changes since a base commit and its deep
 form (null when the pass can't run), and `unavailable` (`listGenesisPasses`, Genesis's `inspectPasses` for that
-source, contract `genesis.passes.v1`). A pass's own last
-step records its run with `genesis passes done <id>`; Vibe64 never writes that
+source and the session's connected copies, through `listSessionPasses`, contract `genesis.passes.v1`). A pass's own last
+step records its run with `genesis passes done <id>`, in a plan the turn the
+person's Yes to the whole-project checks starts; Vibe64 never writes that
 record and reads it only through Genesis's list;
 a malformed record fails the list (`PASS_RECORD_INVALID`), and the Passes list
 shows that error with Retry instead of an empty list.

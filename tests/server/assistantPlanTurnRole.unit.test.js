@@ -6,6 +6,7 @@ import test from "node:test";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createAgentSessionCommandService } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { manageWorkPlan, readWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "../fixtures/genesisPasses.js";
 
 // Which plan changes the agent's plan command takes from the turn it runs in: the role comes from the chat's saved
 // routing request, as `vibe64-helper plan` reaches it, never from the command's input.
@@ -14,7 +15,7 @@ const TICKED = PLAN.replace("- [ ] Save", "- [x] Save").replace("- [ ] Prove", "
 const OTHER_PLAN = "# Contact threads\n\n- [ ] One thread per contact\n";
 const SCOPE_REFUSAL = /Only Senior can change the scope/u;
 
-async function planCommand(t) {
+async function planCommand(t, { connected = [], listPasses } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-plan-turn-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const sessionId = "test-session";
@@ -25,15 +26,21 @@ async function planCommand(t) {
   const context = { session: { sessionId }, runtime: { store: { paths } } };
   let request = null;
   const handoffs = [];
+  const commit = "a".repeat(40);
+  const copies = connected.length ? JSON.stringify(Object.fromEntries(connected.map((name) => [name, {
+    repository: `example/${name}`, branch: "main", path: path.join(path.dirname(source), "connected", name), baseCommit: commit, canonicalCommit: commit
+  }]))) : undefined;
+  const metadataValues = { assistant_routing_request: () => JSON.stringify(request), connected_copies: () => copies };
   const store = { paths,
-    readMetadataValue: async (_id, name) => name === "assistant_routing_request" ? JSON.stringify(request) : undefined,
+    readMetadataValue: async (_id, name) => metadataValues[name]?.(),
     writeMetadataValue: async () => {},
     readSessionSourceDescriptor: async () => ({ sessionId,
       metadata: { source_kind: "session_clone", source_path: source, source_path_authority: "managed_session_source" } }) };
   const service = createAgentSessionCommandService({ logger: silentLogger, project: {
     createSessionStore: async () => store, readCurrentProject: async () => ({ slug: "project", projectRoot: root }),
     runInProjectContext: async (_slug, callback) => callback()
-  }, publishSessionChanged: async () => {}, handPlanToSenior: async (_id, input) => { handoffs.push(input); return { ok: true }; } });
+  }, publishSessionChanged: async () => {}, handPlanToSenior: async (_id, input) => { handoffs.push(input); return { ok: true }; },
+  ...(listPasses ? { listPasses } : {}) });
   t.after(() => service.closeAllForSession(sessionId));
   await service.bindSession(sessionId, { wrapperHostDir: path.join(root, "commands") });
   await manageWorkPlan(context, { operation: "new", text: PLAN }, "senior");
@@ -47,7 +54,7 @@ async function planCommand(t) {
       ...(operation === "new" ? { archiveCurrent: true } : {}) });
   };
   return {
-    context, plan, write, handoffs,
+    context, plan, write, handoffs, source,
     // The chat's running request: its turn is working, delivered and accepted unless the fields say otherwise.
     turn: (fields) => { request = { schemaVersion: 7, messageId: "request-1", turnId: "turn-1", status: "working", delivery: "accepted", ...fields }; },
     planText: async () => (await readWorkPlan(context)).text
@@ -83,6 +90,19 @@ test("a conversation turn works on the plan with its chat's role: Senior's in a 
   assert.equal(await f.planText(), `Status: active\n${PLAN}`);
   assert.equal((await f.plan({ operation: "handoff" })).handedTo, "senior");
   assert.deepEqual(f.handoffs.map(({ operation }) => operation), ["new", "handoff"]);
+});
+
+test("the plan command's check of a Passes item gives Genesis the session's connected copies' roots", async t => {
+  const listed = [];
+  const f = await planCommand(t, { connected: ["ui-kit", "billing"], listPasses: async (options) => {
+    listed.push(options);
+    return { unavailable: null, passes: GENESIS_PASSES, master: GENESIS_MASTER_PASS };
+  } });
+  f.turn({ mode: "senior", resolvedMode: "senior", reason: "conversation", stage: null });
+  await f.write("write", `${PLAN}\n## Passes\n\n- [ ] Security pass: whole app\n`);
+  assert.match(await f.planText(), /- \[ \] Security pass: whole app/u);
+  assert.deepEqual(listed, [{ projectRoot: f.source,
+    connectedRoots: ["ui-kit", "billing"].map((name) => path.join(path.dirname(f.source), "connected", name)) }]);
 });
 
 test("a turn that may only read the plan says which turn it is, that it only reads, and how the person gets the change, never the scope refusal", async t => {

@@ -4,7 +4,6 @@
 import { spawnSync } from "node:child_process";
 import {
   closeSync,
-  fchmodSync,
   fstatSync,
   fsyncSync,
   mkdirSync,
@@ -13,11 +12,12 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
-  rmSync,
-  writeFileSync
+  rmSync
 } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+
+import { writeFileAtomicSync } from "@local/vibe64-atomic-file";
 
 import {
   addUserToGroup,
@@ -38,7 +38,6 @@ import {
   DIRECTORY_NO_FOLLOW,
   directoryEntryName,
   makeDirectory,
-  NEW_FILE_NO_FOLLOW,
   openDirectoryBelow,
   openedPath,
   openRootOwnedDirectory,
@@ -148,21 +147,14 @@ function readPersonRegistration(workspace = "", username = "", options = {}) {
 }
 
 // Root writes a registration whole, under its account's name, in a registry
-// directory it holds open, and durably: its data reaches the disk before the
-// rename, and the directory after it, so a power cut never leaves it empty.
+// directory it holds open, and durably (Vibe64's atomic writer): its data
+// reaches the disk before the rename, and the directory after it, so a power
+// cut never leaves it empty.
 function writeRegistration(directory, record = {}) {
-  const name = `${directoryEntryName(record.username)}.json`;
-  const temporary = `.${name}.${process.pid}.tmp`;
-  const descriptor = openSync(openedPath(directory, temporary), NEW_FILE_NO_FOLLOW, 0o644);
-  try {
-    fchmodSync(descriptor, 0o644);
-    writeFileSync(descriptor, `${JSON.stringify(record)}\n`);
-    fsyncSync(descriptor);
-  } finally {
-    closeSync(descriptor);
-  }
-  renameSync(openedPath(directory, temporary), openedPath(directory, name));
-  fsyncSync(directory);
+  writeFileAtomicSync(openedPath(directory, `${directoryEntryName(record.username)}.json`), `${JSON.stringify(record)}\n`, {
+    createDirectory: false,
+    fileMode: 0o644
+  });
 }
 
 function writePersonRegistration(directory, user = {}) {

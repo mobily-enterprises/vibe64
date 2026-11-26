@@ -10,6 +10,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { inflateRawSync } from "node:zlib";
 
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { publishError } from "../errors.js";
 import { passthroughEnvironment, spawnCommand } from "../stages.js";
 
@@ -29,7 +30,6 @@ async function downloadVerified(archive, directory, { fetchImpl = fetch, signal 
   await mkdir(directory, { recursive: true });
   const target = path.join(directory, archive.file);
   if (await exists(target)) return target;
-  const partial = `${target}.partial-${randomUUID()}`;
   let response;
   try {
     response = await fetchImpl(archive.url, { redirect: "follow", signal });
@@ -55,21 +55,24 @@ async function downloadVerified(archive, directory, { fetchImpl = fetch, signal 
       return callback(null, chunk);
     }
   });
-  try {
-    await pipeline(Readable.fromWeb(response.body), meter, createWriteStream(partial, { mode: 0o644 }));
-    const actual = hash.digest("hex");
-    if (actual !== expected || (archive.size && size !== archive.size)) {
-      throw publishError(
-        "VIBE64_PUBLISH_TOOLCHAIN_CHECKSUM_MISMATCH",
-        `${archive.file} does not match its pinned checksum; nothing was installed.`,
-        { expected, actual, size }
-      );
-    }
-    await rename(partial, target);
-    return target;
-  } finally {
-    await rm(partial, { force: true });
-  }
+  // The archive is published only once its checksum and size match the pin.
+  await writeFileAtomic(target, (temporaryPath) => pipeline(Readable.fromWeb(response.body), meter, createWriteStream(temporaryPath)), {
+    beforePublish: () => {
+      const actual = hash.digest("hex");
+      if (actual !== expected || (archive.size && size !== archive.size)) {
+        throw publishError(
+          "VIBE64_PUBLISH_TOOLCHAIN_CHECKSUM_MISMATCH",
+          `${archive.file} does not match its pinned checksum; nothing was installed.`,
+          { expected, actual, size }
+        );
+      }
+    },
+    createDirectory: false,
+    // A downloaded archive is created 0644 less the umask, as it always was.
+    createMode: 0o644,
+    durable: false
+  });
+  return target;
 }
 
 /**

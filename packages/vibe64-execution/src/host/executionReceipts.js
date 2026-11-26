@@ -10,12 +10,12 @@ import {
   mkdirSync,
   openSync,
   readdirSync,
-  renameSync,
   rmSync,
   writeFileSync
 } from "node:fs";
 import path from "node:path";
-import process from "node:process";
+
+import { writeFileAtomicSync } from "@local/vibe64-atomic-file";
 
 import { managedExecutionRuntimeBase } from "./commandEnvironment.js";
 import { managedExecutionId } from "./executionIdentity.js";
@@ -231,17 +231,15 @@ function readManagedExecutionResult(owner = {}, executionId = "") {
 }
 
 function writeManagedExecutionResult(executionRoot = "", result = {}) {
-  const resultPath = path.join(executionRoot, "result.json");
-  const temporaryPath = `${resultPath}.tmp-${process.pid}`;
-  writeFileSync(temporaryPath, `${JSON.stringify({
+  writeFileAtomicSync(path.join(executionRoot, "result.json"), `${JSON.stringify({
     ...result,
     schema: "vibe64.managed-execution.result",
     schemaVersion: 1
   })}\n`, {
-    flag: "wx",
-    mode: 0o600
+    createDirectory: false,
+    durable: false,
+    createMode: 0o600
   });
-  renameSync(temporaryPath, resultPath);
 }
 
 export {

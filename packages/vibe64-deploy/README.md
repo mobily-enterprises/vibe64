@@ -5,9 +5,10 @@ Public Vibe64's deploy engine: Production's needs from a project's `genesis/stac
 (`record.js`), the steps that make it (`steps.js`) and the provider adapters, mobilynet first
 (`adapters/mobilynet/`).
 
-It is plain Node ESM with no editor or JSKIT dependency. It runs only in Vibe64's editor, which gives it the
-credential, the folder that keeps the record and the prices; it knows no host. Nothing here holds a key or a value of
-the Production Env beyond the call that uses it.
+It is plain Node ESM with no editor or JSKIT dependency; its record is written by Vibe64's one atomic file writer
+(`@local/vibe64-atomic-file`, plain Node too). It runs only in Vibe64's editor, which gives it the credential, the
+folder that keeps the record and the prices; it knows no host. Nothing here holds a key or a value of the Production Env
+beyond the call that uses it.
 
 What is left to build, and what an earlier plan asked that was built or replaced:
 [docs/deployment-adapters.md](../../docs/deployment-adapters.md).

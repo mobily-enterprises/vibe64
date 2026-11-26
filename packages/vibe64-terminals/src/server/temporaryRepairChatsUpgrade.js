@@ -1,9 +1,10 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, copyFile, lstat, mkdir, rename, rm } from "node:fs/promises";
+import { copyFile, lstat } from "node:fs/promises";
 import path from "node:path";
 import { retireClaudeConversationHistory } from "@jskit-ai/assistant-core/server/claude-history";
 import { isRecord } from "@jskit-ai/kernel/shared/support/normalize";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { publishStateUpgradeFiles, verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
@@ -51,15 +52,11 @@ async function preserveClaudeHistory(inventory, configRoot, backupRoot) {
       const saved = await fileDigest(destination);
       if (saved && saved !== original) throw new Error(`Claude history backup differs from the original: ${relative}.`);
       if (!saved) {
-        await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
-        const temporary = `${destination}.${randomUUID()}.tmp`;
-        try {
-          await copyFile(file.path, temporary);
-          await chmod(temporary, 0o600);
-          await rename(temporary, destination);
-        } finally {
-          await rm(temporary, { force: true });
-        }
+        await writeFileAtomic(destination, (temporaryPath) => copyFile(file.path, temporaryPath), {
+          directoryMode: 0o700,
+          durable: false,
+          fileMode: 0o600
+        });
       }
       if (await fileDigest(destination) !== original) throw new Error(`Claude history backup could not be verified: ${relative}.`);
     }

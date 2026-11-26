@@ -134,23 +134,23 @@ describe("current session selection", () => {
 
   it("drops another project's session from the URL, with its chat", () => {
     const sessions = [{ sessionId: "inspector-session" }];
-    const route = (session, slug = "mercbot-inspector") => ({
+    const route = (session, slug = "shop-inspector") => ({
       params: { slug },
       query: { session, chat: "main", conversation: "c1", pane: "dashboard" }
     });
 
     expect(routeQueryWithoutUnlistedSession({
-      route: route("mercbot-session"), projectSlug: "mercbot-inspector", sessions
+      route: route("shop-session"), projectSlug: "shop-inspector", sessions
     })).toEqual({ pane: "dashboard" });
     expect(routeQueryWithoutUnlistedSession({
-      route: route("inspector-session"), projectSlug: "mercbot-inspector", sessions
+      route: route("inspector-session"), projectSlug: "shop-inspector", sessions
     })).toBe(null);
     // A view still showing while the route names the next project keeps it.
     expect(routeQueryWithoutUnlistedSession({
-      route: route("mercbot-session", "mercbot"), projectSlug: "mercbot-inspector", sessions
+      route: route("shop-session", "shop"), projectSlug: "shop-inspector", sessions
     })).toBe(null);
     expect(routeQueryWithoutUnlistedSession({
-      route: { params: { slug: "mercbot-inspector" }, query: {} }, projectSlug: "mercbot-inspector", sessions
+      route: { params: { slug: "shop-inspector" }, query: {} }, projectSlug: "shop-inspector", sessions
     })).toBe(null);
   });
 

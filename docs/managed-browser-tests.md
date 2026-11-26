@@ -216,8 +216,8 @@ target, as above. It does not run, and is not meant to run:
 
 New projects follow JSKIT's managed-runner guidance (`browserTestConfig()`,
 with its managed target), so neither case arises for them. Only a few existing
-repositories use self-starting harnesses, public Mercbot's among them; their own
-CI and test machines run those suites.
+repositories use self-starting harnesses; their own CI and test machines run
+those suites.
 
 The shared assistant session instructions include this workflow. New or refreshed
 provider contexts receive updated instructions through their normal lifecycle;

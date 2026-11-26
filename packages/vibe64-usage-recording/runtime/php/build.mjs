@@ -14,6 +14,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { writeFileAtomicSync } from "@local/vibe64-core/server/atomicFile";
+
 import {
   PHP_EXTENSION_DIRECTORY,
   PHP_EXTENSION_SOURCES,
@@ -50,17 +52,6 @@ function run(command, args, { cwd, env }) {
     throw new Error(`${path.basename(command)} could not run: ${result.error.message}`);
   }
   return { ok: result.status === 0, output: `${result.stdout || ""}${result.stderr || ""}` };
-}
-
-function writeAtomically(filePath, content) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const temporary = `${filePath}.${process.pid}.tmp`;
-  if (Buffer.isBuffer(content)) {
-    fs.writeFileSync(temporary, content);
-  } else {
-    fs.writeFileSync(temporary, content, "utf8");
-  }
-  fs.renameSync(temporary, filePath);
 }
 
 function compile({ phpConfig, phpize, cacheRoot, env }) {
@@ -131,18 +122,18 @@ function buildPhpUsageModule({ phpConfig = "", force = false, env = process.env 
   const modulePath = phpUsageModulePath(phpApi, env);
   const cached = !force && fs.existsSync(modulePath);
   if (!cached) {
-    writeAtomically(modulePath, compile({ phpConfig: config, phpize, cacheRoot, env: childEnv }));
+    writeFileAtomicSync(modulePath, compile({ phpConfig: config, phpize, cacheRoot, env: childEnv }), { durable: false });
   }
   const check = run(phpBinary, ["-n", "-d", `extension=${modulePath}`, "-m"], { env: childEnv });
   if (!check.ok || !check.output.split("\n").includes("vibe64_usage")) {
     throw new Error(`PHP ${phpVersion} did not load ${modulePath}:\n${check.output.trim()}`);
   }
   const scanDirectory = phpUsageScanDirectory(env);
-  writeAtomically(path.join(scanDirectory, PHP_USAGE_INI_NAME), [
+  writeFileAtomicSync(path.join(scanDirectory, PHP_USAGE_INI_NAME), [
     "; Written by Vibe64. Loads the usage recorder into recorded processes only.",
     `extension="${modulePath}"`,
     ""
-  ].join("\n"));
+  ].join("\n"), { durable: false });
   return { cached, modulePath, phpApi, phpBinary, phpVersion, scanDirectory };
 }
 

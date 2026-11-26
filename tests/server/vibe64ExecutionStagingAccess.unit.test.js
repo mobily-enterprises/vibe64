@@ -104,6 +104,21 @@ test("the staging key and sudo rule reach the disk before they are renamed into 
   assertDurablyReplaced(events, path.join(host.options.sudoersRoot, `vibe64-staging-${ACCOUNT}`));
 });
 
+test("under the managed umask 0007 a granted key is still 0644 in 0755 folders, so sshd, reading it as the account, opens it", async (t) => {
+  const previous = process.umask(0o007);
+  t.after(() => process.umask(previous));
+  const host = await stagingHost(t);
+  installStagingAccess({ shell: "/usr/sbin/nologin", username: ACCOUNT }, PUBLIC_KEY, HELPER, host.options);
+  // The account neither owns the key (root does) nor is in its group: sshd opens it, and enters each folder this
+  // made, by the others' bits alone.
+  const keys = path.join(host.options.keysRoot, ACCOUNT);
+  assert.equal((await stat(keys)).mode & 0o777, 0o644);
+  for (const folder of [host.options.keysRoot, path.dirname(host.options.keysRoot)]) {
+    assert.equal((await stat(folder)).mode & 0o777, 0o755, folder);
+  }
+  assert.equal((await stat(path.join(host.options.sudoersRoot, `vibe64-staging-${ACCOUNT}`))).mode & 0o777, 0o440);
+});
+
 test("granting staging access installs the key as root's file, the account's own sudo rule and /bin/sh as its login shell", async (t) => {
   const host = await stagingHost(t);
   installStagingAccess({ shell: "/usr/sbin/nologin", username: ACCOUNT }, PUBLIC_KEY, HELPER, host.options);
@@ -118,10 +133,12 @@ test("granting staging access installs the key as root's file, the account's own
   const rule = path.join(host.options.sudoersRoot, `vibe64-staging-${ACCOUNT}`);
   assert.equal(await readFile(rule, "utf8"), `${ACCOUNT} ALL=(root) NOPASSWD: ${HELPER} staging-service *\n`);
   assert.equal((await stat(rule)).mode & 0o777, 0o440);
-  // visudo checks the candidate before it is renamed into place; then the account gets its login shell, /bin/sh,
-  // which sshd starts the forced command through and which reads no file of the account's own.
+  // visudo checks the candidate (the atomic writer's temporary file beside the rule, a name with a dot, which sudo's
+  // included folder skips) before it is renamed into place; then the account gets its login shell, /bin/sh, which sshd
+  // starts the forced command through and which reads no file of the account's own.
   assert.equal(host.calls[0][0], "visudo");
-  assert.match(host.calls[0][2], new RegExp(`/\\.vibe64-staging-${ACCOUNT}\\.\\d+$`, "u"));
+  assert.equal(path.dirname(host.calls[0][2]), host.options.sudoersRoot);
+  assert.match(path.basename(host.calls[0][2]), /^\.vibe64-write-[0-9a-f-]{36}\.tmp$/u);
   assert.deepEqual(host.calls[1], ["usermod", "--shell", "/bin/sh", ACCOUNT]);
   assert.equal(stagingAccessGranted(ACCOUNT, host.options), true);
 

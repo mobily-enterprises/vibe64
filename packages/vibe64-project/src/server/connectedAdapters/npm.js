@@ -7,12 +7,12 @@
 // lockfiles are never written; npm installs a dependency the tree lacks without saving it.
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, copyFile, mkdir, readdir, rename, rm, stat, unlink } from "node:fs/promises";
+import { copyFile, mkdir, readdir, rename, rm, stat, unlink } from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import semver from "semver";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
+import { writeFileAtomic, writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { notUsed } from "./adapterResults.js";
 import { connectedNpmPackages, existingEntry, installedCopies, missingDependencies, readJsonFile, swapPlan } from "./npmPackages.js";
@@ -144,16 +144,12 @@ async function installDependencies({ connection, needs, runCommand }) {
 /** Writes `source` to `target` in one step, with the session's file mode. */
 async function publishFile(source, target) {
   const modes = vibe64SharedModes();
-  await mkdir(path.dirname(target), { recursive: true, mode: modes.inheritingDirectory });
-  const temporary = path.join(path.dirname(target), `.${path.basename(target)}.${randomUUID()}.vibe64-swap`);
-  try {
-    await copyFile(source, temporary);
-    const executable = Boolean((await stat(source)).mode & 0o111);
-    await chmod(temporary, executable ? modes.directory : modes.file);
-    await rename(temporary, target);
-  } finally {
-    await rm(temporary, { force: true });
-  }
+  const executable = Boolean((await stat(source)).mode & 0o111);
+  await writeFileAtomic(target, (temporaryPath) => copyFile(source, temporaryPath), {
+    directoryMode: modes.inheritingDirectory,
+    durable: false,
+    fileMode: executable ? modes.directory : modes.file
+  });
 }
 
 /**

@@ -1,7 +1,9 @@
+import path from "node:path";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import { workPlanInstructions } from "./assistantWorkPlanInstructions.js";
-import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { listSessionPasses } from "./planPasses.js";
+import { sessionConnectedRoots } from "@local/vibe64-core/server/projectRepository";
 import {
   VIBE64_ASSISTANT_SELECTION_METADATA,
   serializeVibe64AssistantSelection,
@@ -48,6 +50,14 @@ const FOLLOWUP_OVERTAKEN_CODES = Object.freeze([
   "vibe64_assistant_routing_continuation_changed"
 ]);
 
+/**
+ * The names of the session's own copies of its connected repositories, each at ../connected/<name>.
+ * @param {{ metadata?: Record<string, string> }} session
+ */
+function connectedCopyNames(session) {
+  return sessionConnectedRoots(session).map((root) => path.basename(root));
+}
+
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
 /** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
@@ -89,7 +99,7 @@ function createAssistantRoutingDelivery({
   async function passTitlesFor(context, role) {
     if (role === "junior") return null;
     try {
-      return (await listPasses({ projectRoot: sessionSourcePath(context.session) })).passes.map(({ title }) => title);
+      return (await listSessionPasses(listPasses, context.session)).passes.map(({ title }) => title);
     } catch {
       return null;
     }
@@ -263,8 +273,11 @@ function createAssistantRoutingDelivery({
       browserReview: assistantPlanCompletionFollows(state),
       // Auto's Senior hands rework to Junior; a direct chat's own agent does it in its workflow.
       rework: state.mode === "auto" ? "junior" : state.workflow ? "self" : "report",
+      // A pass covers the connected repositories the app is built from as it does this one.
+      connected: taskPurpose ? connectedCopyNames(context.session) : [],
       planInstructions: pass ? passInstructions
-        : checks ? assistantWholeChecksInstructions({ autoSave: savesAutomatically(context.session.metadata) })
+        : checks
+          ? assistantWholeChecksInstructions({ autoSave: savesAutomatically(context.session.metadata), passes: state.wholeChecks?.passes })
           : includePlanInstructions
             ? workPlanInstructions(role, { autoOutcome, auto: state.mode === "auto", passTitles: await passTitlesFor(context, role) }) : ""
     });

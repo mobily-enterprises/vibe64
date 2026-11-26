@@ -7,9 +7,8 @@
 // the wrapper, so it reaches no process that could not already read that environment. The control checks the
 // token, session and generation as before, whichever of the two named them.
 
-import { randomUUID } from "node:crypto";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { writeFileAtomic } from "@local/vibe64-atomic-file";
 
 const AGENT_CONTROL_DIR_NAME = "controls";
 const AGENT_CONTROL_IDENTITY_FIELDS = Object.freeze(["socketPath", "sessionId", "token", "generationId"]);
@@ -29,15 +28,7 @@ function agentControlFilePath(wrapperHostDir, control) {
  * @param {{ socketPath: string, sessionId: string, token: string, generationId: string, contractVersion?: string }} identity
  */
 async function writeAgentControlFile(filePath, identity) {
-  await mkdir(path.dirname(filePath), { mode: 0o700, recursive: true });
-  const temporary = `${filePath}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, `${JSON.stringify(identity)}\n`, { flag: "wx", mode: 0o600 });
-    await rename(temporary, filePath);
-  } catch (error) {
-    await rm(temporary, { force: true });
-    throw error;
-  }
+  await writeFileAtomic(filePath, `${JSON.stringify(identity)}\n`, { directoryMode: 0o700, durable: false, createMode: 0o600 });
 }
 
 /**

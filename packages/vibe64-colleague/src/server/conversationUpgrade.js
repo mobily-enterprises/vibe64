@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 import { upgradeConversationRuntimeState } from "@jskit-ai/assistant-core/server/conversation";
 
@@ -105,13 +105,7 @@ export async function upgradeColleagueConversations({
     if (!(await lstat(update.file)).isFile() || await readFile(update.file, "utf8") !== update.original) {
       throw new Error("Colleague history changed during upgrade. Stop all writers before retrying.");
     }
-    const temporary = `${update.file}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporary, JSON.stringify(update.next), { flag: "wx", mode: 0o600 });
-      await rename(temporary, update.file);
-    } finally {
-      await rm(temporary, { force: true });
-    }
+    await writeFileAtomic(update.file, JSON.stringify(update.next), { durable: false, createMode: 0o600 });
   }
 }
 
@@ -212,13 +206,7 @@ export async function upgradeColleagueConversationRuntime({
     if (!(await lstat(update.file)).isFile() || await readFile(update.file, "utf8") !== update.original) {
       throw new Error("Colleague history changed during runtime upgrade. Stop all writers before retrying.");
     }
-    const temporary = `${update.file}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporary, JSON.stringify(update.next), { flag: "wx", mode: 0o600 });
-      await rename(temporary, update.file);
-    } finally {
-      await rm(temporary, { force: true });
-    }
+    await writeFileAtomic(update.file, JSON.stringify(update.next), { durable: false, createMode: 0o600 });
   }
 }
 
@@ -307,12 +295,6 @@ export async function upgradeColleagueConversationHistory({
     if (!(await lstat(update.file)).isFile() || await readFile(update.file, "utf8") !== update.original) {
       throw new Error("Colleague history changed during upgrade. Stop all writers before retrying.");
     }
-    const temporary = `${update.file}.${randomUUID()}.tmp`;
-    try {
-      await writeFile(temporary, JSON.stringify(update.next), { flag: "wx", mode: 0o600 });
-      await rename(temporary, update.file);
-    } finally {
-      await rm(temporary, { force: true });
-    }
+    await writeFileAtomic(update.file, JSON.stringify(update.next), { durable: false, createMode: 0o600 });
   }
 }

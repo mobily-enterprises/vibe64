@@ -506,7 +506,7 @@ function inspectGenesisCollaboration(options = {}) {
  * Master pass that runs them deeply in turn, and why the Genesis serving the project runs no pass (null when it runs them).
  * This is Vibe64's one reader of Genesis's pass list and its record of runs; a malformed record
  * fails it with Genesis's PASS_RECORD_INVALID, whose message names the file and the fix.
- * @param {{ projectRoot: string }} options
+ * @param {{ projectRoot: string, connectedRoots?: string[] }} options connectedRoots: the session's connected copies
  * @returns {Promise<{ unavailable: string | null, passes: GenesisPass[], master: GenesisMasterPass }>}
  */
 async function listGenesisPasses(options) {
@@ -593,6 +593,7 @@ async function inspectVibe64ResourceEstimates(options = {}) {
 /**
  * @param {object} request
  * @param {object} [request.action] the prompt task: its genesisTask, id and label
+ * @param {string[]} [request.connectedRoots] the session's connected copies, which a pass over the whole app covers too
  * @param {RuntimeEnv} [request.environment] the Env the session's commands receive (resource inputs are checked against it)
  * @param {{ component: string, id: string }[]} [request.pendingResources] managed resources its first command creates
  * @param {object} [request.input] the request text and its options; automaticGenesisTask
@@ -603,6 +604,7 @@ async function inspectVibe64ResourceEstimates(options = {}) {
  */
 async function renderGenesisPrompt({
   action = {},
+  connectedRoots = [],
   environment,
   input = {},
   onGenesisUnavailable = ignoreGenesisUnavailable,
@@ -613,7 +615,7 @@ async function renderGenesisPrompt({
   const requestedTask = genesisPromptTask(action);
   const request = genesisPromptRequest(input, action);
   const generate = (promptTask) => runGenesisOperation(generatePrompt, {
-    environment, pendingResources, projectRoot, request, sessionContextInstalled: true, task: promptTask
+    connectedRoots, environment, pendingResources, projectRoot, request, sessionContextInstalled: true, task: promptTask
   }, { prompt: true });
   const compose = async () => {
     try {

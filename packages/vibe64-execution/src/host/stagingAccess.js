@@ -7,9 +7,10 @@
 // stack may still read an environment file of the account's (Ubuntu's reads ~/.pam_environment), so what a
 // login reports about itself stays only what it says; the host's record of each login is logind's.
 
-import { closeSync, fsyncSync, lstatSync, mkdirSync, openSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, mkdirSync, unlinkSync } from "node:fs";
 import path from "node:path";
-import process from "node:process";
+
+import { writeFileAtomicSync } from "@local/vibe64-atomic-file";
 
 import {
   STAGING_ACCOUNT_SHELL,
@@ -17,7 +18,6 @@ import {
   runRootCommand,
   runRootCommandAllowFailure
 } from "./hostAccounts.js";
-import { fsyncDirectory } from "./hostFiles.js";
 import { helperAccountDatabase, helperStagingKeysRoot, helperSudoersRoot } from "./hostSettings.js";
 
 const STAGING_LOGIN_SHELL = "/bin/sh";
@@ -55,36 +55,17 @@ function stagingAccessGranted(username = "", { keysRoot = helperStagingKeysRoot(
 
 // Root's own folder for the keys: sshd reads a key file only through folders no one else may change.
 function ensureStagingKeysRoot(keysRoot = helperStagingKeysRoot(), rootUid = ROOT_UID) {
-  mkdirSync(keysRoot, { mode: 0o755, recursive: true });
+  const created = mkdirSync(keysRoot, { mode: 0o755, recursive: true });
+  // sshd reads a key as its account, which passes through every folder made here: each is 0755 whatever the umask
+  // (the managed umask 0007 would leave it 0750, which the account cannot enter).
+  for (let folder = keysRoot; created; folder = path.dirname(folder)) {
+    chmodSync(folder, 0o755);
+    if (folder === created) break;
+  }
   const stats = lstatSync(keysRoot);
   if (!stats.isDirectory() || stats.uid !== rootUid || (stats.mode & 0o022) !== 0) {
     throw new Error(`Vibe64 exec helper refused ${keysRoot}: it is not root's own folder.`);
   }
-}
-
-// Durable: the new file's data reaches the disk before the rename, and its
-// folder after it, so a power cut leaves the old file or the new one.
-function replaceRootFile(target = "", content = "", mode = 0o644, check = null) {
-  const temporary = `${path.dirname(target)}/.${path.basename(target)}.${process.pid}`;
-  const descriptor = openSync(temporary, "wx", mode);
-  try {
-    try {
-      writeFileSync(descriptor, content);
-      fsyncSync(descriptor);
-    } finally {
-      closeSync(descriptor);
-    }
-    if (check) check(temporary);
-    renameSync(temporary, target);
-  } catch (error) {
-    try {
-      unlinkSync(temporary);
-    } catch {
-      // The write's, check's or rename's own error is the one to report.
-    }
-    throw error;
-  }
-  fsyncDirectory(path.dirname(target));
 }
 
 // Looks before it removes, so taking back what an account never had writes nothing. On a read-only file system
@@ -120,16 +101,27 @@ function installStagingAccess(user, publicKey, helperPath, {
   sudoersRoot = helperSudoersRoot()
 } = {}) {
   ensureStagingKeysRoot(keysRoot, rootUid);
-  replaceRootFile(
+  // Each file is replaced whole and durably (Vibe64's atomic writer), in a folder that is already there: its data
+  // reaches the disk before the rename, and its folder after it, so a power cut leaves the old file or the new one.
+  // Each gets its exact mode whatever the umask, as another reads it: sshd reads the key as the account, which
+  // neither owns it nor is in its group, so the managed umask 0007's 0640 refused every staging login; sudo reads the
+  // rule.
+  writeFileAtomicSync(
     stagingKeysPath(user.username, keysRoot),
     `command="${helperPath} staging-shell",restrict,pty,from="127.0.0.1,::1" ${publicKey} vibe64-staging\n`,
-    0o644
+    { createDirectory: false, fileMode: 0o644 }
   );
-  replaceRootFile(
+  writeFileAtomicSync(
     stagingSudoersPath(user.username, sudoersRoot),
     `${user.username} ALL=(root) NOPASSWD: ${helperPath} staging-service *\n`,
-    0o440,
-    (candidate) => runRoot("visudo", ["-cqf", candidate])
+    {
+      // visudo checks the complete candidate before it is renamed into place.
+      beforePublish: (candidate) => {
+        runRoot("visudo", ["-cqf", candidate]);
+      },
+      createDirectory: false,
+      fileMode: 0o440
+    }
   );
   if (user.shell !== STAGING_LOGIN_SHELL) {
     changeLoginShell(user.username, STAGING_LOGIN_SHELL, accountDatabase, { prefixParent, run: runRoot });

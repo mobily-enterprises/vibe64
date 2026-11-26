@@ -197,8 +197,10 @@ they are recovery evidence and are never overwritten silently.
    uncertainty that would risk data loss. Emit actionable warnings for supported
    unusual cases. Never include tokens, credentials, or full metadata in logs.
 4. Apply only with writers stopped. Preserve an original backup before changing
-   existing data; use atomic replacement, private permissions and the correct OS
-   owner. Preserve unrelated fields. Make retries safe after every write, without
+   existing data; use atomic replacement (Core's `writeFileAtomic`, Vibe64's
+   one writer; a hand-written temporary file and rename fails
+   `tests/server/handWrittenAtomicWrites.unit.test.js`), private permissions
+   and the correct OS owner. Preserve unrelated fields. Make retries safe after every write, without
    generating a second identity or repeating destructive work.
 5. Add focused tests for old/current/fresh state, check-only behavior, warnings,
    malformed input, interruption/retry and failure. Update affected Blueprint and

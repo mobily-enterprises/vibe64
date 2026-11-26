@@ -46,6 +46,14 @@ Under each pass is a button for each run Genesis offers for it:
   evidence you can check. The list says **Deep reads every file: it takes much
   longer and uses far more of your AI's allowance.**
 
+When the project has connected repositories (**Project settings → Connected
+repositories**), every run covers this session's own copies of them too, at
+`../connected/<name>`: a whole-app or section run reads and fixes the code
+there that the app is built from, a run over changes reads the changes made
+there as well, and the pass's final reply says which repositories it covered.
+A Deep run's file and line count, and its checklist, take in those copies'
+files too, once the project's Genesis is one that counts them.
+
 Select a run. The list closes and main chat sends that run's own request,
 which Genesis writes, as your message, such as **Deslop the whole app.** Then:
 
@@ -77,7 +85,11 @@ current task.
 
 Genesis records a pass as completed only after a **Whole app**, **Since last
 completed** or **Deep** run of it finishes; a pass over a plan's changes or a
-section of the app is not recorded as the pass.
+section of the app is not recorded as the pass. It also waits for the
+whole-project checks: in a plan, Vibe64 asks you about them once the plan is
+finished, and the turn your **Yes** starts records the plan's passes once every
+check passes; after **No** they stay unrecorded (see [Run the whole-project
+checks after a plan](whole-project-checks.md)).
 
 The run buttons are unavailable while:
 
@@ -140,7 +152,9 @@ writes the failing test and then fixes the code; Deslop keeps its cleanups
 behaviour-neutral but fixes a real defect as a separate fix with its own test.
 What is outside the scope is fixed too when the session can fix it: data and
 files the AI created, small defects it found, a step that fails. A failing or
-flaky test is a defect to fix until it passes every run, never a leftover. The
+flaky test is a defect to fix until it passes every run, never a leftover, and
+never called pre-existing or environmental: a missing tool is a defect too,
+named. The
 plan's one **Leftovers** list in Progress holds only what needs you (a choice, a
 real device, an account, a click) or what the session can't reach, each with its
 reason; a choice is asked as a numbered question with a recommended answer.

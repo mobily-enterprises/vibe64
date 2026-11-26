@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { writeFileAtomic } from "@local/vibe64-atomic-file";
 
 import { vibe64Driver } from "./promptContext.js";
 
@@ -28,17 +28,11 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
   let closed = false;
 
   /**
-   * A unique temporary name: processes sharing one runtime directory never
-   * write or rename each other's partial registry.
+   * The writer's temporary name is unique: processes sharing one runtime
+   * directory never write or rename each other's partial registry.
    */
   async function save(next) {
-    const temporary = path.join(directory, `.sessions.${process.pid}.${randomUUID()}.tmp`);
-    try {
-      await writeFile(temporary, JSON.stringify({ sessions: [...next.values()] }), { flag: "wx", mode: 0o600 });
-      await rename(temporary, registryPath);
-    } finally {
-      await rm(temporary, { force: true });
-    }
+    await writeFileAtomic(registryPath, JSON.stringify({ sessions: [...next.values()] }), { durable: false, createMode: 0o600 });
   }
 
   await save(sessions);
