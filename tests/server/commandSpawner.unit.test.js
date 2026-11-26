@@ -500,14 +500,25 @@ test(`at most ${START_RECORD_CAP} commands start while the editor reads none of 
   const startedFile = path.join(root, "started");
   const asked = START_RECORD_CAP + 10;
   await spawnerPid();
-  const children = Array.from({ length: asked }, () => spawnCommand("sh", ["-c", `echo $$ >> ${startedFile}`], { env }));
-  holdEventLoop(1_500);
-  const startedUnread = readFileSync(startedFile, "utf8").trim().split("\n").length;
+  const started = () => (existsSync(startedFile) ? readFileSync(startedFile, "utf8").trim().split("\n").length : 0);
+  // Requests the channel's socket cannot take wait in this process until its loop runs, so the spawner never sees them
+  // while the loop is held: each request is kept small (no environment), and the test checks that none waits here.
+  const children = Array.from({ length: asked }, () => spawnCommand("/bin/sh", ["-c", `echo $$ >> ${startedFile}`], { env: {} }));
+  const waitingHere = process._getActiveHandles().filter((handle) => handle?.constructor?.name === "Pipe")
+    .reduce((bytes, pipe) => bytes + pipe.writeQueueSize, 0);
+  assert.equal(waitingHere, 0, "every spawn request reached the spawner's channel");
+  // While this process's loop is held, it reads no pid. A command shows it started by its own write, which can lag its
+  // spawn on a loaded host: the hold lasts until the cap's commands have all written (5 s at most), then 500 ms more,
+  // in which no command past the cap may start.
+  const deadline = Date.now() + 5_000;
+  while (started() < START_RECORD_CAP && Date.now() < deadline) holdEventLoop(25);
+  holdEventLoop(500);
+  const startedUnread = started();
   const codes = await Promise.all(children.map((child) => new Promise((resolve) => child.once("close", resolve))));
   assert.deepEqual({
     startedUnread,
     codes: [...new Set(codes)],
-    startedInAll: readFileSync(startedFile, "utf8").trim().split("\n").length
+    startedInAll: started()
   }, { startedUnread: START_RECORD_CAP, codes: [0], startedInAll: asked });
 });
 
