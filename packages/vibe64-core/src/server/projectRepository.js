@@ -279,6 +279,22 @@ function sessionConnectedCopies(session = {}) {
 }
 
 /**
+ * The absolute roots of this session's copies of its connected repositories, the repositories its app is built from
+ * beside its source, which Genesis's passes and prompts cover too. Unreadable copy records give none: Save and Update
+ * report them, and a pass or prompt still covers the session's own source.
+ * @param {object} session
+ * @returns {string[]}
+ */
+function sessionConnectedRoots(session = {}) {
+  try {
+    return sessionConnectedCopies(session).map((copy) => copy.path);
+  } catch (error) {
+    if (error?.code === "vibe64_connected_copies_invalid") return [];
+    throw error;
+  }
+}
+
+/**
  * The saved connected_copies text for these copies, validated before it is written.
  * @param {Array<{ name: string, repository: string, branch: string, path: string, baseCommit: string, canonicalCommit: string }>} copies
  */
@@ -412,6 +428,7 @@ export {
   sessionRepositoryProject,
   serializeSessionConnectedCopies,
   sessionConnectedCopies,
+  sessionConnectedRoots,
   sessionConnectedCopyPath,
   projectRepositoryView
 };

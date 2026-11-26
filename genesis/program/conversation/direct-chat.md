@@ -2617,7 +2617,15 @@ whose pass instructions (`connectedPassScope`) name each `../connected/<name>`,
 take them into the pass's scope as this repository (a whole-app or section run
 reads and fixes that code wherever it is; a run over changes reads the changes
 made in the copies too) and ask the final reply to say which repositories it
-covered. The pass fixes what it finds within its scope, writes
+covered. Genesis gets the copies too: every listing of a session's passes is
+`listSessionPasses` (`planPasses.js`), which gives `listGenesisPasses` the
+copies' roots (`sessionConnectedRoots`, none when their records are unreadable)
+beside the session's source, and the runtime's `renderPrompt` gives
+`renderGenesisPrompt` the same roots, so a Genesis that reads them sizes a Deep
+run and the Master pass over the copies' files and names the copies in a whole
+or deep run's PASS RUN scope, which its checklist follows; an older Genesis
+ignores them (`sessionPassListings.unit.test.js` refuses a listing or prompt
+made anywhere else). The pass fixes what it finds within its scope, writes
 one line in Progress, may change only its own Passes item's tick (plan role
 `pass`, `vibe64_work_plan_pass_item_only`), and reports continue, wait or
 complete; handoff is refused. Complete needs its item ticked
@@ -5747,7 +5755,7 @@ description, recommendation hint, `lastRun`, Genesis's committed record of
 its last completed run in the project, `runs`, the runs Genesis offers for it
 now, `sinceBase`, the request for the changes since a base commit and its deep
 form (null when the pass can't run), and `unavailable` (`listGenesisPasses`, Genesis's `inspectPasses` for that
-source, contract `genesis.passes.v1`). A pass's own last
+source and the session's connected copies, through `listSessionPasses`, contract `genesis.passes.v1`). A pass's own last
 step records its run with `genesis passes done <id>`, in a plan the turn the
 person's Yes to the whole-project checks starts; Vibe64 never writes that
 record and reads it only through Genesis's list;

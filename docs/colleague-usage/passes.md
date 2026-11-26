@@ -51,6 +51,8 @@ repositories**), every run covers this session's own copies of them too, at
 `../connected/<name>`: a whole-app or section run reads and fixes the code
 there that the app is built from, a run over changes reads the changes made
 there as well, and the pass's final reply says which repositories it covered.
+A Deep run's file and line count, and its checklist, take in those copies'
+files too, once the project's Genesis is one that counts them.
 
 Select a run. The list closes and main chat sends that run's own request,
 which Genesis writes, as your message, such as **Deslop the whole app.** Then:

@@ -442,7 +442,11 @@ function createAgentSessionCommandService({
       }
       // A plan's pass ticks only its own Passes item, and a new plan in a chat whose plans run passes gets them.
       const role = assistantPlanRole(request);
-      const readListing = planPassListing(listPasses, sourceRoot);
+      const readListing = planPassListing(listPasses, async () => ({
+        ...descriptor,
+        sessionId,
+        metadata: { ...descriptor.metadata, connected_copies: await store.readMetadataValue(sessionId, "connected_copies") }
+      }));
       const planInput = input.operation === "new" && request?.afterPlan && ["senior", "review"].includes(role)
         ? { ...input, text: await withAfterPlanPasses(input.text, store, sessionId, readListing) } : input;
       let result;

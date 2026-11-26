@@ -1,8 +1,9 @@
+import path from "node:path";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import { workPlanInstructions } from "./assistantWorkPlanInstructions.js";
-import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
+import { listSessionPasses } from "./planPasses.js";
+import { sessionConnectedRoots } from "@local/vibe64-core/server/projectRepository";
 import {
   VIBE64_ASSISTANT_SELECTION_METADATA,
   serializeVibe64AssistantSelection,
@@ -52,12 +53,7 @@ const FOLLOWUP_OVERTAKEN_CODES = Object.freeze([
  * @param {{ metadata?: Record<string, string> }} session
  */
 function connectedCopyNames(session) {
-  try {
-    return sessionConnectedCopies(session).map((copy) => copy.name);
-  } catch {
-    // Unreadable copy records are Save's and Update's to report; the pass still runs on this repository.
-    return [];
-  }
+  return sessionConnectedRoots(session).map((root) => path.basename(root));
 }
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -101,7 +97,7 @@ function createAssistantRoutingDelivery({
   async function passTitlesFor(context, role) {
     if (role === "junior") return null;
     try {
-      return (await listPasses({ projectRoot: sessionSourcePath(context.session) })).passes.map(({ title }) => title);
+      return (await listSessionPasses(listPasses, context.session)).passes.map(({ title }) => title);
     } catch {
       return null;
     }

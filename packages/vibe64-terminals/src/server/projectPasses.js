@@ -10,7 +10,7 @@ import { runSourceCommand } from "@local/vibe64-runtime/server/sourceCommand";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { vibe64Result } from "./terminalShared.js";
 import { readWorkPlan } from "./assistantWorkPlan.js";
-import { planPassesView } from "./planPasses.js";
+import { listSessionPasses, planPassesView } from "./planPasses.js";
 
 /** @typedef {Awaited<ReturnType<typeof listGenesisPasses>>["passes"][number]} GenesisPass */
 /**
@@ -140,7 +140,7 @@ function createProjectPasses({
     const { runtime, session } = await sessionContext(sessionId);
     const sourceRoot = sessionSourcePath(session);
     const [{ unavailable, passes: genesisPasses, master }, records] = await Promise.all([
-      listPasses({ projectRoot: sourceRoot }),
+      listSessionPasses(listPasses, session),
       readProjectPassRecords(runtime.stateRoot)
     ]);
     // Passes that last completed at the same time share one count.
@@ -191,7 +191,7 @@ function createProjectPasses({
 
   async function changeRecommendation(sessionId, input) {
     const { runtime, session } = await sessionContext(sessionId);
-    if (!(await listPasses({ projectRoot: sessionSourcePath(session) })).passes.some(({ id }) => id === input.passId)) {
+    if (!(await listSessionPasses(listPasses, session)).passes.some(({ id }) => id === input.passId)) {
       throw vibe64Error("That pass is not available in this project.", "vibe64_project_pass_unknown");
     }
     const at = now();

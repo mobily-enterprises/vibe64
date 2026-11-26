@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { sessionConnectedRoots } from "@local/vibe64-core/server/projectRepository";
 import {
   managedSessionSourcePath,
   sessionHasSource,
@@ -394,6 +395,8 @@ class Vibe64SessionRuntime {
         id: genesisTask,
         label: toText(request) || genesisTask
       },
+      // A pass over the whole app covers the repositories it is built from: the session's connected copies.
+      connectedRoots: sessionConnectedRoots(session),
       environment,
       pendingResources,
       input: {

@@ -294,6 +294,41 @@ test("a pass in a session with connected repositories covers them: its turn name
   assert.equal(requestOf(f.sends[0]), "Security pass the whole app.");
 });
 
+test("every listing of a session's passes gives Genesis its connected copies' roots, so a deep run is sized over them too", async (t) => {
+  const commit = "a".repeat(40);
+  const connected = async (copies) => {
+    const f = await fixture(t, { mode: "senior" }, { readyPlan: false, source: true });
+    const roots = copies.map((name) => path.join(path.dirname(f.source.source), "connected", name));
+    if (roots.length) {
+      f.metadata.connected_copies = JSON.stringify(Object.fromEntries(roots.map((root) => [path.basename(root), {
+        repository: `example/${path.basename(root)}`, branch: "main", path: root, baseCommit: commit, canonicalCommit: commit
+      }])));
+    }
+    // Each step must list the passes, and every listing carries the copies' roots.
+    const listed = async (step, label) => {
+      const before = f.passReads.options.length;
+      await step();
+      assert.ok(f.passReads.options.length > before, `${label} lists the passes`);
+      assert.deepEqual(f.passReads.options.map(({ connectedRoots }) => connectedRoots), f.passReads.options.map(() => roots), label);
+    };
+    return { f, listed };
+  };
+  // A Senior turn's plan instructions name the pass titles.
+  const turn = await connected(["ui-kit", "billing"]);
+  await turn.listed(() => turn.f.service.send("session-1", request, turn.f.context), "a Senior turn");
+  // A pass the request names, by its fields.
+  const explicit = await connected(["ui-kit", "billing"]);
+  await explicit.listed(() => explicit.f.service.send("session-1", { ...request, genesisTask: "security-pass", passRun: "deep", message: "Security pass the whole app deeply." }, explicit.f.context), "a named pass");
+  // Several passes the request names, which become a plan's Passes, then the plan's next pass once the first is done.
+  const plan = await connected(["ui-kit"]);
+  await plan.listed(() => plan.f.service.send("session-1", { ...request, message: "Run Data pass and Security pass deeply.", passes: ["data-pass", "security-pass"], passRun: "deep" }, plan.f.context), "the passes a request names");
+  await plan.listed(() => passDone(plan.f), "the plan's next pass");
+  assert.equal(plan.f.state().pass.id, "data-pass");
+  // A session without connected repositories gives Genesis none.
+  const own = await connected([]);
+  await own.listed(() => own.f.service.send("session-1", request, own.f.context), "a Senior turn without copies");
+});
+
 test("passes asked for while the plan is still being worked on join its Passes, and Senior says so without running one", async (t) => {
   const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
   await publishPlanFixture(f.context, planWith([]));

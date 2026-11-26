@@ -31,7 +31,7 @@ async function temporaryDirectory(t, prefix) {
 // A project whose Genesis list reports lastRuns[id] for each pass and, when its own Genesis runs no
 // pass, unavailable as the reason, and whose session source answers every commit count with
 // commits(since); Main chat's open plan is plan, and its saved routing request request.
-async function project(t, { lastRuns = {}, commits = () => 60, unavailable = null, plan = "", request = null } = {}) {
+async function project(t, { lastRuns = {}, commits = () => 60, unavailable = null, plan = "", request = null, connected = [] } = {}) {
   const stateRoot = await temporaryDirectory(t, "v64-passes-");
   const clock = { now: START };
   const counted = [];
@@ -39,6 +39,11 @@ async function project(t, { lastRuns = {}, commits = () => 60, unavailable = nul
   const store = { paths: (sessionId) => ({ sessionRoot: path.join(stateRoot, "sessions", sessionId), conversationsRoot: path.join(stateRoot, "sessions", sessionId, "conversations") }) };
   if (plan) await manageWorkPlan({ runtime: { store }, session: { sessionId: "session-1" } }, { operation: "new", text: plan }, "senior");
   const metadata = request ? { assistant_routing_request: JSON.stringify(request) } : {};
+  if (connected.length) {
+    metadata.connected_copies = JSON.stringify(Object.fromEntries(connected.map((root) => [path.basename(root), {
+      repository: `example/${path.basename(root)}`, branch: "main", path: root, baseCommit: "a".repeat(40), canonicalCommit: "a".repeat(40)
+    }])));
+  }
   const passes = createProjectPasses({
     sessionContext: async (sessionId) => ({ runtime: { stateRoot, store }, session: { sessionId, metadata } }),
     listPasses: async (options) => {
@@ -75,7 +80,7 @@ test("the Passes list is Genesis's passes, each with its last completed run from
   assert.equal(result.byId.deslop.lastRun, null, "a pass that never ran shows none");
   assert.equal(result.byId.deslop.commitsSince, 120, "a pass that never ran counts the whole history");
   assert.deepEqual(f.counted.sort(), ["", ago(3)], "passes that last ran at the same time share one count");
-  assert.deepEqual(f.listed, [{ projectRoot: "" }], "Genesis lists the passes for the session's source");
+  assert.deepEqual(f.listed, [{ projectRoot: "", connectedRoots: [] }], "Genesis lists the passes for the session's source, which has no connected copies");
   assert.equal(result.unavailable, null, "the Genesis serving the project runs passes");
   assert.deepEqual(result.byId.deslop.runs, GENESIS_PASSES[0].runs, "each pass carries the runs Genesis offers");
   assert.deepEqual(result.master, { passes: GENESIS_MASTER_PASS.passes }, "Genesis's Master pass gives only the order several passes run in");
@@ -92,6 +97,14 @@ test("the Passes list shows the open plan's passes, each with its state from the
   ] });
   assert.equal((await (await project(t, { plan: plan.replace("## Passes\n\n- [x] Review: the plan's changes\n- [ ] Deslop: whole app\n", "") })).read()).plan, null,
     "a plan without passes shows none");
+});
+
+test("the Passes list and a suggestion's Later give Genesis the session's connected copies, which a deep run is sized over too", async (t) => {
+  const connected = ["/srv/projects/shop/sessions/active/session-1/connected/ui-kit", "/srv/projects/shop/sessions/active/session-1/connected/billing"];
+  const f = await project(t, { connected });
+  assert.equal((await f.read()).ok, true);
+  assert.equal((await f.passes.changePassRecommendation("session-1", { passId: "deslop", action: "snooze" })).ok, true);
+  assert.deepEqual(f.listed, [{ projectRoot: "", connectedRoots: connected }, { projectRoot: "", connectedRoots: connected }]);
 });
 
 test("a project whose own Genesis runs no pass lists its passes with Genesis's reason and suggests none", async (t) => {
