@@ -14,13 +14,12 @@
 // One process runs one editor server at a time: each server configures the reader as it starts
 // (configurePlannedRestart), and everything else reads that one (plannedRestart()).
 
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
-import { writeFileAtomic, serializeByKey } from "./atomicFile.js";
+import { writeFileAtomic, writeFileAtomicSync, serializeByKey } from "./atomicFile.js";
 import { logOperationalEvent } from "./logging.js";
 import { sha256Hex } from "./sha256Hex.js";
 import {
@@ -406,10 +405,7 @@ function createPlannedRestart({
     record = { ...record, stoppedAt: new Date(now()).toISOString(), atRestart: snapshot() };
     latest.set(record.id, record);
     try {
-      mkdirSync(recordsRoot, { recursive: true, mode: 0o770 });
-      const temporary = path.join(recordsRoot, `.${record.id}.${process.pid}.stop`);
-      writeFileSync(temporary, `${JSON.stringify(record)}\n`, { mode: 0o660 });
-      renameSync(temporary, recordFile(record.id));
+      writeFileAtomicSync(recordFile(record.id), `${JSON.stringify(record)}\n`, { directoryMode: 0o770, fileMode: 0o660 });
     } catch (error) {
       warn("stop_record_failed", { noticeId: record.id, error: error?.message }, "The planned restart's stop could not be recorded.");
     }
