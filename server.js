@@ -48,7 +48,7 @@ import {
 } from "./server/lib/browserLifecycle.js";
 import { handleUpgradeSocketErrors } from "./server/lib/upgradeSocketErrors.js";
 import { destroyUpgradedSockets, trackUpgradedSockets } from "./server/lib/upgradedSockets.js";
-import { STOP_DRAIN_MS, endRunningCommands, endRuntimeTerminals, registerStopGate, stopAcceptingConnections } from "./server/lib/stopGate.js";
+import { STOP_DRAIN_MS, endRunningCommands, killRuntimeTerminals, registerStopGate, stopAcceptingConnections } from "./server/lib/stopGate.js";
 import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
@@ -133,23 +133,23 @@ function forceCloseServerConnections(server) {
  * The SIGINT and SIGTERM handler. The stop begins before anything else (`beginStop`): nothing new starts from then
  * on, the next server will read this stop as planned, and every AI engine closes its fence. The listener stops taking
  * connections, and the runtime terminals and the capability runtime stop together, then Fastify closes. Requests in
- * flight, the commands that were running when the stop began and the runtime terminals have `drainMs`: then those
- * connections close, those commands end and those terminals' process groups get SIGKILL, which ends the work still
- * waiting on them. Every command this process started that still runs is ended before it exits, within the deadline.
- * A stop past the deadline is still the stop that was asked for: it is logged and exits 1, but records no crash
- * (`onStopOverran`). It is logged at warn, which a hosted editor's default level keeps, with its time and each provider's shutdown.
+ * flight, the commands running as the stop began and the runtime terminals have `drainMs`: then, from the drain's own
+ * timer, which fires before the deadline's on any machine, those connections close, the terminals' process groups get
+ * SIGKILL and those commands end. Every command this process started is ended before it exits. A stop past the
+ * deadline is logged and exits 1, but records no crash (`onStopOverran`): it is the stop that was asked for. The stop
+ * is logged at warn, which a hosted editor's default level keeps, with its time and each provider's shutdown.
  * @param {object} dependencies
  * @param {import("fastify").FastifyInstance} dependencies.app
  * @param {CapabilityRuntime} dependencies.capabilityRuntime
  * @param {(signal: string) => unknown} dependencies.beforeClose Runs with the runtime terminals and the capability runtime.
  * @param {(signal: string, options: { logger: unknown }) => unknown} [dependencies.beginStop]
  * @param {typeof clearTimeout} [dependencies.clearTimeoutFn]
- * @param {(drainMs: number) => unknown} [dependencies.closeRuntimeTerminals] Ends them, `drainMs` after SIGTERM.
+ * @param {() => unknown} [dependencies.closeRuntimeTerminals]
  * @param {number} [dependencies.drainMs]
- * @param {(startedBefore: number) => Promise<{ ended?: number }>} [dependencies.endCommands] Ends the commands still
- *   running that started before the given time.
+ * @param {(startedBefore: number) => Promise<{ ended?: number }>} [dependencies.endCommands] Ends those started before it.
  * @param {(code: number) => void} [dependencies.exitProcess]
  * @param {() => number} [dependencies.now]
+ * @param {() => unknown} [dependencies.killTerminals] SIGKILLs the runtime terminals' process groups as the drain ends.
  * @param {(error: Error) => unknown} [dependencies.onStopFailed] Records a stop that failed, before the exit.
  * @param {() => unknown} [dependencies.onStopOverran] Runs when the stop overruns its deadline, before the exit.
  * @param {typeof setTimeout} [dependencies.setTimeoutFn]
@@ -161,10 +161,11 @@ function createSignalShutdownHandler({
   beforeClose,
   beginStop = beginServerStop,
   clearTimeoutFn = clearTimeout,
-  closeRuntimeTerminals = endRuntimeTerminals,
+  closeRuntimeTerminals = () => closeTerminalSessionsForNamespacePrefix(""),
   drainMs = STOP_DRAIN_MS,
   endCommands = endRunningCommands,
   exitProcess = process.exit.bind(process),
+  killTerminals = killRuntimeTerminals,
   now = Date.now,
   onStopFailed = () => {},
   onStopOverran = () => {},
@@ -226,11 +227,11 @@ function createSignalShutdownHandler({
       }, () => {});
     }
 
-    const drainEndsMs = Math.min(drainMs, timeoutMs);
     const drain = setTimeoutFn(() => {
       forceCloseServerConnections(app.server);
+      killTerminals();
       void endCommandsStartedBefore(startedAt);
-    }, drainEndsMs);
+    }, Math.min(drainMs, timeoutMs));
     drain.unref?.();
     const timeout = setTimeoutFn(() => {
       logOperationalEvent(app.log, "error", {
@@ -252,13 +253,11 @@ function createSignalShutdownHandler({
     try {
       const preCloseOperations = [
         { name: "before-close", run: () => beforeClose(signal) },
-        { name: "runtime-terminals", run: () => closeRuntimeTerminals(drainEndsMs) },
+        { name: "runtime-terminals", run: () => closeRuntimeTerminals() },
         { name: "capability-runtime", run: () => capabilityRuntime.shutdown() }
       ];
       const preClosePromises = preCloseOperations.map(startOperation);
-      const capabilityRuntimeIndex = preCloseOperations.findIndex(({ name }) => (
-        name === "capability-runtime"
-      ));
+      const capabilityRuntimeIndex = preCloseOperations.findIndex(({ name }) => name === "capability-runtime");
       await preClosePromises[capabilityRuntimeIndex].catch(() => null);
       const operations = [
         ...preCloseOperations,

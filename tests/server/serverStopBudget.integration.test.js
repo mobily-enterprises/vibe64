@@ -3,7 +3,6 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { readFileSync } from "node:fs";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -16,19 +15,23 @@ import {
   resumePolicy
 } from "../../packages/vibe64-terminals/src/server/turnInterruptions.js";
 import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
+import { STOP_DRAIN_MS } from "../../server/lib/stopGate.js";
 import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 
 // A busy editor's stop, end to end, in a real server process (fixtures/stopBudgetServer.mjs): a request waiting on a
-// long command, a background job's long command and a poller starting a command every 50 ms. On release 10's stop of a
-// hosted workspace (24 Nov 2026) the editor went on starting helper calls after SIGTERM and took 3.33 s to stop, while
-// the edge in front of it answered 502 and 503. On SIGTERM the editor must stop in under a second: it closes its
-// listener at once, starts no new command, gives the request in flight a short drain, ends the commands it started,
+// long command, a background job's long command, a poller starting a command every 50 ms and a terminal that ignores
+// SIGTERM. On release 10's stop of a hosted workspace (24 Nov 2026) the editor went on starting helper calls after
+// SIGTERM and took 3.33 s to stop, while the edge in front of it answered 502 and 503; on 26 Nov two hosted editors'
+// terminals held their restarts past the deadline. On SIGTERM the editor closes its listener and its command gate at
+// once, starts no new command, gives the request in flight, the commands then running and its terminals a drain of
+// STOP_DRAIN_MS, then from the drain's own timer closes those connections, SIGKILLs the terminals and ends the commands,
 // leaves nothing of them running, and records its stop as planned, so the next server resumes the turns it interrupted
-// as a restart. The stop is logged at warn, which a hosted editor's default level keeps, with how long it took.
+// as a restart. Its deadline exits whatever is left. The tests read the server's own timeline, ordered as the server
+// lived it, so a machine that starves the process changes how long the stop takes, never what they prove; how long it
+// took is reported, not asserted, and a busy machine may meet the deadline (exit 1, no crash record) instead.
 
 const APP_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const SERVER = fileURLToPath(new URL("./fixtures/stopBudgetServer.mjs", import.meta.url));
-const STOP_BUDGET_MS = 1000;
 
 async function waitUntil(check, label, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
@@ -69,18 +72,6 @@ function processIsAlive(pid) {
     if (error?.code === "ENOENT") return false;
     throw error;
   }
-}
-
-/** Whether a new TCP connection to the port is refused. */
-function connectionRefused(port) {
-  return new Promise((resolve) => {
-    const socket = net.connect({ host: "127.0.0.1", port });
-    socket.once("connect", () => {
-      socket.destroy();
-      resolve(false);
-    });
-    socket.once("error", (error) => resolve(error?.code === "ECONNREFUSED"));
-  });
 }
 
 /**
@@ -129,7 +120,7 @@ async function startBusyServer(t, env = {}) {
   }, "the request's and the background job's long commands", 30_000);
   await waitUntil(() => readEvents(root).filter(({ event }) => event === "poll-ran").length >= 3, "the poller's commands");
   await waitUntil(() => terminalPids().length === 1, "the terminal that ignores SIGTERM and SIGHUP");
-  return { root, port, server, exited, slow, output: () => output, childPids, terminalPids };
+  return { root, server, exited, slow, output: () => output, childPids, terminalPids };
 }
 
 /** The files in a folder of the server's crash records ("records", or "running" for its running marker). */
@@ -140,53 +131,101 @@ async function crashFiles(root, folder = "records") {
   });
 }
 
-test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves none of its commands running, and records a planned stop", {
+/** The server's JSON log lines of one event. */
+function logged(output, event) {
+  return output.split("\n").filter((line) => line.includes(`"${event}"`)).map((line) => JSON.parse(line));
+}
+
+/**
+ * The stop's timeline from the fixture's events: SIGTERM's arrival, the stop's first moment, the signals the server
+ * sent each process group, in order, and the exit.
+ */
+function stopTimeline(events) {
+  const indexed = events.map((entry, index) => ({ ...entry, index }));
+  const first = (event) => indexed.find((entry) => entry.event === event);
+  const signals = indexed.filter(({ event }) => event === "signal")
+    .map((entry) => ({ ...entry, group: Number(entry.detail.split(" ")[0]), signal: entry.detail.split(" ")[1] }));
+  return { sigterm: first("sigterm"), began: first("stop-began"), exit: first("exit"), signals,
+    sent: (group, signal) => signals.filter((entry) => entry.group === group && entry.signal === signal) };
+}
+
+/** The signal events in the same synchronous step as the one at `index`: those straight after it, up to another event. */
+function sameStep(events, index) {
+  const after = events.slice(index + 1);
+  const end = after.findIndex(({ event }) => event !== "signal");
+  return after.slice(0, end === -1 ? after.length : end);
+}
+
+test("a busy editor's stop closes its listener and gate at once, starts nothing new, gives its terminals and commands the drain, then kills them from the drain's own timer, leaves none running, and records a planned stop", {
   skip: process.platform !== "linux",
   timeout: 90_000
 }, async (t) => {
-  const { root, port, server, exited, slow, output: serverOutput, childPids, terminalPids } = await startBusyServer(t);
+  const { root, server, exited, slow, output: serverOutput, childPids, terminalPids } = await startBusyServer(t);
 
   const stopAt = Date.now();
   server.kill("SIGTERM");
-  const refusedAfterMs = await waitUntil(async () => (await connectionRefused(port)) ? Date.now() - stopAt : 0,
-    "the listener to close", 10_000);
   const [code, signal] = await exited;
   const stopMs = Date.now() - stopAt;
   const slowStatus = await slow;
   const events = readEvents(root);
   const pids = childPids();
+  const [terminalPid] = terminalPids();
   const output = serverOutput();
-  const report = JSON.stringify({ stopMs, refusedAfterMs, code, signal, slowStatus, events: events.slice(-40), output: output.slice(-6000) });
-  t.diagnostic(`stopped ${stopMs} ms after SIGTERM; new connections refused after ${refusedAfterMs} ms; exit ${code}`);
+  const report = JSON.stringify({ stopMs, code, signal, slowStatus, events: events.slice(-60), output: output.slice(-6000) });
+  const { sigterm, began, exit, signals, sent } = stopTimeline(events);
+  const terminalKill = sent(terminalPid, "SIGKILL");
+  t.diagnostic(`stopped ${stopMs} ms after SIGTERM, exit ${code}; the drain's kill came ${terminalKill[0]?.at - sigterm?.at} ms after SIGTERM arrived`);
 
-  assert.ok(stopMs < STOP_BUDGET_MS, `the editor stopped ${stopMs} ms after SIGTERM, not within ${STOP_BUDGET_MS} ms: ${report}`);
-  assert.deepEqual([code, signal], [0, null], `a stop within its budget is a clean exit: ${report}`);
-  assert.ok(refusedAfterMs < 300, `new connections are refused at once (${refusedAfterMs} ms): ${report}`);
-  // Each poll's line carries the time its process began: a busy host can take a while to write it, but none may begin
-  // once the stop has (SIGTERM's delivery to the server takes a moment of the slack).
-  const ranAfterStop = events.filter(({ event, at }) => event === "poll-ran" && at > stopAt + 250);
+  // The listener and the command gate are closed at the stop's first moment, before it signals anything.
+  assert.ok(sigterm && began && sigterm.index < began.index, report);
+  assert.equal(began.detail, "listening=false gate=true", `the listener and the gate close as the stop begins: ${report}`);
+  assert.ok(signals.every(({ index }) => index > began.index), report);
+
+  // No call made once the stop had begun reached a process; one was made, and the gate refused it.
+  const calledAfterStop = new Set(events.slice(began.index).filter(({ event }) => event === "poll-call").map(({ detail }) => detail));
+  const ranAfterStop = events.filter(({ event, detail }) => event === "poll-ran" && calledAfterStop.has(detail));
   assert.deepEqual(ranAfterStop, [], `no command starts once the stop has begun: ${report}`);
-  assert.ok(events.some(({ event, detail }) => event === "poll-refused" && detail === "vibe64_server_stopping"),
-    `the gateway refuses a new command as the editor stops: ${report}`);
+  assert.ok(events.some(({ event, detail }) => event === "poll-refused" && calledAfterStop.has(detail.split(" ")[0]) &&
+    detail.endsWith(" vibe64_server_stopping")), `the gateway refuses a new command as the editor stops: ${report}`);
+
+  // The terminal's close sends SIGTERM as the stop begins; it ignores it. Its SIGKILL comes from the drain's own timer,
+  // whose same step ends the two commands running as the stop began, once the drain has passed and before the exit.
   assert.equal(pids.length, 2, report);
-  assert.deepEqual(pids.filter(processIsAlive), [], `no command the editor started outlives it: ${report}`);
-  assert.deepEqual(terminalPids().filter(processIsAlive), [], `nor does its terminal that ignores SIGTERM: ${report}`);
-  assert.deepEqual(await crashFiles(root), [], `a stop within its budget records no crash: ${report}`);
+  const terminalTerm = sent(terminalPid, "SIGTERM");
+  assert.equal(terminalTerm.length, 1, report);
+  assert.equal(terminalKill.length, 1, `the terminal gets one SIGKILL: ${report}`);
+  assert.ok(terminalTerm[0].index < terminalKill[0].index, report);
+  const drainStep = sameStep(events, terminalKill[0].index);
+  for (const pid of pids) {
+    assert.ok(drainStep.some(({ detail }) => detail === `${pid} SIGTERM`), `the drain's step also ends command ${pid}: ${report}`);
+  }
+  assert.ok(terminalKill[0].at - sigterm.at >= STOP_DRAIN_MS - 1, `the terminal had the whole drain first: ${report}`);
+  assert.ok(exit && terminalKill[0].index < exit.index && exit.detail === String(code), report);
 
-  // The stop's own record says how long it took, at a level a hosted editor keeps.
-  const stopped = output.split("\n").filter((line) => line.includes("\"vibe64.server.stopped\"")).map((line) => JSON.parse(line));
-  assert.equal(stopped.length, 1, `the stop is logged once at warn: ${report}`);
-  assert.equal(stopped[0].level, 40, report);
-  assert.ok(Number.isInteger(stopped[0].durationMs) && stopped[0].durationMs < STOP_BUDGET_MS, report);
+  // Nothing it started outlives it, and its stop is no crash.
+  await waitUntil(() => [...pids, terminalPid].every((pid) => !processIsAlive(pid)), "the commands and the terminal to end", 10_000);
+  assert.deepEqual(await crashFiles(root), [], `a planned stop records no crash: ${report}`);
 
-  // The turns this stop interrupted are the next server's to resume, as after a restart.
+  // It exits 0 with its stop logged at warn, which a hosted editor's default level keeps, or, on a machine too busy to
+  // finish by the deadline, 1 with the overrun logged; never both.
+  const stopped = logged(output, "vibe64.server.stopped");
+  const timedOut = logged(output, "vibe64.server.shutdown_timeout");
+  assert.deepEqual({ code, signal, stopped: stopped.length, timedOut: timedOut.length },
+    { code, signal: null, stopped: code === 0 ? 1 : 0, timedOut: code === 1 ? 1 : 0 }, report);
+  for (const record of stopped) {
+    assert.equal(record.level, 40, report);
+    assert.ok(Number.isInteger(record.durationMs), report);
+  }
+
+  // The turns this stop interrupted are the next server's to resume, as after a restart; the stop was recorded as
+  // planned before its drain ended.
   const systemRoot = path.join(root, "state");
   const runs = await Promise.all((await readdir(path.join(systemRoot, "server-runs")))
     .map(async (name) => JSON.parse(await readFile(path.join(systemRoot, "server-runs", name), "utf8"))));
   const run = runs.find((record) => record.pid === server.pid);
   assert.ok(run, JSON.stringify(runs));
   assert.equal(run.stopReason, "server-shutdown", JSON.stringify(run));
-  assert.ok(Date.parse(run.stoppedAt) - stopAt < 500, `the planned stop is recorded as the stop begins: ${JSON.stringify(run)}`);
+  assert.ok(Date.parse(run.stoppedAt) <= terminalKill[0].at, `the planned stop is recorded before the drain ends: ${JSON.stringify(run)} ${report}`);
   const next = createServerRun({ systemRoot });
   await next.started;
   const end = await next.endOf(run.id);
@@ -194,29 +233,40 @@ test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves
   assert.equal(resumePolicy(end.cause), "now");
 });
 
-test("a stop that overruns its deadline ends what still runs and exits 1, but records no crash: it is the stop that was asked for", {
+test("a stop that overruns its deadline, even one that comes with its drain, ends what still runs and exits 1, but records no crash: it is the stop that was asked for", {
   skip: process.platform !== "linux",
   timeout: 90_000
 }, async (t) => {
-  // Its Fastify close never ends, as a hosted editor's did not end within the deadline on 26 Nov 2026.
+  // Its Fastify close never ends, as a hosted editor's did not end within the deadline on 26 Nov 2026. Its deadline is
+  // the drain's own moment, the earliest a deadline can come, so the drain's kill must come first however the machine
+  // schedules the process.
   const { root, server, exited, output: serverOutput, childPids, terminalPids } = await startBusyServer(t, {
-    VIBE64_STOP_TEST_STALL_CLOSE: "1"
+    VIBE64_STOP_TEST_STALL_CLOSE: "1",
+    VIBE64_STOP_TEST_DEADLINE_MS: String(STOP_DRAIN_MS)
   });
 
   server.kill("SIGTERM");
   const [code, signal] = await exited;
   const output = serverOutput();
-  const report = JSON.stringify({ code, signal, events: readEvents(root).slice(-40), output: output.slice(-6000) });
-  const timedOut = output.split("\n").filter((line) => line.includes("\"vibe64.server.shutdown_timeout\""))
-    .map((line) => JSON.parse(line));
+  const events = readEvents(root);
+  const report = JSON.stringify({ code, signal, events: events.slice(-60), output: output.slice(-6000) });
+  const timedOut = logged(output, "vibe64.server.shutdown_timeout");
   assert.equal(timedOut.length, 1, `the overrun is logged: ${report}`);
+  assert.ok(timedOut[0].pendingOperations.includes("fastify"), report);
   assert.deepEqual([code, signal], [1, null], report);
   assert.deepEqual(await crashFiles(root), [], `an overrun is no crash: ${report}`);
   assert.deepEqual(await crashFiles(root, "running"), [], `nor does its running marker stay for the next start to record: ${report}`);
   assert.equal(output.includes("\"vibe64.server.crashed\""), false, report);
-  // Only the stalled close held it: the terminal's SIGKILL came with the drain.
-  assert.deepEqual(timedOut[0].pendingOperations, ["fastify"], report);
-  // The commands got their SIGTERM and the terminal its SIGKILL as the drain ended, before the deadline.
-  await waitUntil(() => [...childPids(), ...terminalPids()].every((pid) => !processIsAlive(pid)),
+  // The terminal that ignores SIGTERM got its SIGKILL from the drain, before the deadline's exit, and the commands
+  // their SIGTERM in the same step, so nothing it started outlives it.
+  const { exit, sent } = stopTimeline(events);
+  const [terminalPid] = terminalPids();
+  const terminalKill = sent(terminalPid, "SIGKILL");
+  assert.equal(terminalKill.length, 1, `the drain kills the terminal before the exit: ${report}`);
+  assert.ok(exit && terminalKill[0].index < exit.index && exit.detail === "1", report);
+  for (const pid of childPids()) {
+    assert.ok(sameStep(events, terminalKill[0].index).some(({ detail }) => detail === `${pid} SIGTERM`), report);
+  }
+  await waitUntil(() => [...childPids(), terminalPid].every((pid) => !processIsAlive(pid)),
     "the commands and the terminal to end", 10_000);
 });

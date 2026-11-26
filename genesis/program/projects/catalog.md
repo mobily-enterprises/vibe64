@@ -311,13 +311,16 @@ tells the page it may send it again, writes included; every answer sent while
 stopping closes its connection. The runtime terminals and capability features
 stop together, then Fastify closes. Requests in flight, the commands running
 when the stop began and the runtime terminals have 350 ms (`STOP_DRAIN_MS`),
-which leaves most of the stop's second for a loaded machine: then those
-connections close, those commands' process groups end (`endCaptures`: SIGTERM,
-then SIGKILL) and the terminals' process groups, sent SIGTERM as the stop began,
-get SIGKILL (`endRuntimeTerminals`; a terminal's ordinary close waits 3 s).
-Before it exits the server ends every command it started that still runs, so
-none outlives it. At 850 ms (`DEFAULT_SHUTDOWN_TIMEOUT_MS`) whatever still runs
-is ended, the overrun is logged and the process exits 1. An overrun is still the
+which leaves most of the stop's second for a loaded machine. Then, from the
+drain's own timer, those connections close, the terminals' process groups, sent
+SIGTERM as their closes began with the stop, get SIGKILL
+(`killRuntimeTerminals`; a terminal close's own SIGKILL waits 3 s) and those
+commands' process groups end (`endCaptures`: SIGTERM, then SIGKILL). The drain's
+timer fires before the deadline's on any machine, however starved, so a
+terminal that ignores SIGTERM never outlives the server. Before it exits the
+server ends every command it started that still runs, so none outlives it. At
+850 ms (`DEFAULT_SHUTDOWN_TIMEOUT_MS`) whatever still runs is ended, the overrun
+is logged and the process exits 1. An overrun is still the
 stop that was asked for, ending what runs on its schedule, so it records no
 crash (`onStopOverran` ends the crash watch as a clean stop does); a stop
 operation that fails is recorded. The planned stop is already recorded, so
@@ -332,9 +335,13 @@ duration). A timeout also names its `pendingOperations`; a failure names its
 causes, redacted, so the provider and its reason are visible.
 `tests/server/serverStopBudget.integration.test.js` stops a busy real server
 (a request waiting on a long command, a background command, a poller and a
-terminal that ignores SIGTERM and SIGHUP) and holds it to all of this, and
-stops one whose Fastify close never ends to hold an overrun to its exit 1 with
-no crash record.
+terminal that ignores SIGTERM and SIGHUP) and holds it to all of this from the
+server's own timeline (the stop's first moment, each signal it sends a process
+group and its exit, in the order the server lived them), so a starved machine
+changes how long the stop takes, which it reports, but not what it proves. It
+also stops one whose Fastify close never ends, with its deadline at the drain's
+own moment, to hold an overrun to its exit 1 with no crash record and its
+terminal killed by the drain first.
 
 ## Practice projects
 
