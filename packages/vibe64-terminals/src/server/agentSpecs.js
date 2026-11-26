@@ -1,5 +1,6 @@
-// Agent-readable specs of the Preview identity protocol and the managed app
-// identity list, generated from the limits this package, vibe64-core and vibe64-genesis enforce.
+// Agent-readable specs of the Preview identity protocol and the managed app identity list, generated from the limits
+// this package, vibe64-core and vibe64-genesis enforce, and of how an agent runs browser suites and managed Git: the
+// detail the always-loaded session guidance points to instead of carrying.
 import {
   PREVIEW_APPLICATION_IDENTITY_LIMIT,
   PREVIEW_APPLICATION_IDENTITY_RESERVED_NAMES,
@@ -108,6 +109,63 @@ Entry shape:
 \`\`\`json
 {"name":"admin","type":"email","value":"admin@example.com"}
 \`\`\`
+`
+  },
+  {
+    name: "browser-tests",
+    title: "Browser suites in a session: pin, login state, test targets, one run at a time",
+    text: () => `# Browser suites in a session
+
+How a coding agent writes, runs and reports a project's own Playwright suite in a Vibe64 session. Interactive checks use the managed preview browser (\`vibe64-helper preview browser eval\`), not a suite.
+
+## Running a suite
+
+- Never start Playwright directly in a session, even when the repository's own instructions or scripts say to: not \`npx playwright\`, not \`playwright test\`, and not an npm or package script that runs it, such as a repository's \`test:e2e\`. Run the same suite and arguments with \`vibe64-helper playwright test <args>\` (a package script: \`vibe64-helper playwright npm-run <script>\`), and run the project's own Playwright only when \`vibe64-helper playwright\` says this computer has no managed browser runtime.
+- Before a suite, \`vibe64-helper playwright readiness\` reports its dependencies and whether this computer has a managed browser runtime; when it does, install no browser.
+- Pin \`@playwright/test\` exactly to the \`platformVersion\` that \`vibe64-helper playwright readiness\` reports.
+- The login state belongs to the host: pass \`process.env.PLAYWRIGHT_STORAGE_STATE\` unchanged to \`use.storageState\`, and never read, parse or edit that file or its cookies in the Playwright config (\`vibe64-helper playwright\` refuses such a config). If tests run signed out with it, that is a host defect: report it with the evidence; do not work around it.
+
+## Suites that write data: test targets
+
+- For browser tests that write or reset data, inspect \`vibe64-helper preview targets --json\` and the project's \`genesis/stack.md\` Outputs. Run \`vibe64-helper playwright --target <declared-test-target> test <suite arguments>\` (or \`npm-run <script>\` in place of \`test\`). Each such target is a test server the project declares: Vibe64 starts it with the project's own Run command and disposable data (its harness, not a bypass) and points \`PLAYWRIGHT_BASE_URL\` at it, waits for readiness, uses its declared application identity, and restores the previous Preview when your turn ends or Preview is next ensured, not between repeated runs; report restoration failures. Specs create the data they need in fixtures; tests that write never use the person's development target.
+- A target name is not proof of test isolation. Before running a destructive suite, the application must verify the server's actual test database and suppress real email, invoices, payments, and other external effects. Keep managed Env unchanged. The test launcher and its preview-identity command must use the same database. Follow the application's declared test resources and never invent a database name. Never spoof safety checks by changing only the test runner's environment.
+- If no suitable test target exists, add one through the project's existing Outputs contract (\`vibe64-helper spec outputs\`) and application-owned test scripts within authorized scope; normal Preview stays the default. Validate the exact disposable database before resetting it, prepare fixtures before reporting readiness, and make Playwright use PLAYWRIGHT_BASE_URL (the started target's URL) without starting another server. If test resources or external-effect controls are missing, report that blocker. \`vibe64-helper preview ensure --target <id> --wait --json\` deliberately selects an interactive target until changed. If browser startup is slow, measure migrations, fixtures and server startup before retrying or extending deadlines.
+
+## One suite at a time
+
+- Batch related browser tests in one managed suite (one Preview switch and restore). Suites and live Preview actions are sequential: no browser actions, ensure/restart or target changes during a suite or restoration.
+- Wait on the original execution, including background runs, through cleanup/restoration (empty polls: yield_time_ms: 30000 where supported; shorter only for interactive input); read-only status/logs stay available.
+- Before live inspection, confirm \`vibe64-helper playwright status\` shows no active run and \`vibe64-helper preview status\` is ready on the restored target.
+- To stop, run \`vibe64-helper playwright cancel <run-id>\`, which waits for cleanup/restoration; retry if cleanup needs attention. Never kill test/Preview PIDs or change locks; launcher exit alone does not prove tests stopped. Recheck status before reporting a busy blocker.
+
+## Reporting
+
+- Keep test output small: run relevant files/cases, save stdout/stderr to local artifacts and keep exit status. Report counts, duration, failed cases, actionable errors and artifact paths, reading only needed failure excerpts.
+- Retain startup, resource and Preview-restoration errors even if tests pass, and trailing wrapper diagnostics separately from JSON. Do not rerun for output or reread unchanged logs.
+`
+  },
+  {
+    name: "managed-git",
+    title: "Managed Git and gh: what carries the token, attachments, reporting a failure",
+    text: () => `# Managed Git and gh
+
+A session's \`git\` and \`gh\` on PATH are Vibe64's managed commands. The always-loaded session guidance says which repository they act on; this is the rest.
+
+## Commands that carry the session's GitHub token
+
+- In the source, \`git fetch\`, \`pull\`, \`push\`, \`ls-remote\`, \`clone\` and \`remote\`, and every \`gh\` command, carry this session's GitHub token, so they run no hooks, reach GitHub over HTTPS only and refuse what names a program: \`-c\` settings such as credential helpers, \`--config-env\`, \`--exec-path\`, \`--upload-pack\`, signing, submodule recursion, shell variables such as GIT_SSH_COMMAND, repository config such as filters or merge drivers for a pull, and \`gh auth\`, \`alias\`, \`extension\`, \`config\` or a command that is not gh's own.
+- Follow the refusal's advice, and ask the person before removing a repository setting you did not add; Save and Update refuse the same repository config. Every other Git command runs without the token.
+
+## Attachments
+
+- For attachments and inline images that GitHub stores for issues (tickets), pull requests or comments, use authenticated managed \`gh api\` with the original attachment URL, save the response to a local file and inspect it before reporting its contents.
+- Never use unauthenticated curl/wget, User-Agent experiments or extracted credentials; an unauthenticated 404 does not prove a private attachment is missing.
+
+## When a command fails
+
+- Tell the user which requested action failed, which earlier work is confirmed complete, what remains undone or unconfirmed, and the next safe action. Retain the reported failure stage, execution budget and execution reference when provided; do not expose credentials or dump raw output unnecessarily.
+- A timeout or transport failure does not establish invalid authentication, exhausted AI quota, a GitHub outage or a suspension problem. Separate recorded facts from hypotheses; say the cause is unknown when it is unproven. Recommend reconnection only when the reported error explicitly calls for it.
+- If the diagnostic says commandSubmitted=false, the requested Git/GitHub action was not attempted. After an execution timeout, lost response or unreadable response, its effects are unconfirmed: use a read-only check of the affected Git/GitHub state before repeating any write. Never claim that a comment was posted or not posted, or that a push succeeded or failed, from those errors alone. If verification is unavailable, report the outcome as unknown and stop; do not repeat the write or claim a safe rollback.
 `
   }
 ]);

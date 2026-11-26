@@ -3722,15 +3722,17 @@ Malformed response envelopes cannot become successful empty command results.
 Success and ordinary Git nonzero exits retain their original byte streams;
 platform failures append the diagnostic without replacing captured output.
 
-The provider-neutral managed Git session instructions require user-facing
+The `managed-git` spec (`vibe64-helper spec managed-git`), which the
+provider-neutral session guidance and every platform failure's own output name
+before a report or a repeated write, requires user-facing
 reports to name the failed action, earlier confirmed work, remaining undone or
 unconfirmed work and the next safe step. They retain supplied diagnostic references
 and distinguish facts from hypotheses, without inferring an authentication,
 quota, GitHub-service or suspension cause from a timeout. Reconnection is suggested
 only when the reported error calls for it. Main and temporary chats receive the
-same rule through their existing context lifecycle; no extra model turn or
-automatic retry is introduced. Contract tests verify the supplied instructions,
-not that every generated model reply will follow them.
+same pointer through their existing context lifecycle; no extra model turn or
+automatic retry is introduced. Contract tests verify the spec, the pointer and
+the failure output's line, not that every generated model reply will follow them.
 
 The conversation accepts messages, structured answers, attachments, and
 steering guidance. It streams commentary and the final response, persists the

@@ -554,12 +554,13 @@ Target selection does not change managed environment values or certify data
 safety. Application-owned scripts must select the designated disposable data,
 prepare fixtures before readiness, suppress external effects, and verify the
 actual server's test identity before destructive tests. A test target's preview
-identity command must select the same data. Provider-neutral session guidance
-explains these requirements, the commands, and the project work needed when a
-test target is absent. See `docs/managed-browser-tests.md` for the portable setup.
+identity command must select the same data. The `browser-tests` spec
+(`vibe64-helper spec browser-tests`, which the provider-neutral session guidance
+names before any browser suite) explains these requirements, the commands, and
+the project work needed when a test target is absent. See `docs/managed-browser-tests.md` for the portable setup.
 Routine test launchers retain the isolated schema, apply pending migrations and
 reset fixture data. Fresh-schema proofs and production builds are separate from
-ordinary browser checks. Shared guidance asks agents to batch related cases and
+ordinary browser checks. The same spec asks agents to batch related cases and
 measure slow startup before retrying. The web readiness probe allows five minutes;
 the managed waiter has another thirty seconds to observe its final status and
 cleanup instead of racing the probe's deadline. The probe stops when its launch

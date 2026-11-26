@@ -152,7 +152,8 @@ After changing GitHub issues, comments, labels or PRs, agents run
 `vibe64-helper github refresh`. Session guidance supplies this instruction alongside
 the existing managed Git commands. The shared Main and temporary conversation
 guidance (AI task conversations included) also directs agents to fetch GitHub-hosted ticket, PR and comment
-attachments through authenticated managed `gh api`, using their original URLs.
+attachments through authenticated managed `gh api`, and the `managed-git` spec it names says to use their
+original URLs.
 Agents save and inspect the downloaded files; an unauthenticated 404 is not proof
 that a private attachment is missing. The managed `gh` carries the session's
 GitHub token, so it runs only the GitHub CLI's own commands and none that shows

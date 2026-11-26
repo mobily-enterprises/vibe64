@@ -240,6 +240,7 @@ if (hasPlatformFailure) {
   } else if (timedOut) {
     process.stderr.write("The command's effects are unconfirmed. Check the result before retrying a write.\\n");
   }
+  process.stderr.write("Before you report it or repeat a write: vibe64-helper spec managed-git\\n");
 }
 
 const exitCode = Number.isInteger(payload.exitCode) ? payload.exitCode : (payload.ok === false ? 1 : 0);
