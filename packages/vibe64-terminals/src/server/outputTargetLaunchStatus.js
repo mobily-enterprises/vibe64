@@ -86,8 +86,18 @@ function createOutputTargetLaunchStatus({
     const stopState = previewStopState(context.session.metadata);
     if (stopState.stopped) response.preview.stoppedIntent = true;
     if (stopState.stopped && !launchTerminalIsRunning(previewStatus.activeTerminal || {})) {
+      // A Stop during the run's Prepare steps cut one: say so, since a migration or seed may be half done.
+      const prepareCut = !stopState.error && previewStatus.activeTerminal?.metadata?.launchPrepareCut === true;
       response.preview.state = stopState.error ? "failed" : "stopped";
-      response.preview.message = stopState.error || "Preview is stopped. Start it to run the application.";
+      response.preview.message = stopState.error || (prepareCut
+        ? "Preview was stopped during its database step (Prepare), which may be half done. Start it to run the application."
+        : "Preview is stopped. Start it to run the application.");
+      if (prepareCut) response.preview.reason = "prepare_cut";
+    }
+    // A restart waits for the run it replaces to finish its Prepare steps rather than cut one.
+    if (response.preview.state === "starting" && launchCoordination.launchWaitsForPrepare(sessionId)) {
+      response.preview.message = "Waiting for the database step to finish, then Preview restarts.";
+      response.preview.reason = "restart_waiting_for_prepare";
     }
     const testRun = state.previewTestRuns.get(sessionId);
     if (testRun) response.previewTestRun = { targetId: testRun.targetId, state: testRun.state };

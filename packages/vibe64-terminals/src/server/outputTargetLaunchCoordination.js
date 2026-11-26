@@ -1,12 +1,21 @@
-import { beginTerminalNamespaceOperation } from "@local/vibe64-execution/server/terminalSessions";
+import { setTimeout as delay } from "node:timers/promises";
+import { beginTerminalNamespaceOperation, readTerminalSession } from "@local/vibe64-execution/server/terminalSessions";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { snapshotDeclaredOutputResults } from "./outputResults.js";
 import { normalizeOpenTarget } from "./outputTargetMetadata.js";
 import { outputTargetTerminalNamespace } from "./terminalShared.js";
-import { ensureLaunchPreviewProxy, markLaunchTerminalReady } from "./launchPreviewReadiness.js";
+import {
+  ensureLaunchPreviewProxy,
+  launchPrepareUnfinished,
+  launchTerminalIsRunning,
+  markLaunchTerminalReady
+} from "./launchPreviewReadiness.js";
 import { resolveLaunchPreviewStatus } from "./launchPreviewStatus.js";
 import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
+
+// How often a restart waiting for a run's Prepare steps looks whether they ended.
+const PREPARE_POLL_MS = 200;
 
 /** @typedef {import("./types.js").OutputTargetTerminalState} OutputTargetTerminalState */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -43,6 +52,9 @@ function createOutputTargetLaunchCoordination({
   // Each session's starts queued for or holding the launch lock: while one is, the outputs read and Stop answer without
   // queuing behind its slow steps (the preparation check, the project's services, the admission, the spawn).
   const startsInLock = new Map();
+  // Each session's restarts waiting, outside the launch lock, for the run they replace to end its Prepare steps, so
+  // the outputs read says so meanwhile.
+  const prepareWaits = new Map();
 
   /**
    * The environment, project and command runner a Preview status read or
@@ -230,22 +242,62 @@ function createOutputTargetLaunchCoordination({
    * The refusal of a start that waited while the session's Preview was stopped or the session closed, or null.
    * @param {string} sessionId
    * @param {number} count `launchInterruptions` when the start began
+   * @param {"workspace-preparation" | "prepare-step"} [waitingFor] what the start waited for
    */
-  function launchInterruptedSince(sessionId, count) {
+  function launchInterruptedSince(sessionId, count, waitingFor = "workspace-preparation") {
     const latest = interruptions.get(String(sessionId || "global"));
     if (!latest || latest.count === count) return null;
+    const meanwhile = waitingFor === "prepare-step"
+      ? "the restart waited for the database step to finish"
+      : "the workspace was being prepared";
     if (latest.reason === "closed") {
       return {
         ok: false,
         code: "vibe64_session_closing",
-        error: "The session closed while its workspace was being prepared, so Preview did not start."
+        error: `The session closed while ${meanwhile}, so Preview did not start.`
       };
     }
     return {
       ok: false,
       code: "vibe64_preview_stopped",
-      error: "Preview was stopped while the workspace was being prepared. Use Start preview to run it again."
+      error: `Preview was stopped while ${meanwhile}. Use Start preview to run it again.`
     };
+  }
+
+  /**
+   * Waits, outside the launch lock, for a run a restart replaces to end its target's Prepare steps: they succeeded,
+   * the run ended, a Stop or the session's close came, or `limitMs` passed. Answers false only for the last.
+   * @param {string} sessionId
+   * @param {string} terminalSessionId the run in its Prepare steps
+   * @param {number} limitMs
+   * @param {number} count `launchInterruptions` when the start began
+   */
+  async function waitForLaunchPrepare(sessionId, terminalSessionId, limitMs, count) {
+    const key = String(sessionId || "global");
+    const namespace = outputTargetTerminalNamespace(sessionId);
+    const deadline = Date.now() + limitMs;
+    prepareWaits.set(key, (prepareWaits.get(key) || 0) + 1);
+    try {
+      for (;;) {
+        const terminal = readTerminalSession(terminalSessionId, { namespace, outputLimit: 1 });
+        if (terminal.ok === false || !launchTerminalIsRunning(terminal) || !launchPrepareUnfinished(terminal) ||
+            launchInterruptedSince(sessionId, count)) {
+          return true;
+        }
+        const left = deadline - Date.now();
+        if (left <= 0) return false;
+        await delay(Math.min(PREPARE_POLL_MS, left));
+      }
+    } finally {
+      const left = prepareWaits.get(key) - 1;
+      if (left > 0) prepareWaits.set(key, left);
+      else prepareWaits.delete(key);
+    }
+  }
+
+  /** Whether a restart of the session's Preview waits for its run's Prepare steps to end. */
+  function launchWaitsForPrepare(sessionId) {
+    return prepareWaits.has(String(sessionId || "global"));
   }
 
   function launchAdmissionFailure(sessionId = "", session = null) {
@@ -320,6 +372,8 @@ function createOutputTargetLaunchCoordination({
     interruptLaunches,
     launchInterruptions,
     launchInterruptedSince,
+    waitForLaunchPrepare,
+    launchWaitsForPrepare,
     throwIfLaunchInterrupted,
     launchAdmissionFailure,
     withLaunchAdmission,

@@ -22,6 +22,7 @@ import {
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
 const OUTPUT_RESULTS_READY_MARKER_PREFIX = "VIBE64_OUTPUT_RESULTS_READY_V1";
+const OUTPUT_PREPARE_DONE_MARKER_PREFIX = "VIBE64_OUTPUT_PREPARE_DONE_V1";
 const VIBE64_RUNTIME_PACKS = Object.freeze({
   awsebcli: ["awsebcli"],
   bubblewrap: ["bubblewrap"],
@@ -190,6 +191,17 @@ function outputResultsReadyMarker() {
   return `[[${OUTPUT_RESULTS_READY_MARKER_PREFIX}:${crypto.randomBytes(24).toString("hex")}]]`;
 }
 
+/**
+ * The line a target's last Prepare step prints once its Prepare steps succeeded, "" for a target without any: a restart
+ * waits for it rather than cutting a Prepare step (a migration, a seed) part way, and a Stop before it says so.
+ * @param {Array<{ role: string }>} steps
+ */
+function outputPrepareMarker(steps = []) {
+  return steps.some(({ role }) => role === "prepare")
+    ? `[[${OUTPUT_PREPARE_DONE_MARKER_PREFIX}:${crypto.randomBytes(24).toString("hex")}]]`
+    : "";
+}
+
 function outputResultsMarkerCommand(marker = "") {
   return `printf '\\n%s\\n' ${shellQuote(marker)}`;
 }
@@ -203,7 +215,10 @@ function vibe64WebOutputDescriptor(target = {}, options = {}) {
   } = options;
   const runtime = vibe64RuntimePacks(target.runtimeRequirements);
   const previewIdentityRuntime = vibe64RuntimePacks(target.previewIdentity?.runtimes);
-  const commands = (Array.isArray(target.steps) ? target.steps : []).flatMap((step) => {
+  const steps = Array.isArray(target.steps) ? target.steps : [];
+  const prepareMarker = outputPrepareMarker(steps);
+  const lastPrepare = steps.findLastIndex(({ role }) => role === "prepare");
+  const commands = steps.flatMap((step, index) => {
     const command = vibe64OutputCommand(step.argv, { host, port, parameters: target.parameterValues });
     const entry = {
       command,
@@ -211,6 +226,9 @@ function vibe64WebOutputDescriptor(target = {}, options = {}) {
       label: String(step.label || "").trim(),
       networkEnv: step.role === "run"
     };
+    if (index === lastPrepare) {
+      return [entry, { command: outputResultsMarkerCommand(prepareMarker), networkEnv: false, quiet: true }];
+    }
     return step.role === "run" && marker
       ? [
           {
@@ -230,6 +248,7 @@ function vibe64WebOutputDescriptor(target = {}, options = {}) {
       outputParameters: target.parameterValues || {},
       outputMode: target.mode,
       outputPresentationKind: "web",
+      ...(prepareMarker ? { outputPrepareMarker: prepareMarker } : {}),
       outputResultsMarker: marker,
       vibe64OutputsSource: String(target.source || "").trim(),
       vibe64RuntimeRequirements: normalizedRuntimeRequirements(target.runtimeRequirements)
@@ -247,12 +266,13 @@ function vibe64WebOutputDescriptor(target = {}, options = {}) {
   };
 }
 
-function genericOutputStartupScript(target = {}, marker = "") {
+function genericOutputStartupScript(target = {}, marker = "", prepareMarker = "") {
   const steps = Array.isArray(target.steps) ? target.steps : [];
+  const lastPrepare = steps.findLastIndex(({ role }) => role === "prepare");
   // The login shell may have reordered PATH (macOS path_helper); restore the
   // tool PATH Vibe64 resolved when it provides one.
   const lines = ["set -e", "if [ -n \"${VIBE64_TOOL_PATH:-}\" ]; then export PATH=\"$VIBE64_TOOL_PATH\"; fi"];
-  for (const step of steps) {
+  for (const [index, step] of steps.entries()) {
     if (step.role === "run") {
       continue;
     }
@@ -262,6 +282,7 @@ function genericOutputStartupScript(target = {}, marker = "") {
       `printf '[vibe64] $ %s\\n\\n' ${shellQuote(command)}`,
       command
     );
+    if (index === lastPrepare) lines.push(outputResultsMarkerCommand(prepareMarker));
   }
   if (marker) {
     lines.push(outputResultsMarkerCommand(marker));
@@ -299,8 +320,9 @@ function createVibe64GenericOutputTargetTerminalSpec({
     };
   }
   const marker = outputResultsReadyMarker();
+  const prepareMarker = outputPrepareMarker(Array.isArray(target.steps) ? target.steps : []);
   const runtime = vibe64RuntimePacks(target.runtimeRequirements);
-  const script = genericOutputStartupScript(target, marker);
+  const script = genericOutputStartupScript(target, marker, prepareMarker);
   return {
     args: ["-lc", script],
     command: "bash",
@@ -314,6 +336,7 @@ function createVibe64GenericOutputTargetTerminalSpec({
       outputParameters: target.parameterValues || {},
       outputMode: target.mode,
       outputPresentationKind: target.presentation?.kind || "none",
+      ...(prepareMarker ? { outputPrepareMarker: prepareMarker } : {}),
       outputResultsMarker: marker,
       outputTargetId: targetView.id,
       outputTargetLabel: targetView.label,

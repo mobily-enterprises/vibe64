@@ -5,6 +5,7 @@ import {
   resizeTerminalSession,
   stopTerminalSessionAndWait,
   subscribeTerminalSession,
+  updateTerminalSessionMetadata,
   writeTerminalSession
 } from "@local/vibe64-execution/server/terminalSessions";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
@@ -12,7 +13,7 @@ import { stopActiveUsageRecording } from "@local/vibe64-usage-recording/server/a
 import { currentProjectSlug, vibe64Result, outputTargetTerminalNamespace } from "./terminalShared.js";
 import { readOutputResult, removeOutputResults } from "./outputResults.js";
 import { writePreviewStopState } from "./outputTargetMetadata.js";
-import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
+import { launchPrepareUnfinished, launchTerminalIsRunning } from "./launchPreviewReadiness.js";
 import { latestLaunchTerminal } from "./launchPreviewStatus.js";
 import { readLaunchContext } from "./outputTargetLaunchContext.js";
 
@@ -140,6 +141,12 @@ function createOutputTargetTerminalSessions({
       let result = { ok: true, id: requestedId, running: false, status: "exited" };
       try {
         if (activeId && launchTerminalIsRunning(active)) {
+          // Stop is immediate, in a Prepare step too: the stopped run then says that step was cut.
+          if (launchPrepareUnfinished(active)) {
+            updateTerminalSessionMetadata(activeId, { launchPrepareCut: true }, {
+              namespace: outputTargetTerminalNamespace(sessionId)
+            });
+          }
           result = await stopTerminalSessionAndWait(activeId, {
             namespace: outputTargetTerminalNamespace(sessionId)
           });

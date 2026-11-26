@@ -254,9 +254,11 @@ only a new process serves the prepared workspace. `serviceWorkspacePreparation.j
 follows each run it starts, so every path that runs setup again is covered: Update
 and its recovery, the end of a turn, Prepare workspace and Retry, an AI task's
 check, a Preview start, a starter and renewal. It calls the Preview's
-`restartPreviewAfterWorkspaceSetup` in `outputTargetLaunchStart.js`, which, in the
-Preview's launch queue, restarts it through the ordinary restart only when its
-process started before the run finished. A Preview started after the run, including
+`restartPreviewAfterWorkspaceSetup` in `outputTargetLaunchRequests.js`, which, in
+the Preview's launch queue, restarts it through the ordinary restart only when its
+process started before the run finished. An agent's or a tab's restart asked for
+while it waits is satisfied by the run it starts, so the run's Prepare steps are
+not cut. A Preview started after the run, including
 one whose own start ran it, is therefore not restarted twice. A stopped Preview
 stays stopped, other outputs and a Preview that browser tests own are left alone,
 and a failed or cancelled run restarts nothing and keeps its diagnostic.

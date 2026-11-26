@@ -31,6 +31,54 @@ replaces it; agent ensure/restart and the restart after workspace setup name non
 and keep their own rules. Tabs send it with every start, so a **Start preview**,
 restart or automatic start pressed on an older status never ends a Preview that an
 agent's ensure or another tab began meanwhile.
+
+A restart (`restartPreview` or `forceRestart`) is satisfied by any run of what it
+asks for (its target, and its parameters when it names them) that started after
+it was asked for: `startTerminal` takes the request's id and time
+(`requestId`, `requestedAt`) before the start waits for the launch queue, and a
+start that then finds such a run returns it and logs `restart_satisfied`
+(`keptRunReason` in `outputTargetLaunchRequests.js`, which also decides
+`start_kept_running`). Two
+restarts close together, or the restart after workspace setup and an agent's
+`preview restart` asked for while it waited, give one new run; a restart asked
+for after a run started still replaces it.
+
+A restart never cuts a run's Prepare steps part way (a migration, a seed): a
+target with Prepare steps prints a line once its last one succeeded
+(`outputPrepareMarker`, `VIBE64_OUTPUT_PREPARE_DONE_V1`), which the run's output
+watch records as `launchPrepareFinished`. A start that would replace a running
+run still before that line waits for it outside the launch queue
+(`waitForLaunchPrepare`, waiting for `prepare-step`), until the steps succeed or
+fail, the run ends, a Stop or the session's close comes, or the wait passes
+`PREPARE_WAIT_MS`. Prepare steps declare no time limit of their own, so that
+bound is the five minutes a Preview start already has to become ready
+(`WEB_LAUNCH_READINESS_TIMEOUT_SECONDS`), and past it the restart replaces the
+run anyway: a restart always ends in a run or a clear failure, never parked. It
+waits once per run, then starts again from its checks, and its run says so
+(`waitedForPrepare`, and `prepareCut` when the steps were still running).
+Meanwhile the outputs read says "Waiting for the database step to finish, then
+Preview restarts." (`restart_waiting_for_prepare`), and so does
+`vibe64-helper preview status` (`Preview note:`); `preview restart --wait` says
+it waited, or that it cut the step. Stop stays immediate: Stop during the
+Prepare steps marks the run `launchPrepareCut` and stops it at once, the stopped
+Preview reads "Preview was stopped during its database step (Prepare), which
+may be half done." (`prepare_cut`), and a restart waiting for those steps ends
+`vibe64_preview_stopped`.
+
+Each start records who asked (`requestedBy`: `http` or `assistant-tool` for the
+start action, by its channel, `agent-preview-command`, `workspace-setup`,
+`usage-recording` or `preview-test`) in its `launchRequest`: its id and time,
+`automatic`, `forceRestart`, `restartPreview` and `replacesTerminalSessionId`,
+with the runs it replaces (`replaced`: terminal, workflow, start time and
+`prepareCut`). The request goes to the workflow it starts (`request`, which a
+managed execution provider keeps in its workflow record) and its id to the
+run's metadata (`launchRequestId`). Each run a start replaces is logged once at
+warn level (`vibe64.preview.run_replaced`) and closes with the reason
+`superseded:<the replacing start's id>`, which its close and stop hooks, its
+workflow's finish (`reason`) and its `process_stopped` diagnostic
+(`stopReason`) carry. The replacing start's workflow does not exist yet when
+the run closes: a start closes the run it replaces before it is admitted, so
+the admission sees that run's resources free.
 An unchanged target, parameters and configured environment reuse the original
 running terminal and resource workflow. The web spec supplies an allocation-free
 environment fingerprint: generated loopback ports do not change that identity,
@@ -96,6 +144,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/outputTargetTerminalState.js`
 - `packages/vibe64-terminals/src/server/outputTargetLaunchCoordination.js`
 - `packages/vibe64-terminals/src/server/outputTargetLaunchStart.js`
+- `packages/vibe64-terminals/src/server/outputTargetLaunchRequests.js`
 - `packages/vibe64-terminals/src/server/outputTargetPreviewTests.js`
 - `packages/vibe64-terminals/src/server/outputTargetLaunchStatus.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminalSessions.js`
@@ -126,6 +175,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `tests/server/agentPreviewBrowserProcessGroups.unit.test.js`
 - `tests/server/agentPreviewOpenCommand.unit.test.js`
 - `tests/server/previewPreparation.integration.test.js`
+- `tests/server/previewRestartPrepare.integration.test.js`
 - `tests/client/vibe64OutputControls.vitest.js`
 - `tests/client/vibe64OutputControlsSurface.vitest.js`
 - `tests/server/launchPreviewCrossSiteCookies.unit.test.js`
@@ -556,7 +606,7 @@ A start the page names (`startId`, `src/lib/vibe64LaunchStart.js`) runs as
 held work (`@local/vibe64-core/server/heldWork`, in `outputTargetTerminal.js`):
 it answers with its run when that comes within two seconds, and otherwise
 `{ ok: true, starting: true, startId, waitingFor }` (`launch-queue`,
-`workspace-preparation` or `starting`). A repeat of it joins it, or reads its
+`workspace-preparation`, `prepare-step` or `starting`). A repeat of it joins it, or reads its
 outcome once it ended, and never starts it again. The outputs read reports the
 session's latest five such starts as `launchStarts` (`starting` with
 `waitingFor`, `started` with `terminalSessionId`, or `failed` with the refusal's

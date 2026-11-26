@@ -19,6 +19,13 @@ const execFileAsync = promisify(execFile);
 export async function createPreviewPreparationFixture({
   // The project's logger, which also reports the session store's lock events.
   logger = console,
+  // The terminals service's logger, which logs each Preview run a start replaces.
+  terminalsLogger = silentLogger,
+  // A Prepare step `Migrate` before the Preview's Run step, as a migration is: it logs `begun` and, once it
+  // finished, `done` to migrate-log.txt, waits while hold-migrate exists and fails while fail-migrate does.
+  outputPrepare = false,
+  // How long a restart waits at most for the Preview's Prepare steps.
+  previewPrepareWaitMs,
   publishSessionChanged = {}
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-preview-preparation-"));
@@ -57,7 +64,7 @@ export async function createPreviewPreparationFixture({
 - Default.
 - Mode: \`interactive\`
 - Runtimes: \`nodejs\`
-- Run \`Serve\`: \`node\` \`preview.cjs\` \`{host}\` \`{port}\`
+${outputPrepare ? "- Prepare `Migrate`: `node` `migrate.cjs`\n" : ""}- Run \`Serve\`: \`node\` \`preview.cjs\` \`{host}\` \`{port}\`
 
 #### Presentation
 - Kind: \`web\`
@@ -74,6 +81,16 @@ const check = () => {
   if (fs.existsSync("fail-setup")) process.exit(1);
   const runs = fs.readFileSync("setup-runs.txt", "utf8").split("\\n").filter(Boolean).length;
   fs.writeFileSync("installed.txt", "install " + runs);
+};
+check();
+`);
+  if (outputPrepare) await writeFile(path.join(sourceRoot, "migrate.cjs"), `
+const fs = require("node:fs");
+fs.appendFileSync("migrate-log.txt", "begun\\n");
+const check = () => {
+  if (fs.existsSync("hold-migrate")) return setTimeout(check, 20);
+  if (fs.existsSync("fail-migrate")) process.exit(1);
+  fs.appendFileSync("migrate-log.txt", "done\\n");
 };
 check();
 `);
@@ -113,7 +130,8 @@ listen();
     codexTerminalController: { codexToolHomeRequired: false },
     // The server composes its features with the process env and its own settings.
     env: { ...process.env, VIBE64_RUNTIME_NAMESPACE: "preview-preparation-test" },
-    logger: silentLogger,
+    logger: terminalsLogger,
+    previewPrepareWaitMs,
     project,
     publishSessionChanged
   }));
@@ -130,6 +148,10 @@ listen();
       if (session.workspaceSetup.status !== "succeeded") {
         throw new Error(JSON.stringify(session.workspaceSetup));
       }
+    },
+    /** What the Preview's Prepare step logged, one `begun` per start and one `done` per finish. */
+    async migrateLog() {
+      return readFile(path.join(sourceRoot, "migrate-log.txt"), "utf8").catch(() => "");
     },
     async setupRuns() {
       const source = await readFile(path.join(sourceRoot, "setup-runs.txt"), "utf8").catch(() => "");
@@ -150,6 +172,7 @@ listen();
     },
     async close() {
       await rm(path.join(sourceRoot, "hold-setup"), { force: true });
+      await rm(path.join(sourceRoot, "hold-migrate"), { force: true });
       await terminals.closeSessionNonAgentTerminals(sessionId);
       await terminals.close();
       await rm(root, { force: true, recursive: true });

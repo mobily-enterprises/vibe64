@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { beginTerminalNamespaceOperation, updateTerminalSessionMetadata } from "@local/vibe64-execution/server/terminalSessions";
 import { terminalNoGithubActorMetadata } from "@local/studio-terminal-core/server/terminalOwnership";
 import {
@@ -50,7 +52,6 @@ import {
   managedPreviewLaunchPlan
 } from "./outputTargetLaunchContext.js";
 import {
-  cleanupSupersededLaunchTerminals,
   closeStoppedLaunchTerminals,
   composeLaunchTerminalEnvironment,
   launchActionsChanged,
@@ -63,6 +64,18 @@ import {
   releaseLaunchSpecReservation,
   reusableLaunchTerminal
 } from "./outputTargetLaunchTerminals.js";
+import {
+  PREPARE_RUNNING,
+  PREPARE_WAIT_MS,
+  PREPARING,
+  keptRunReason,
+  launchRequest,
+  managedPreviewRequests,
+  prepareFinishedWatch,
+  prepareToWaitFor,
+  replaceRunningRuns,
+  startWhenPrepared
+} from "./outputTargetLaunchRequests.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 
@@ -73,42 +86,6 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 /** @typedef {import("./types.js").ProjectServices} ProjectServices */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("./types.js").ProjectServicesEnsure} ProjectServicesEnsure */
-
-// A start's answer, inside the launch lock, that the workspace preparation runs: the start waits for it outside.
-const PREPARING = Symbol("preparing");
-
-/**
- * Starts an output target once the session's workspace is prepared. A start waits for a running preparation outside
- * the session's launch lock, so the session's other Preview requests answer meanwhile, then starts again from its
- * checks without asking for another. A Stop or a close meanwhile, or while the start holds the lock, ends it
- * unstarted at its next step. `stage` names what it waits on: `launch-queue` (the lock), `workspace-preparation`,
- * then `starting`.
- * @param {OutputTargetLaunchCoordination} launchCoordination
- * @param {(sessionId: string, input: object, controls: object) => Promise<any>} startOnce
- * @param {string} sessionId
- * @param {object} input
- * @param {(name: string) => void} stage
- */
-async function startWhenPrepared(launchCoordination, startOnce, sessionId, input, stage) {
-  const interruptions = launchCoordination.launchInterruptions(sessionId);
-  let prepared = false;
-  for (;;) {
-    stage("launch-queue");
-    const attempt = await startOnce(sessionId, input, { interruptions, prepared, stage });
-    if (!attempt?.[PREPARING]) return attempt;
-    stage("workspace-preparation");
-    let failure;
-    try {
-      failure = await attempt[PREPARING].then(() => null, error => error);
-    } finally {
-      attempt.admission.release();
-    }
-    if (failure) return vibe64Result(() => Promise.reject(failure));
-    const interrupted = launchCoordination.launchInterruptedSince(sessionId, interruptions);
-    if (interrupted) return interrupted;
-    prepared = true;
-  }
-}
 
 function previewStoppedRefusal() {
   return { ok: false, code: "vibe64_preview_stopped", error: "Preview was stopped explicitly. Use Start preview to run it again." };
@@ -142,6 +119,8 @@ function previewStartedBefore(sessionId, time) {
  * @param {typeof import("./resourceWorkflow.js").startResourceWorkflow} dependencies.startWorkflow
  * @param {typeof import("@local/vibe64-execution/server").finishVibe64Workflow} dependencies.finishWorkflow
  * @param {typeof import("@local/vibe64-execution/server").setVibe64WorkflowPhase} dependencies.setWorkflowPhase
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} [dependencies.logger] where each replaced run is logged
+ * @param {number} [dependencies.prepareWaitMs] how long a restart waits at most for its run's Prepare steps
  */
 function createOutputTargetLaunchStart({
   state,
@@ -154,7 +133,9 @@ function createOutputTargetLaunchStart({
   runCommand,
   startWorkflow,
   finishWorkflow,
-  setWorkflowPhase
+  setWorkflowPhase,
+  logger = silentLogger,
+  prepareWaitMs = PREPARE_WAIT_MS
 }) {
   /**
    * An ended launch terminal gives up its Preview proxy and the session's
@@ -171,40 +152,16 @@ function createOutputTargetLaunchStart({
     }
   }
 
-  function ensurePreview(sessionId, input = {}) {
-    return startTerminal(sessionId, {
-      outputTargetId: input.outputTargetId,
-      ensurePreview: true
-    });
-  }
-
-  function restartPreview(sessionId) {
-    return startTerminal(sessionId, {
-      restartPreview: true
-    });
-  }
-
   /**
-   * A managed Preview whose process started before the session's workspace
-   * setup finished restarts, so it runs on what that setup installed. One
-   * started after it, a stopped Preview and other outputs are left alone.
-   * @param {string} sessionId
-   * @param {{ finishedAt: string }} setup the setup that succeeded
+   * The start takes its id and the time it was asked for before it waits for the launch lock (`launchRequest`).
+   * @param {{ stage?: (name: string) => void }} [controls]
    */
-  function restartPreviewAfterWorkspaceSetup(sessionId, { finishedAt }) {
-    return startTerminal(sessionId, {
-      automatic: true,
-      restartIfStartedBefore: finishedAt,
-      restartPreview: true
-    });
-  }
-
-  /** @param {{ stage?: (name: string) => void }} [controls] */
   function startTerminal(sessionId, input = {}, { stage = doNothing } = {}) {
-    return startWhenPrepared(launchCoordination, startOnce, sessionId, input, stage);
+    const request = { ...input, requestId: randomUUID(), requestedAt: new Date().toISOString() };
+    return startWhenPrepared(launchCoordination, startOnce, sessionId, request, stage, prepareWaitMs);
   }
 
-  function startOnce(sessionId, input, { interruptions, prepared, stage }) {
+  function startOnce(sessionId, input, { interruptions, prepared, preparesWaited, stage }) {
     return vibe64Result(async () => launchCoordination.withStartLock(sessionId, async () => {
       if (input.restartIfStartedBefore !== undefined && !previewStartedBefore(sessionId, input.restartIfStartedBefore)) {
         return { ok: true, restarted: false };
@@ -261,22 +218,20 @@ function createOutputTargetLaunchStart({
           }
         }
         const cwd = context.sessionSourceRoot;
-        // A start decided from what a view showed names the run it saw, "" when it saw none; an automatic one
-        // that names none saw none. Another run starting or running now means that view is out of date: the
-        // run is returned as it is, as ensure returns it, never replaced. The restart after setup is deliberate.
-        const seenTerminalId = input.replacesTerminalSessionId ??
-          (input.automatic === true && input.restartPreview !== true ? "" : undefined);
+        // The running run is returned as it is, as ensure returns it, when the start's view of it is out of date or
+        // a restart is satisfied by it.
         const runningTerminal = latestLaunchTerminal(sessionId);
-        if (seenTerminalId !== undefined && runningTerminal && launchTerminalIsRunning(runningTerminal) &&
-            runningTerminal.id !== normalizeText(seenTerminalId)) {
+        const keptReason = keptRunReason(input, runningTerminal);
+        if (keptReason) {
           await writePreviewDiagnostic(context.session, {
             cwd,
             details: {
-              replacesTerminalSessionId: normalizeText(seenTerminalId),
+              replacesTerminalSessionId: normalizeText(input.replacesTerminalSessionId),
+              request: launchRequest(input),
               requestedOutputTargetId: normalizeText(input.outputTargetId)
             },
             outputTargetId: runningTerminal.metadata?.outputTargetId,
-            reason: "start_kept_running",
+            reason: keptReason,
             sessionId,
             status: "running",
             terminalSessionId: runningTerminal.id
@@ -320,6 +275,8 @@ function createOutputTargetLaunchStart({
           forceRestart = launchPlan.forceRestart;
           outputTargetId = launchPlan.outputTargetId;
         }
+        const preparing = prepareToWaitFor(sessionId, forceRestart, preparesWaited);
+        if (preparing) return { [PREPARE_RUNNING]: preparing };
         const diagnosticBase = {
           cwd,
           outputTargetId,
@@ -391,6 +348,7 @@ function createOutputTargetLaunchStart({
         let resourceWorkflow = null;
         let outputResultsMarker = "";
         let readinessMarker = "";
+        const request = launchRequest(input, forceRestart);
         try {
           const terminalEnvRecords = await loadProjectExecutionEnvRecords({
             includeResourceConfiguration: true,
@@ -432,6 +390,7 @@ function createOutputTargetLaunchStart({
           });
           readinessMarker = readinessMarkerFromSpec(spec);
           outputResultsMarker = String(spec.metadata?.outputResultsMarker || "").trim();
+          const watchPrepare = prepareFinishedWatch(spec.metadata?.outputPrepareMarker);
           const previewPublicOrigin = webOutput
             ? previewPublicOriginForLaunch({
               env,
@@ -450,9 +409,12 @@ function createOutputTargetLaunchStart({
               namespace,
               spec
             });
-          await cleanupSupersededLaunchTerminals({
+          await replaceRunningRuns({
             launchPreviewProxies: state.launchPreviewProxies,
+            logger,
             namespace,
+            outputTargetId: outputTarget.id,
+            request,
             reusableTerminal: existingReusableTerminal,
             sessionId
           });
@@ -477,6 +439,7 @@ function createOutputTargetLaunchStart({
               environment: testRun && !testRun.restoring && outputTarget.id === testRun.targetId ? "test" : "development",
               kind: execution.kind,
               label: execution.label,
+              request,
               env
             });
             if (resourceWorkflow?.ok === false) {
@@ -521,6 +484,7 @@ function createOutputTargetLaunchStart({
                   ...(spec.metadata || {}),
                   attemptedCommand: commandPreview,
                   envHash: launchEnvHash,
+                  launchRequestId: input.requestId,
                   ...(launchRestartBaseline ? { launchRestartBaseline } : {}),
                   outputTargetId: outputTarget.id,
                   outputTargetLabel: outputTarget.label,
@@ -568,6 +532,7 @@ function createOutputTargetLaunchStart({
                   } finally {
                     await finishWorkflow(resourceWorkflow?.workflow?.id, {
                       outcome: event.reason !== "exit" ? "stopped" : event.exitCode === 0 ? "succeeded" : "failed",
+                      reason: event.reason,
                       defer: true
                     });
                   }
@@ -579,6 +544,7 @@ function createOutputTargetLaunchStart({
                     commandPreview,
                     exitCode: event.exitCode ?? null,
                     outputTargetId: outputTarget.id,
+                    details: { stopReason: event.reason },
                     outputTail: event.output,
                     reason: "process_stopped",
                     status: "stopped",
@@ -591,6 +557,7 @@ function createOutputTargetLaunchStart({
                   }
                 }),
                 onOutput: (event) => void inCallbackContext(({ output, session: runningTerminalSession, updateMetadata }) => {
+                  watchPrepare(event);
                   const actions = launchActionsFromOutput(output);
                   if (actions.length > 0 && launchActionsChanged(runningTerminalSession.metadata?.actions, actions)) {
                     updateMetadata({
@@ -719,15 +686,14 @@ function createOutputTargetLaunchStart({
         if (terminalSession?.ok !== false && stopState.stopped && !(testRun && input.previewTestRun === testRun)) {
           await writePreviewStopState(context.store, sessionId, { stopped: false });
         }
-        return terminalSession;
+        const prepareCut = request.replaced?.some((replaced) => replaced.prepareCut) && terminalSession?.ok !== false;
+        return prepareCut ? { ...terminalSession, prepareCut: true } : terminalSession;
       });
     }));
   }
 
   return Object.freeze({
-    ensurePreview,
-    restartPreview,
-    restartPreviewAfterWorkspaceSetup,
+    ...managedPreviewRequests(startTerminal),
     startTerminal
   });
 }

@@ -71,6 +71,15 @@ function launchTerminalIsRunning(terminal = {}) {
   return terminal.status === "running" || terminal.status === "closing";
 }
 
+/**
+ * Whether a launch has not finished its target's Prepare steps: it has some (`outputPrepareMarker`) and has not yet
+ * printed the line the last one prints once they succeeded (`launchPrepareFinished`).
+ * @param {{ metadata?: object }} terminal
+ */
+function launchPrepareUnfinished(terminal = {}) {
+  return Boolean(terminal.metadata?.outputPrepareMarker) && terminal.metadata?.launchPrepareFinished !== true;
+}
+
 function launchReadinessMarkerLineSeen(output = "", readinessMarker = "") {
   const marker = String(readinessMarker || "").trim();
   if (!marker) {
@@ -363,6 +372,7 @@ async function ensureLaunchPreviewProxy({
 
 export {
   ensureLaunchPreviewProxy,
+  launchPrepareUnfinished,
   launchReadinessMarkerLineSeen,
   launchTerminalIsRunning,
   markLaunchTerminalReady,

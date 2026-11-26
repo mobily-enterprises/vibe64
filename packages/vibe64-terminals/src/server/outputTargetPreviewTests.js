@@ -91,6 +91,7 @@ function createOutputTargetPreviewTests({
       const start = () => launchStart.startTerminal(sessionId, {
         ensurePreview: true,
         outputTargetId: targetId,
+        requestedBy: "preview-test",
         ...(options?.restoring ? { outputParameters: previous.outputParameters } : {}),
         previewTestRun: testRun
       });

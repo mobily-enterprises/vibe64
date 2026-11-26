@@ -7,6 +7,8 @@ import { normalizeObject, normalizeText } from "@jskit-ai/kernel/shared/support/
 
 const WAITING_LABELS = Object.freeze({
   "launch-queue": "Waiting for another Preview change to finish",
+  // A restart whose run is in its target's Prepare steps waits for them rather than cut one.
+  "prepare-step": "Waiting for the database step to finish",
   "workspace-preparation": "Waiting for the workspace preparation to finish",
   received: "Starting Preview",
   starting: "Starting Preview",
