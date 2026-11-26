@@ -102,8 +102,9 @@ failing checks. Take it only after the whole-suite run, asked for once at the
 end, passed with the person's OK, or after the person explicitly accepted
 finishing without it, as `PASS REPORT` says; until the end, run focused checks
 only. Work as the engineering approach's "Your own test loop" says: fix in
-groups, run the narrow files that cover each group once, and leave the full
-run to the pass's end.
+groups, run the narrow files that cover each group once, then lint and the
+tests covering the pass's changes in one run, and leave the full run to the
+pass's end.
 
 ## Deep run
 

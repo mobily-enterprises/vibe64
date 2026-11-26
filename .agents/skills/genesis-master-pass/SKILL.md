@@ -1,14 +1,15 @@
 ---
 name: genesis-master-pass
-description: Run the project's passes deeply, one after another, through an explicitly requested Master pass over the whole app or the changes since its last completed run, every pass or the ones named, each as that pass's own Deep run, committed with its focused checks passing before the next starts and one whole-suite run at the end only with the person's OK, with a ledger that lets an interrupted Master pass continue and one combined report. Use when asked for a Master pass, to run every pass, or to run several passes deeply in turn.
+description: Run the project's passes deeply, one after another, through an explicitly requested Master pass over the whole app or the changes since its last completed run, every pass or the ones named, each as that pass's own Deep run, committed with lint and the tests covering its changes passing in one run before the next starts and one whole-suite run at the end only with the person's OK, with a ledger that lets an interrupted Master pass continue and one combined report. Use when asked for a Master pass, to run every pass, or to run several passes deeply in turn.
 ---
 
 # Genesis Master pass
 
 Run the selected passes deeply, one after another, so the software comes out of
-each one committed, with its focused checks passing, before the next starts,
-and the whole suite runs once, at the end, only with the person's OK. A Master
-pass is explicit: never run it merely because implementation finished.
+each one committed, with lint and the tests covering its changes passing in one
+run, before the next starts, and the whole suite runs once, at the end, only
+with the person's OK, as the engineering approach's "Your own test loop" says.
+A Master pass is explicit: never run it merely because implementation finished.
 
 Resolve the invocation before running the first Genesis operation. Do not use a
 Genesis operation or `genesis --version` as an availability probe.
@@ -84,7 +85,7 @@ questions, done or skipped), the path of its checklist (the one its `DEEP RUN`
 names), its commits and its checklist count, and, at the end, the whole-suite
 question, the person's answer and the run's result. Update it as each pass
 starts and finishes. A pass is done in the ledger once its work is committed
-and its focused checks pass; no pass needs a whole run of its own.
+and its run of lint and its tests passes; no pass needs a whole run of its own.
 
 When a ledger for the same request is already there and not finished, continue
 from it: passes marked done stay done, a pass marked running or questions
@@ -111,9 +112,11 @@ For each listed pass, in order:
    the same time, because each one starts from the tree the last one committed.
 4. Checkpoint before the next pass starts: every change of this pass is
    committed, in small commits of one checklist item or concern each with
-   messages that say what changed and why; nothing is left uncommitted; and the
-   pass's focused checks pass on the committed tree. Record its commits and
-   checklist count in the ledger and mark it done.
+   messages that say what changed and why; nothing is left uncommitted; and
+   lint and the tests covering this pass's changes pass on the committed tree,
+   in one run, as the engineering approach's "Your own test loop" says after
+   each pass (after a Data pass, the database tests too). Record its commits
+   and checklist count in the ledger and mark it done.
 
 Each pass ends as its `PASS REPORT` says: finished, or with questions for the
 person. A pass with questions, including a blocker such as failing checks it

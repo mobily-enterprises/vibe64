@@ -381,6 +381,9 @@ runs only the narrowest test that covers the change, and the browser or wider
 checks for it once, when the step is done. New tests are seen to fail in one
 batch: several behaviors broken, or the fix reverted once, in one run. One
 started server, prepared database and set of fixtures serve several runs.
+After each pass it runs lint and only the tests covering that pass's changes,
+in one run (after a Data pass, the database tests too), and the whole suite
+once, at the end, as the baseline's "Your own test loop" says.
 
 **Check:** count your own runs and what each costs. A check rerun after each
 small edit, or one that takes minutes, runs files one at a time, rebuilds its
@@ -395,6 +398,10 @@ or lighten a pass, plan step or requested check to save time.
   deliberate break per run to see each new test fail, and a 25 s test database
   restore several times per break. The agent then proposed lightening the
   remaining passes instead of fixing its loop.
+- A Master pass of eight passes meant to run the whole suite, a 75-minute
+  database suite and browser specs, after each one: hours of the same run.
+  Each pass needed lint and its own tests; the whole suite runs once, at the
+  end.
 
 **Outer limit:** an agent's own check that takes minutes and runs again after
 every change, or a pass whose time is mostly reruns of the same check.
