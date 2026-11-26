@@ -40,6 +40,9 @@ jobs:
       - id: lint
         name: Lint
         run: npm run lint
+      - id: genesis-check
+        name: Genesis check
+        run: npm run verify:genesis
       - id: client-tests
         name: Client tests
         run: npm run test:client

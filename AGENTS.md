@@ -320,6 +320,10 @@ overlap a test run already active for this checkout.
   in shards: `npm run test:full -- --shard=I/N` runs every Nth server test
   file from the Ith (Node's `--test-shard`), so the N shards together run
   every file once.
+- `npm run verify` runs the project's own `genesis check` with the pinned
+  Genesis (`npm run verify:genesis`, `tooling/verify-genesis-check.mjs`): an
+  invalid Program module or managed Agent Skill copies that are not that
+  Genesis's (`genesis skills sync` refreshes them) fail it.
 - Every test process, `npm run test:full` included, loads
   `tooling/test-host-path-guard.mjs` and runs with `APP_ENV=test`, as
   `jskit test` gives it, whatever the shell says; a shell whose `APP_ENV` is

@@ -239,6 +239,6 @@ test("the full suites run under the machine's test budget", async () => {
   }
   assert.equal(
     manifest.scripts.verify,
-    "npm run lint && npm run test:full && npm run test:client && npm run build && npm run verify:packages"
+    "npm run lint && npm run verify:genesis && npm run test:full && npm run test:client && npm run build && npm run verify:packages"
   );
 });

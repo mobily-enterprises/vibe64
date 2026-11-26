@@ -11,7 +11,7 @@ const APP_ROOT = path.resolve(__dirname, "../..");
 const EXPECTED_APPLICATION_SCRIPTS = Object.freeze({
   "jskit:check": "jskit check",
   "jskit:update": "npx --yes @jskit-ai/jskit-catalog@latest update",
-  verify: "npm run lint && npm run test:full && npm run test:client && npm run build && npm run verify:packages"
+  verify: "npm run lint && npm run verify:genesis && npm run test:full && npm run test:client && npm run build && npm run verify:packages"
 });
 
 const REQUIRED_TOP_LEVEL_ENTRIES = Object.freeze([
