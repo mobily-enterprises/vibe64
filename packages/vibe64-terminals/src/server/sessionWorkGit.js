@@ -11,7 +11,8 @@ import {
   normalizeRepositoryMode,
   sessionRepositoryProject
 } from "@local/vibe64-core/server/projectRepository";
-import { checkpointRefs, vibe64Host, writeGitWorktreeTree } from "@local/vibe64-execution/server";
+import { checkpointRefs, writeGitWorktreeTree } from "@local/vibe64-execution/server/gitTurnCheckpoint";
+import { vibe64Host } from "@local/vibe64-execution/server/hostProfile";
 import { parseGitNameStatusZ } from "./gitRecords.js";
 import {
   commandProject,

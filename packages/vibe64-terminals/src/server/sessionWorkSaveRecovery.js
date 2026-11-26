@@ -2,7 +2,7 @@
 
 import crypto from "node:crypto";
 import { PROJECT_REPOSITORY_MODE_GITHUB } from "@local/vibe64-core/server/projectRepository";
-import { runVibe64Command } from "@local/vibe64-execution/server";
+import { runVibe64Command } from "./managedCommandRunner.js";
 import {
   commitTree,
   optionalGitOutput,

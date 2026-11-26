@@ -2,7 +2,8 @@
 
 import { sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { repositoryUpdateRelationship, repositoryUpdateStrategy } from "@local/vibe64-core/shared";
-import { runVibe64Command, writeGitWorktreeTree } from "@local/vibe64-execution/server";
+import { runVibe64Command } from "./managedCommandRunner.js";
+import { writeGitWorktreeTree } from "@local/vibe64-execution/server/gitTurnCheckpoint";
 import {
   DEFAULT_CHANGE_DIFF_LINE_LIMIT,
   DEFAULT_CHANGE_FILE_LIMIT,

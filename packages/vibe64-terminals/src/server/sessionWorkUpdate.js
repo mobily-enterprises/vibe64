@@ -3,12 +3,9 @@
 import crypto from "node:crypto";
 import { PROJECT_REPOSITORY_MODE_LOCAL_SOURCE } from "@local/vibe64-core/server/projectRepository";
 import { repositoryUpdateRelationship, repositoryUpdateStrategy } from "@local/vibe64-core/shared";
-import {
-  createGitTurnCheckpoint,
-  executionCleanupRequired,
-  runVibe64Command,
-  writeGitWorktreeTree
-} from "@local/vibe64-execution/server";
+import { runVibe64Command } from "./managedCommandRunner.js";
+import { createGitTurnCheckpoint, writeGitWorktreeTree } from "@local/vibe64-execution/server/gitTurnCheckpoint";
+import { executionCleanupRequired } from "@local/vibe64-execution/server/result";
 import { incomingFileCount, incomingVersionsBetween } from "./sessionNewerSaved.js";
 import {
   assertBranch,

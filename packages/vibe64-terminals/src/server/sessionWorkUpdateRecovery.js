@@ -3,7 +3,8 @@
 import crypto from "node:crypto";
 import { access } from "node:fs/promises";
 import path from "node:path";
-import { runVibe64Command, writeGitWorktreeTree } from "@local/vibe64-execution/server";
+import { runVibe64Command } from "./managedCommandRunner.js";
+import { writeGitWorktreeTree } from "@local/vibe64-execution/server/gitTurnCheckpoint";
 import {
   commandProject,
   commitIsAncestor,

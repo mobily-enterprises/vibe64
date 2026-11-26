@@ -7,7 +7,7 @@ import {
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT
 } from "@local/vibe64-core/server/projectRepository";
-import { githubMirrorRefreshInvocation } from "@local/vibe64-execution/server";
+import { githubMirrorRefreshInvocation } from "@local/vibe64-execution/server/repositoryStorage";
 import {
   git,
   gitOutput,
