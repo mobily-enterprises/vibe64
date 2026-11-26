@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { existsSync, openSync, readFileSync, readdirSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,6 +49,11 @@ function events(child) {
 async function spawnerPid() {
   const { stdout } = await execFileCommand("sh", ["-c", "echo $PPID"], { env });
   return Number(stdout.trim());
+}
+
+/** Holds this process's event loop, as a busy editor's is held: it reads nothing from its spawner meanwhile. */
+function holdEventLoop(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
 
 async function waitUntil(check, timeoutMs = 5_000) {
@@ -163,6 +168,46 @@ test("a spawner that dies mid-command fails its commands naming it, their groups
   assert.notEqual(Number(next.stdout.trim()), deadSpawner);
   assert.notEqual(Number(next.stdout.trim()), process.pid);
   assert.match(readFileSync(`/proc/${Number(next.stdout.trim())}/cmdline`, "utf8"), /commandSpawnerProcess\.js/u);
+});
+
+test("a spawner that dies with output still waiting for the editor leaves no command running unknown to it, and the commands it reported end as usual", linux, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-spawner-backlog-"));
+  const reported = path.join(root, "reported.pid");
+  const unreported = path.join(root, "unreported.pid");
+  t.after(async () => {
+    for (const file of [reported, unreported]) {
+      if (existsSync(file)) {
+        try {
+          process.kill(-Number(readFileSync(file, "utf8")), "SIGKILL");
+        } catch {
+          // Already ended.
+        }
+      }
+    }
+    await rm(root, { recursive: true, force: true });
+  });
+  const spawner = await spawnerPid();
+  // While the editor reads nothing, a command fills the channel with output: the spawner's own queue holds what the
+  // socket cannot, behind which an answer would wait.
+  const flooding = runCaptureCommand("sh", ["-c", `echo $$ > ${reported}; head -c 8000000 /dev/zero; exec sleep 30`], {
+    env,
+    timeout: 30_000
+  });
+  holdEventLoop(1_000);
+  const late = spawnCommand("sh", ["-c", `echo $$ > ${unreported}; exec sleep 30`], { env });
+  const lateFailure = new Promise((resolve) => late.once("error", resolve));
+  holdEventLoop(1_000);
+  process.kill(spawner, "SIGKILL");
+  holdEventLoop(200);
+
+  // A command the editor does not know never started.
+  assert.equal((await lateFailure).code, COMMAND_SPAWNER_FAILED);
+  const started = existsSync(unreported) ? Number(await readFile(unreported, "utf8")) : undefined;
+  assert.equal(late.pid, started, "a command that started is one the editor knows, and one it does not know never started");
+  // The command whose start was reported fails naming the spawner, and its group is ended, as for any spawner death.
+  const flooded = await flooding;
+  assert.equal(flooded.code, COMMAND_SPAWNER_FAILED);
+  assert.equal(await processGroupHasLiveMember(Number(await readFile(reported, "utf8"))), false);
 });
 
 test("a spawner that stops answering is stopped, and the command waiting on it fails naming it", { ...posix, timeout: 30_000 }, async () => {
