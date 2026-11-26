@@ -58,9 +58,9 @@ from the plan itself each time it changes:
 | **Plan: Senior review starts when this answer ends** | Another answer came before the plan's next step (here Senior's review; also **Plan: item 2 of 6, Replies join their thread, starts when this answer ends** or a pass): it starts by itself once that answer ends (see [Auto workflow](auto-workflow.md)) |
 | **Plan: pass Security (3 of 6)** | The plan is at its third pass of six |
 | **Plan: needs you (2 questions)** | The chat waits for your answers |
-| **Plan: paused, Continue implementation to resume** | Paused; the line names the button above it, such as **Continue review** or **Check delivery** |
-| **Plan: paused · Continue implementation is available when this answer ends** | Paused while the assistant answers; the button stays greyed out, with that reason beside it, until the answer ends |
-| **Plan: paused, send a message to go on** | Paused with no button to resume it; your next message moves it on |
+| **Paused: item 2 of 6, Replies join their thread. Continue implementation to resume** | Paused; the line says what is paused (the item, **Senior review**, **changing the plan**, or a pass with its scope, such as **Paused: UI pass (whole app)**) and names the button above it, such as **Continue review**, **Continue the passes** or **Check delivery** |
+| **Paused: UI pass (whole app). Your request is running now. Continue the passes is available when this answer ends** | Paused while the assistant answers your own request; the button stays greyed out, with that reason beside it, until the answer ends |
+| **Paused: Senior review. Send a message to go on** | Paused with no button to resume it; your next message moves it on |
 | **Plan: ready, Implement plan to start** | Senior made the plan; it waits for your go-ahead (during an answer: **Plan: ready · Implement plan is available when this answer ends**) |
 | **Plan: completed** | The plan is completed and not yet archived |
 

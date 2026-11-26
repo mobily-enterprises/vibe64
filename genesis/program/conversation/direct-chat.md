@@ -2710,12 +2710,17 @@ routing request waits for the person's answer or shows questions (needs you,
 with their number), waits for Implement plan, or is otherwise paused. A waiting
 line names the one workflow action the routing notice offers
 (`assistantRoutingNotice`, which both read so they cannot disagree) by its exact
-label: "Plan: paused, Continue implementation to resume" (or "Plan: ready,
-Implement plan to start") only while that button can be pressed; while an answer,
-a message being sent or a spoken message holds it, "Plan: paused · Continue
-implementation is available when this answer ends" (or "once your message is
-sent"); once pressed, the button's own progress ("Plan: paused · Continuing…");
-and with no action on offer, "Plan: paused, send a message to go on". Senior
+label. A paused line first says what is paused: the item ("Paused: item 2 of 6,
+Replies join their thread"), Senior review, changing the plan, or the pass with
+its Passes item's scope (the step's `scope`: "Paused: UI pass (whole app)").
+While the assistant's turn holds the chat (`busy`, the chat's hold the notice
+also takes), the person's own request is what runs, and the line says so ("Your
+request is running now"). Then the action: "Continue implementation to resume"
+(or "Plan: ready, Implement plan to start") only while that button can be
+pressed; while an answer, a message being sent or a spoken message holds it,
+"Continue implementation is available when this answer ends" (or "once your
+message is sent"); once pressed, the button's own progress ("Continuing…"); and
+with no action on offer, "Send a message to go on". Senior
 review reads as such only while a request is working; with nothing running it
 (a Junior chat's built plan, say) the line says it is ready for Senior review and
 asks the person to ask Senior. The plan
