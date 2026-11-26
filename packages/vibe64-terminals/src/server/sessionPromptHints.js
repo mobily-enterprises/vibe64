@@ -1,9 +1,6 @@
 import { sessionSourcePath as savedSessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
-import {
-  PROMPT_HINT_CACHE_MAX_ENTRIES,
-  PROMPT_HINT_CACHE_TTL_MS
-} from "./promptHintRules.js";
+import { PROMPT_HINT_CACHE_MAX_ENTRIES } from "./promptHintRules.js";
 import { readPromptHintBlueprint, readPromptHintSubsystems } from "./promptHintGenesisFiles.js";
 import { createPromptHintState } from "./promptHintState.js";
 import { createPromptHintContext } from "./promptHintContext.js";
@@ -19,10 +16,8 @@ import { createPromptHintRequests } from "./promptHintRequests.js";
  * and the service offers its functions by name.
  * @param {object} dependencies
  * @param {number} [dependencies.cacheMaxEntries]
- * @param {number} [dependencies.cacheTtlMs]
  * @param {SessionAgentManager} dependencies.agent
  * @param {(event: object) => void} dependencies.diagnostic
- * @param {() => number} [dependencies.now]
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {typeof readPromptHintBlueprint} [dependencies.readBlueprintText]
@@ -31,10 +26,8 @@ import { createPromptHintRequests } from "./promptHintRequests.js";
  */
 function createSessionPromptHintsService({
   cacheMaxEntries = PROMPT_HINT_CACHE_MAX_ENTRIES,
-  cacheTtlMs = PROMPT_HINT_CACHE_TTL_MS,
   agent,
   diagnostic,
-  now = () => Date.now(),
   project,
   publishSessionChanged,
   readBlueprintText = readPromptHintBlueprint,
@@ -52,9 +45,7 @@ function createSessionPromptHintsService({
   const hintJobs = createPromptHintJobs({
     agent,
     cacheMaxEntries,
-    cacheTtlMs,
     hintContext,
-    now,
     publishSessionChanged,
     state
   });

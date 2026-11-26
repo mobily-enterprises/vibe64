@@ -25,24 +25,25 @@ import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /**
  * Prompt hint jobs: one helper turn per basis and identity, shared by every
- * request that joins it, cancelled when its last subscriber leaves or a newer
- * job of the same actor replaces it, and revalidated before its result is
- * cached, shared and returned.
+ * request that joins it, and revalidated before its result is cached, shared
+ * and returned. A job whose AI turn has started runs to its end even when
+ * every request leaves it, so a page that lets go and asks again for the same
+ * basis joins it or reads its cached result: a hint runs once per real change.
+ * One that has not started its turn yet stops when its last request leaves,
+ * having spent nothing. A newer job of the same actor, or the session's own
+ * cancel (a Send, the session closing), stops it either way. A cached result
+ * stays until its basis or identity changes, within the cache's size.
  * @param {object} dependencies
  * @param {SessionAgentManager} dependencies.agent
  * @param {number} dependencies.cacheMaxEntries
- * @param {number} dependencies.cacheTtlMs
  * @param {PromptHintContext} dependencies.hintContext
- * @param {() => number} dependencies.now
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
  * @param {PromptHintState} dependencies.state
  */
 function createPromptHintJobs({
   agent,
   cacheMaxEntries,
-  cacheTtlMs,
   hintContext,
-  now,
   publishSessionChanged,
   state
 }) {
@@ -55,10 +56,6 @@ function createPromptHintJobs({
     if (!entry) {
       return null;
     }
-    if (entry.expiresAt <= now()) {
-      completedCache.delete(key);
-      return null;
-    }
     completedCache.delete(key);
     completedCache.set(key, entry);
     return entry;
@@ -66,10 +63,7 @@ function createPromptHintJobs({
 
   function cacheSet(key, value) {
     completedCache.delete(key);
-    completedCache.set(key, {
-      ...value,
-      expiresAt: now() + cacheTtlMs
-    });
+    completedCache.set(key, value);
     while (completedCache.size > cacheMaxEntries) {
       completedCache.delete(completedCache.keys().next().value);
     }
@@ -97,11 +91,18 @@ function createPromptHintJobs({
     job.subscribers.delete(request.subscriberKey);
   }
 
-  function cancelRequest(request) {
+  /**
+   * A request leaves its job. Once no request waits for it, a job that has not
+   * started its AI turn stops; one whose turn runs keeps running for the next
+   * request of its basis, unless `stopJob` (the session's own cancel) says so.
+   * @param {object} request
+   * @param {{ stopJob?: boolean }} [options]
+   */
+  function cancelRequest(request, { stopJob = false } = {}) {
     request.cancelled = true;
     const job = request.job;
     detachRequestFromJob(request);
-    if (job && !job.subscribers.size) {
+    if (job && !job.subscribers.size && (stopJob || !job.turnStarted)) {
       cancelJob(job);
     }
   }
@@ -140,6 +141,8 @@ function createPromptHintJobs({
         prefix: PROMPT_HINT_HELPER_PREFIX,
         profile: PROMPT_HINT_EXECUTION_PROFILE_REQUEST,
         prompt(profile) {
+          // The turn starts with this prompt: from here a page that lets go leaves the job running.
+          job.turnStarted = true;
           const prompt = promptHintPrompt({
             blueprint: job.snapshot.blueprint,
             conversation: job.snapshot.conversation,
@@ -228,7 +231,7 @@ function createPromptHintJobs({
       suggestions
     });
     // Only conversation-based hints are shared. Draft-based hints stay private
-    // to the actor's existing short-lived cache.
+    // to the actor's own cache.
     if (!job.snapshot.draft) {
       try {
         await current.runtime.store.writeJsonArtifact(job.sessionId, SHARED_PROMPT_HINTS_ARTIFACT, {
@@ -254,6 +257,10 @@ function createPromptHintJobs({
     snapshot,
     vibe64User
   }) {
+    // A request cancelled before it joins starts nothing.
+    if (request.cancelled) {
+      return promptHintResponse("cancelled", { basis: snapshot.basis });
+    }
     let job = jobsByKey.get(key);
     if (job?.cancelRequested) {
       job = null;
@@ -271,6 +278,7 @@ function createPromptHintJobs({
         abort: new AbortController(),
         previous: previousJobs,
         cancelRequested: false,
+        turnStarted: false,
         context,
         identity,
         key,
@@ -287,10 +295,6 @@ function createPromptHintJobs({
     }
     request.job = job;
     job.subscribers.add(request.subscriberKey);
-    if (request.cancelled) {
-      cancelRequest(request);
-      return promptHintResponse("cancelled", { basis: snapshot.basis });
-    }
     if (startJob) {
       job.promise = Promise.resolve().then(() => runJob(job)).finally(() => {
         if (jobsByKey.get(key) === job) {

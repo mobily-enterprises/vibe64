@@ -189,12 +189,10 @@ function createFixture({
   artifacts = new Map(),
   agentResult = null,
   cacheMaxEntries = 128,
-  cacheTtlMs = 300_000,
   conversation = conversationPage(),
   fixtureRoot = null,
   deleteResult = { ok: true, status: "deleted" },
   interruptResult = { ok: true, status: "interrupted" },
-  now = () => Date.now(),
   promptHints = projectPromptHints(),
   resolvePurpose = null,
   readBlueprintText = null,
@@ -273,9 +271,7 @@ function createFixture({
   const service = createSessionPromptHintsService({
     publishSessionChanged: (sessionId, payload) => { calls.published.push({ sessionId, payload }); },
     cacheMaxEntries,
-    cacheTtlMs,
     diagnostic(event) { calls.diagnostic.push(event); },
-    now,
     project: {
       async createRuntime() {
         return runtime;
@@ -1021,14 +1017,12 @@ test("prompt hints coalesce identical work, invalidate on conversation, and igno
   assert.equal(agentCalls, 2);
 });
 
-test("prompt-hint cache identity follows the selected provider account and expires at its bounded TTL", async () => {
+test("prompt-hint cache identity follows the selected provider account, and a result stays cached while nothing changes", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
   let accountIdentitySignature = ACCOUNT_SIGNATURE;
   let agentCalls = 0;
-  let nowMs = 1_000;
   const fixture = createFixture({
     accountIdentitySignature: () => accountIdentitySignature,
-    cacheTtlMs: 50,
-    now: () => nowMs,
     async runAgentTurn({ options }) {
       agentCalls += 1;
       const threadId = `thread-account-cache-${agentCalls}`;
@@ -1063,13 +1057,14 @@ test("prompt-hint cache identity follows the selected provider account and expir
   assert.equal(switchedAccount.cached, false);
   assert.equal(agentCalls, 2);
 
-  nowMs += 51;
-  const expired = await fixture.service.generateSessionPromptHints(
+  // Asked again an hour later with nothing changed, the hint runs nothing new: there is no expiry to run it again.
+  t.mock.timers.tick(60 * 60_000);
+  const later = await fixture.service.generateSessionPromptHints(
     "session-1",
     generateInput("hint:account-cache:4")
   );
-  assert.equal(expired.cached, false);
-  assert.equal(agentCalls, 3);
+  assert.equal(later.cached, true);
+  assert.equal(agentCalls, 2);
 });
 
 test("prompt-hint cache evicts the least-recently-used entry at its configured bound", async () => {
@@ -1311,7 +1306,66 @@ test("prompt-hint cancellation during profile resolution never starts Luna", asy
   assert.equal(fixture.calls.run.length, 0);
 });
 
-test("prompt-hint cancellation interrupts the exact detached turn, cleans it, and never caches it", async () => {
+test("a page's cancel leaves its running hint to finish, and asking again for the same basis runs nothing new", async () => {
+  const started = deferred();
+  const release = deferred();
+  let agentCalls = 0;
+  const fixture = createFixture({
+    async runAgentTurn({ options }) {
+      agentCalls += 1;
+      await options.onEvent({ executionProfile: resolvedPromptHintProfile(), type: "execution-profile" });
+      await options.onEvent({ threadId: "thread-left", type: "thread" });
+      await options.onEvent({ threadId: "thread-left", turnId: "turn-left", type: "turn" });
+      started.resolve();
+      await release.promise;
+      return readyAgentResult({ threadId: "thread-left", turnId: "turn-left" });
+    }
+  });
+  const firstInput = generateInput("hint:left:1");
+  const first = fixture.service.generateSessionPromptHints("session-1", firstInput);
+  await started.promise;
+  // The page lets go (its composer flickered out of reach) and asks again for the same conversation.
+  assert.equal((await fixture.service.cancelSessionPromptHints("session-1", firstInput)).status, "cancelled");
+  const again = fixture.service.generateSessionPromptHints("session-1", generateInput("hint:left:2"));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fixture.calls.interrupt.length, 0);
+  release.resolve();
+  const [firstResult, againResult] = await Promise.all([first, again]);
+  assert.equal(firstResult.status, "cancelled");
+  assert.equal(againResult.status, "ready");
+  const later = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:left:3"));
+  assert.equal(later.cached, true);
+  assert.equal(agentCalls, 1, "one run for one conversation, however often the page lets go and asks again");
+});
+
+test("a page's cancel with nobody asking again still finishes the hint and caches it for the next request", async () => {
+  const started = deferred();
+  const release = deferred();
+  let agentCalls = 0;
+  const fixture = createFixture({
+    async runAgentTurn({ options }) {
+      agentCalls += 1;
+      await options.onEvent({ executionProfile: resolvedPromptHintProfile(), type: "execution-profile" });
+      await options.onEvent({ threadId: "thread-alone", type: "thread" });
+      started.resolve();
+      await release.promise;
+      return readyAgentResult({ threadId: "thread-alone", turnId: "turn-alone" });
+    }
+  });
+  const input = generateInput("hint:alone:1");
+  const generation = fixture.service.generateSessionPromptHints("session-1", input);
+  await started.promise;
+  await fixture.service.cancelSessionPromptHints("session-1", input);
+  release.resolve();
+  assert.equal((await generation).status, "cancelled");
+  assert.equal(fixture.calls.interrupt.length, 0);
+  const next = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:alone:2"));
+  assert.equal(next.status, "ready");
+  assert.equal(next.cached, true);
+  assert.equal(agentCalls, 1);
+});
+
+test("the session's own cancel interrupts the exact detached turn, cleans it, and never caches it", async () => {
   const started = deferred();
   const interrupted = deferred();
   let agentCalls = 0;
@@ -1339,13 +1393,12 @@ test("prompt-hint cancellation interrupts the exact detached turn, cleans it, an
       };
     }
   });
-  const originalInterrupt = fixture.service.cancelSessionPromptHints.bind(fixture.service);
   const generation = fixture.service.generateSessionPromptHints(
     "session-1",
     generateInput("hint:cancel")
   );
   await started.promise;
-  const cancellation = originalInterrupt("session-1", generateInput("hint:cancel"));
+  const cancellation = fixture.service.cancelSessionPromptHintsForSession("session-1");
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(fixture.calls.interrupt.length, 1);
   assert.deepEqual(fixture.calls.interrupt[0].input, {
@@ -1356,7 +1409,7 @@ test("prompt-hint cancellation interrupts the exact detached turn, cleans it, an
   interrupted.resolve();
   const [cancelResult, generationResult] = await Promise.all([cancellation, generation]);
 
-  assert.equal(cancelResult.status, "cancelled");
+  assert.deepEqual(cancelResult, { cancelled: 1, ok: true });
   assert.equal(generationResult.status, "cancelled");
   assert.deepEqual(generationResult.suggestions, []);
   assert.equal(fixture.calls.delete.length, 1);
@@ -1411,7 +1464,7 @@ test("cancelling one coalesced subscriber leaves the shared generation available
   assert.equal(fixture.calls.delete.length, 1);
 });
 
-test("cancellation requested before thread ids arrive interrupts as soon as the exact turn is known", async () => {
+test("the session's cancel requested before thread ids arrive interrupts as soon as the exact turn is known", async () => {
   const runStarted = deferred();
   const publishIds = deferred();
   const idsPublished = deferred();
@@ -1444,8 +1497,8 @@ test("cancellation requested before thread ids arrive interrupts as soon as the 
   const input = generateInput("hint:late-ids");
   const generation = fixture.service.generateSessionPromptHints("session-1", input);
   await runStarted.promise;
-  const cancellation = await fixture.service.cancelSessionPromptHints("session-1", input);
-  assert.equal(cancellation.status, "cancelled");
+  const cancellation = fixture.service.cancelSessionPromptHintsForSession("session-1");
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(fixture.calls.interrupt.length, 0);
 
   publishIds.resolve();
@@ -1459,6 +1512,7 @@ test("cancellation requested before thread ids arrive interrupts as soon as the 
   interrupted.resolve();
   const result = await generation;
   assert.equal(result.status, "cancelled");
+  assert.deepEqual(await cancellation, { cancelled: 1, ok: true });
   assert.equal(fixture.calls.delete.length, 1);
 });
 
@@ -1717,9 +1771,8 @@ test("equal session and operation ids stay isolated by canonical project scope a
     fixture.service.cancelSessionPromptHints("session-shared", alphaAdaInput)
   ));
   assert.equal(cancellation.status, "cancelled");
-  assert.equal(fixture.calls.interrupt.length, 1);
-  assert.equal(fixture.calls.interrupt[0].projectScope, "project:alpha");
-  assert.equal(fixture.calls.interrupt[0].options.vibe64User.username, "ada");
+  // The cancel reaches only that request; its hint still finishes for the next request of its basis.
+  assert.equal(fixture.calls.interrupt.length, 0);
 
   release.resolve();
   const [alphaAdaResult, alphaGraceResult, betaAdaResult] = await Promise.all([
@@ -1750,7 +1803,7 @@ test("equal session and operation ids stay isolated by canonical project scope a
       generateInput("hint:beta-ada-cache", ada)
     )
   ));
-  const regeneratedAlphaAda = await runWithProjectRequestContext(alpha, () => (
+  const cachedAlphaAda = await runWithProjectRequestContext(alpha, () => (
     fixture.service.generateSessionPromptHints(
       "session-shared",
       generateInput("hint:alpha-ada-regenerate", ada)
@@ -1758,8 +1811,8 @@ test("equal session and operation ids stay isolated by canonical project scope a
   ));
   assert.equal(cachedAlphaGrace.cached, true);
   assert.equal(cachedBetaAda.cached, true);
-  assert.equal(regeneratedAlphaAda.cached, false);
-  assert.equal(fixture.calls.run.length, 4);
+  assert.equal(cachedAlphaAda.cached, true);
+  assert.equal(fixture.calls.run.length, 3);
 });
 
 test("session-wide Send cancellation covers preparing requests only in its canonical project", async () => {
@@ -1887,7 +1940,7 @@ test("prompt hint cleanup waits for pending interruption before deleting the thr
   const input = generateInput("hint:ordered-cleanup");
   const generation = fixture.service.generateSessionPromptHints("session-1", input);
   await started.promise;
-  const cancellation = fixture.service.cancelSessionPromptHints("session-1", input);
+  const cancellation = fixture.service.cancelSessionPromptHintsForSession("session-1");
   finishTurn.resolve();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(fixture.calls.interrupt.length, 1);
@@ -1933,10 +1986,12 @@ test("native retirement still closes the independently owned helper scope", asyn
   const input = generateInput("hint:retirement-race");
   const pending = fixture.service.generateSessionPromptHints("session-1", input);
   await started.promise;
-  await fixture.service.cancelSessionPromptHints("session-1", input);
+  const cancellation = fixture.service.cancelSessionPromptHintsForSession("session-1");
+  await new Promise((resolve) => setImmediate(resolve));
   finishTurn.resolve();
   finishInterrupt.resolve({ ok: false, error: "Thread no longer exists." });
   assert.equal((await pending).status, "cancelled");
+  await cancellation;
   assert.equal(fixture.calls.delete.length, 1);
   assert.deepEqual(fixture.calls.diagnostic, []);
 });

@@ -1243,7 +1243,12 @@ Prompt suggestions follow the person's current draft first, then the latest
 conversation, grounded in the project's purpose. They help express the current
 intent instead of repeating finished work or proposing unrelated generic tasks.
 Changing the draft cancels superseded suggestion work without sending a chat
-message or stopping the main assistant.
+message or stopping the main assistant. Otherwise suggestion work runs once per
+real change: a run whose AI turn has started still finishes when the page stops
+waiting for it, the page's next request for the same conversation and draft
+joins it or reads its result, and that result stays until the conversation,
+draft or helper changes. Every helper turn keeps to its workload's time limit,
+its process's start included.
 
 Every Vibe64 editor uses the same AI Accounts screen and provider
 configuration. Account settings offers Codex with OpenAI, DeepSeek and GLM, Claude
