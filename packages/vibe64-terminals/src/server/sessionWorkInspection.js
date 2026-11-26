@@ -15,7 +15,7 @@ import {
 } from "./gitRecords.js";
 import {
   commandProject,
-  countCommitsBetween,
+  countAheadBehind,
   git,
   gitOutput,
   observedCanonicalCommit,
@@ -211,7 +211,7 @@ async function inspectSessionWorkDirect({
       project
     })
   ]);
-  const [headTree, ahead, behind, comparison] = await Promise.all([
+  const [headTree, { ahead, behind }, comparison] = await Promise.all([
     gitOutput(runCommand, context, [
       "rev-parse",
       `${sessionHead}^{tree}`
@@ -219,14 +219,7 @@ async function inspectSessionWorkDirect({
       commandOptions,
       project
     }),
-    countCommitsBetween(runCommand, context, canonicalCommit, sessionHead, {
-      commandOptions,
-      project
-    }),
-    countCommitsBetween(runCommand, context, sessionHead, canonicalCommit, {
-      commandOptions,
-      project
-    }),
+    countAheadBehind(runCommand, context, canonicalCommit, sessionHead, { commandOptions, project }),
     sessionWorkComparison(runCommand, context, {
       baseCommit: context.baseCommit,
       canonicalCommit,

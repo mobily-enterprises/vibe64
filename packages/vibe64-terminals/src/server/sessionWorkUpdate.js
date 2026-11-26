@@ -18,7 +18,7 @@ import {
   commitIsAncestor,
   commitTree,
   conflictWorktreeTree,
-  countCommitsBetween,
+  countAheadBehind,
   createVirtualCommit,
   derivedArtifactsKeptProgress,
   git,
@@ -184,21 +184,12 @@ async function checkSessionUpdatesDirect({
       { commandOptions, project }
     )).slice(0, 100)
   } : null;
-  const [ahead, behind, canonicalInSession, canonicalTree] = await Promise.all([
-    countCommitsBetween(runCommand, context, canonicalCommit, sessionHead, {
-      commandOptions,
-      project
-    }),
-    countCommitsBetween(runCommand, context, sessionHead, canonicalCommit, {
-      commandOptions,
-      project
-    }),
-    commitIsAncestor(runCommand, context, canonicalCommit, sessionHead, {
-      commandOptions,
-      project
-    }),
+  const [{ ahead, behind }, canonicalTree] = await Promise.all([
+    countAheadBehind(runCommand, context, canonicalCommit, sessionHead, { commandOptions, project }),
     commitTree(runCommand, context, canonicalCommit, { commandOptions, project })
   ]);
+  // The saved version is in the session exactly when the session lacks none of its commits.
+  const canonicalInSession = behind === 0;
   const relationship = repositoryUpdateRelationship(ahead, behind);
   // The newer saved versions and how many files they change, for the message a session behind main is given.
   const [incoming, fileCount] = behind > 0

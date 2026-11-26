@@ -20,8 +20,10 @@ import {
 } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
 import {
   checkSessionUpdates,
+  checkSessionUpdatesDirect,
   updateSessionWork
 } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
+import { inspectSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkInspection.js";
 import { updateSessionWorkInProcess } from "./sessionWorkUpdateTestHelpers.js";
 import { updateWorktreeChangedError } from "../../packages/vibe64-terminals/src/server/sessionWorktreeSwitch.js";
 import {
@@ -694,6 +696,62 @@ test("local-source current changes reuses one snapshot for its initial file diff
     assert.match(changes.initialDiff.diff, /-initial/u);
     assert.match(changes.initialDiff.diff, /\+changed locally/u);
     assert.equal(changes.initialDiff.worktreeTree, changes.worktreeTree);
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("an update check counts both sides' versions with one Git command and asks the local baseline three things, refusing each unfinished operation", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-update-counts-"));
+  try {
+    const fixture = await createRemoteFixture(root);
+    const session = await sessionForRemote(root, fixture);
+    for (const name of ["one", "two"]) {
+      await writeFile(path.join(session.sourcePath, `${name}.txt`), `${name}\n`, "utf8");
+      await git(session.sourcePath, ["add", `${name}.txt`]);
+      await git(session.sourcePath, ["commit", "-m", `session ${name}`]);
+    }
+    await writeFile(path.join(fixture.seed, "saved.txt"), "saved\n", "utf8");
+    await git(fixture.seed, ["add", "saved.txt"]);
+    await git(fixture.seed, ["commit", "-m", "saved in the baseline"]);
+    const project = { sourceRoot: fixture.seed, repository: { mode: "local_source", defaultBranch: "main" } };
+    const calls = [];
+    const runCommand = (request) => {
+      calls.push(request);
+      return commandRunner(request);
+    };
+    const counts = (args) => calls.filter((request) => args.every((arg) => request.args?.includes(arg))).length;
+
+    const check = await checkSessionUpdatesDirect({ project, runCommand, session });
+    assert.deepEqual([check.ahead, check.behind], [2, 1]);
+    assert.equal(check.relationship, "diverged");
+    assert.equal(counts(["rev-list", "--count"]), 1, "one count gives both sides");
+    assert.equal(counts(["merge-base"]), 1, "only the history check asks for ancestry; the count answers the rest");
+    assert.equal(
+      calls.filter((request) => path.resolve(request.cwd || "") === path.resolve(fixture.seed)).length,
+      3,
+      "the local baseline is asked its branch, its status, and its unfinished operations with HEAD in one look"
+    );
+
+    calls.length = 0;
+    const inspected = await inspectSessionWorkDirect({ project, runCommand, session });
+    assert.deepEqual([inspected.ahead, inspected.behind], [2, 1]);
+    assert.equal(counts(["rev-list", "--count"]), 1);
+
+    const head = await git(fixture.seed, ["rev-parse", "HEAD"]);
+    for (const marker of ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD"]) {
+      await writeFile(path.join(fixture.seed, ".git", marker), `${head}\n`, "utf8");
+      await assert.rejects(
+        checkSessionUpdatesDirect({ project, runCommand: commandRunner, session }),
+        { code: "vibe64_session_save_local_operation_in_progress" },
+        marker
+      );
+      await rm(path.join(fixture.seed, ".git", marker));
+    }
+    assert.deepEqual(
+      [(await checkSessionUpdatesDirect({ project, runCommand: commandRunner, session })).canonicalCommit],
+      [head]
+    );
   } finally {
     await rm(root, { force: true, recursive: true });
   }

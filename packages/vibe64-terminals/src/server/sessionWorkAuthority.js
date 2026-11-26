@@ -55,19 +55,26 @@ async function assertLocalAuthority(runCommand, context, options) {
       "vibe64_session_save_local_authority_dirty"
     );
   }
-  for (const marker of ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD"]) {
-    const markerResult = await git(runCommand, context, ["rev-parse", "--verify", "-q", marker], {
-      ...options,
-      cwd: context.standaloneSourceRoot,
-      required: false
-    });
-    if (markerResult?.ok === true) {
-      throw saveError(
-        "The local project baseline has an unfinished Git operation.",
-        "vibe64_session_save_local_operation_in_progress"
-      );
-    }
+  // The unfinished-operation markers and HEAD in one look: `cat-file --batch-check` answers each name on its own line,
+  // "<name> missing" for one that names no object.
+  const markers = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD"];
+  const answers = (await gitOutput(runCommand, context, ["cat-file", "--batch-check"], {
+    ...options,
+    cwd: context.standaloneSourceRoot,
+    input: `${[...markers, "HEAD"].join("\n")}\n`
+  })).split("\n");
+  if (answers.length !== markers.length + 1) {
+    throw saveError("Git answered the local project baseline check unexpectedly.", "vibe64_session_save_git_failed");
   }
+  if (markers.some((marker, index) => answers[index] !== `${marker} missing`)) {
+    throw saveError(
+      "The local project baseline has an unfinished Git operation.",
+      "vibe64_session_save_local_operation_in_progress"
+    );
+  }
+  const [head] = answers[markers.length].split(" ");
+  if (isGitObjectId(head)) return head;
+  // No HEAD commit: Git's own refusal names it.
   return gitOutput(runCommand, context, ["rev-parse", "--verify", "HEAD"], {
     ...options,
     cwd: context.standaloneSourceRoot

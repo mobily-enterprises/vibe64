@@ -261,6 +261,21 @@ async function countCommitsBetween(runCommand, context, fromCommit, toCommit, op
   return Number.isSafeInteger(count) && count >= 0 ? count : 0;
 }
 
+/**
+ * How many commits the session has that the saved version lacks (`ahead`) and the saved version has that the session
+ * lacks (`behind`), from one `rev-list --left-right --count`: its left side is the saved version's.
+ */
+async function countAheadBehind(runCommand, context, canonicalCommit, sessionHead, options = {}) {
+  const [behind, ahead] = (await gitOutput(runCommand, context, [
+    "rev-list",
+    "--left-right",
+    "--count",
+    `${canonicalCommit}...${sessionHead}`
+  ], options)).split(/\s+/u).map(Number);
+  const count = (value) => Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  return { ahead: count(ahead), behind: count(behind) };
+}
+
 async function commitTree(runCommand, context, commit, options = {}) {
   return gitOutput(runCommand, context, [
     "rev-parse",
@@ -715,6 +730,7 @@ export {
   commitIsAncestor,
   commitTree,
   conflictWorktreeTree,
+  countAheadBehind,
   countCommitsBetween,
   createVirtualCommit,
   deleteOperationRef,
