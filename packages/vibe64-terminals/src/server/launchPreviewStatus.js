@@ -1,6 +1,8 @@
 // A launched Preview's status: the Preview and open target a launch terminal serves, and the status
 // response for an output target.
 
+import { stripVTControlCharacters } from "node:util";
+
 import { listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { outputTargetTerminalNamespace } from "./terminalShared.js";
@@ -228,6 +230,24 @@ function latestLaunchTerminal(sessionId = "") {
   }).at(-1) || null;
 }
 
+// A line a failing server prints for its error: Node's `Error: listen EADDRINUSE: …`, a `TypeError: …`, a tool's
+// `error: …` or `ERROR in …`. A plain `Error: ` label is dropped from what is quoted.
+const ERROR_LINE = /^(?:Uncaught\s+)?(?:[A-Z]\w*)?(?:Error|Exception)\b|^(?:error|ERROR|fatal|FATAL)\b/u;
+const ERROR_LINE_MAX_CHARACTERS = 200;
+
+/**
+ * Why a Preview's process exited, in one short sentence: its exit code and, when its output has one, the last error
+ * line it printed (`The preview process exited with code 1: listen EADDRINUSE: address already in use
+ * 127.0.0.1:4103.`).
+ * @param {number | null} exitCode @param {string} output the process's output, its end at least
+ */
+function previewExitMessage(exitCode, output = "") {
+  const lines = stripVTControlCharacters(String(output)).split(/\r?\n/u).map((line) => line.trim());
+  const line = (lines.findLast((text) => ERROR_LINE.test(text)) || "").replace(/^(?:Uncaught\s+)?Error:\s+/u, "")
+    .slice(0, ERROR_LINE_MAX_CHARACTERS).replace(/[.:]$/u, "");
+  return `The preview process exited with code ${exitCode ?? "unknown"}${line ? `: ${line}` : ""}.`;
+}
+
 function stoppedLaunchPreviewStatus({
   activeTerminal = null,
   outputTargets = [],
@@ -245,9 +265,7 @@ function stoppedLaunchPreviewStatus({
       canRestart: Boolean(lastOutputTarget?.id || activeTerminal?.metadata?.outputTargetId),
       canShowLog: Boolean(activeTerminal?.id),
       canStart: outputTargetCanStart(outputTargets),
-      message: failed
-        ? `The preview process exited with code ${exitCode ?? "unknown"}.`
-        : "The preview process exited.",
+      message: failed ? previewExitMessage(exitCode, activeTerminal?.output) : "The preview process exited.",
       reason: failed ? "process_exited_nonzero" : "process_exited",
       state: failed ? "failed" : "stopped",
       targetHref,
@@ -439,5 +457,6 @@ async function resolveLaunchPreviewStatus({
 export {
   latestLaunchTerminal,
   outputStatusResponseFromPreviewStatus,
+  previewExitMessage,
   resolveLaunchPreviewStatus
 };
