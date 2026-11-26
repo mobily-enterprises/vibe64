@@ -173,6 +173,8 @@ function useConversationIntegrationActions({ turns, enabled, sessionId, projectS
     const selection = { sessionId: sessionId.value, turnId: request.turnId, requestId: request.requestId };
     integrationActionPending.value = selection;
     integrationActionError.value = null;
+    // The setup operation was sent, so a failure may hide a decision the saved chat holds.
+    let setupSent = false;
     try {
       if (["connect", "cancel", "status"].includes(action)) {
         const path = vibe64SessionPath(sessionsApiPath.value, selection.sessionId, "/integrations");
@@ -197,6 +199,7 @@ function useConversationIntegrationActions({ turns, enabled, sessionId, projectS
         const endpoint = `${path}/${encodeURIComponent(integrationId)}/setup`;
         const previous = integrationConnections.value[selection.requestId];
         if (action === "cancel" && !previous?.attemptId) return false;
+        setupSent = true;
         let connection = await httpClient.request(endpoint, { method: "POST", body: {
           operation: action,
           ...(action === "cancel" ? { attemptId: previous.attemptId } : {
@@ -213,7 +216,10 @@ function useConversationIntegrationActions({ turns, enabled, sessionId, projectS
           const resumed = await resumeIntegrationContinuation(httpClient, { ...selection, sessionsApiPath: sessionsApiPath.value });
           if (resumed?.ok !== true) throw new Error(resumed?.error || "Assistant continuation is not yet confirmed.");
         }
-        if (integrationActionPending.value === selection && sessionId.value === selection.sessionId) await reloadConversationLog();
+        // The chat changes only when the server has decided the request (its answer then carries the decision): a
+        // check or connection that leaves it pending, such as the recovery check every load runs, has nothing to read.
+        if (connection.integrationSetup && integrationActionPending.value === selection &&
+            sessionId.value === selection.sessionId) await reloadConversationLog();
         return true;
       }
       const result = action === "resume"
@@ -229,7 +235,7 @@ function useConversationIntegrationActions({ turns, enabled, sessionId, projectS
     } catch (error) {
       if (sessionId.value === selection.sessionId && integrationActionPending.value === selection) {
         integrationActionError.value = { turnId: selection.turnId, message: String(error?.message || "Could not update integration setup.") };
-        if (action === "resume" || action === "connect" || action === "status") await reloadConversationLog();
+        if (action === "resume" || (setupSent && (action === "connect" || action === "status"))) await reloadConversationLog();
       }
       return false;
     } finally {
