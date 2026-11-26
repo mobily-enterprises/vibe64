@@ -123,6 +123,16 @@ cancelled is not sent, and its turn is stopped if a Cancel arrives during the
 send. Its entry in a workflow's steering list joins the request's latest record
 in one session mutation, unless the request was stopped or replaced. A message
 for no running turn, a cancelled or repeated one, and new requests still wait.
+Claude reads a steer only when its running tool call returns, and the steer's
+label asks it to answer there and carry on. JSKIT's native Claude turn owes
+such a message a reply: when its replay arrives while an earlier input of the
+loop has begun and has no result yet, the first text Claude writes after it,
+streamed or in one frame, is an assistant message with that input's identity,
+even when a tool call follows it. The transcript saves it as the reply of the
+steer's turn, so the progress after it goes to turns of its own. Narration
+after the reply, and text in a loop the message starts itself after the running
+loop's result, stay commentary. Codex and OpenCode keep the model's own
+classification of a mid-turn answer: commentary.
 What a finished turn leaves to routing (`afterTurn`, a reported outcome) queues
 for the lock again while such a write holds it, instead of giving up after the
 usual minute; everything else, `reconcile` included, still gives up after it.
