@@ -740,3 +740,4 @@ export {
 };
 export { STAGING_DATA_ENTRY_FORMS, STAGING_DATA_MODES, VIBE64_STAGING_DATA_CONTRACT, VIBE64_STAGING_DATA_SECTION } from "./stagingData.js";
 export { parseVibe64StagingDataLines, vibe64StagingDataInspection } from "./stagingData.js";
+export { genesisSymbolRange } from "./genesisSymbolRange.js";

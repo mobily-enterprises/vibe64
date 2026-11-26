@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import { GENESIS_MACHINE_CITY_PATH, validateArchitectureFacts } from "@local/vibe64-genesis/server";
+import { GENESIS_MACHINE_CITY_PATH, genesisSymbolRange, validateArchitectureFacts } from "@local/vibe64-genesis/server";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import {
   downloadSessionFile,
@@ -388,8 +388,10 @@ function createExplanationOperations({
 function indexedSymbolSelection(architecture, symbolId, file, lines, presentation) {
   const symbol = architecture.symbols.find(entry => entry.id === symbolId);
   const indexedFile = architecture.files.find(entry => entry.id === symbol?.fileId);
-  if (!symbol?.rangeAvailable ||
-      symbol.path !== file.path ||
+  // Machine City 3 keeps a symbol's path on its file only.
+  const range = symbol ? genesisSymbolRange(symbol) : null;
+  if (!range?.rangeAvailable ||
+      (symbol.path ?? indexedFile?.path) !== file.path ||
       indexedFile?.path !== file.path ||
       indexedFile.hash !== `sha256:${file.hash}`) {
     throw sourceEditorError(
@@ -399,7 +401,7 @@ function indexedSymbolSelection(architecture, symbolId, file, lines, presentatio
       409
     );
   }
-  for (const point of [symbol.start, symbol.end]) {
+  for (const point of [range.start, range.end]) {
     if (point.line > lines.length || point.column > lines[point.line - 1].length + 1) {
       throw sourceEditorError(
         "The indexed symbol range is invalid for this file. Refresh analysis.",
@@ -415,7 +417,7 @@ function indexedSymbolSelection(architecture, symbolId, file, lines, presentatio
       "vibe64_source_explanation_not_callable"
     );
   }
-  return { startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column };
+  return { startLine: range.start.line, startColumn: range.start.column, endLine: range.end.line, endColumn: range.end.column };
 }
 
 async function sourceEditorExplanationInput(context, input) {

@@ -1,6 +1,7 @@
 import {
   GENESIS_MACHINE_CITY_PATH,
   GENESIS_PROGRAM_CITY_PATH,
+  genesisSymbolRange,
   inspectVibe64ArchitectureInspection,
   inspectVibe64ArchitectureLayout,
   mergeArchitectureObservations,
@@ -276,6 +277,7 @@ function fileView(file, sourceMetrics) {
 }
 
 function publicSymbolView(symbol) {
+  const { start, end, rangeAvailable } = genesisSymbolRange(symbol);
   return {
     id: symbol.id,
     fileId: symbol.fileId,
@@ -286,9 +288,9 @@ function publicSymbolView(symbol) {
     visibilityScope: symbol.visibilityScope,
     parameters: symbol.parameters,
     returnType: symbol.returnType,
-    start: symbol.start,
-    end: symbol.end,
-    rangeAvailable: symbol.rangeAvailable
+    start,
+    end,
+    rangeAvailable
   };
 }
 
@@ -404,7 +406,8 @@ function createService({
       const record = await cityReader(context.sourceRoot, "machine");
       const machine = requireGenesisCity(record, "machine");
       const native = machine.architecture;
-      const sourceMetrics = new Map((machine.buildings || []).filter(file => file.role === "source").map(file => [file.id, file]));
+      // Machine City 3 has no buildings: its architecture files carry each indexed file's role and lines.
+      const sourceMetrics = new Map((machine.buildings || native?.files || []).filter(file => file.role === "source").map(file => [file.id, file]));
       // Stack supplies application entry identity; the renderer never guesses
       // server/main filenames. Reading declarations executes no inspector.
       let inspection = null;
