@@ -264,7 +264,13 @@ replayed, while current effect failure still fails its own run.
 Public Claude captures the existing same-owner CONTROL projection at native
 process creation and re-enters it for event, failure and application-control
 callbacks. Its application event sink also re-enters the exact captured context
-for checkpoint and terminal publication. This replaces the finite practice
+for checkpoint and terminal publication. A captured projection never keeps the
+request it was taken in (`captureProjectRequestContext`), the send that started
+the process or a page's later read of the session: an engine's events, tool
+calls and control requests, like every other callback that re-enters a captured
+context (Codex's and OpenCode's events, a helper command's binding, a running
+process's callbacks), run under no request, and an application action they
+dispatch carries its authority's own. This replaces the finite practice
 admission’s inherited async context; it does not extend that expired grant or
 retain CREATE/WRITE authority. Fresh teaching effects continue through the
 original saved-attempt action contributor and preparation barrier. Ordinary
