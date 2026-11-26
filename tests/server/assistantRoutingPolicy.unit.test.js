@@ -442,6 +442,23 @@ test("task intent sets permissions independently of the selected role", () => {
   assert.ok(assistantModePrompt("ui_pass", text).endsWith(text));
 });
 
+test("a pass turn's scope takes in the session's connected copies, each named, and its reply says which it covered; no other turn's does", () => {
+  const request = "Run the UI pass on the whole app.";
+  const connected = ["ui-kit", "billing"];
+  // A plan's pass is its purpose's own turn; a pass the person starts keeps Senior's role with the pass as intent.
+  for (const [mode, intent] of [["pass", "pass"], ["ui_pass", "ui_pass"], ["senior", "ui_pass"], ["senior", "deslop"], ["deslop", ""]]) {
+    const prompt = assistantModePrompt(mode, request, { intent, connected });
+    assert.match(prompt, /This app is built from this repository and its connected repositories, this session's own copies at `\.\.\/connected\/ui-kit` and `\.\.\/connected\/billing`, which you edit like this source and Save covers\./u, `${mode} ${intent}`);
+    assert.match(prompt, /a run over the whole app or a section of it reads and fixes that code wherever it is, here or in a copy, for what the app takes from each; a run over changes reads the changes made in the copies too\. Say in your final reply which repositories it covered\./u);
+    assert.ok(prompt.endsWith(`\n\n${request}`), "Genesis's request stays the message's last paragraph");
+  }
+  assert.match(assistantModePrompt("pass", request, { intent: "pass", connected: ["ui-kit"] }), /own copies at `\.\.\/connected\/ui-kit`, which/u);
+  for (const [mode, intent] of [["senior", "implementation"], ["senior", "planning"], ["review", ""], ["senior", "checks"], ["senior", ""]]) {
+    assert.doesNotMatch(assistantModePrompt(mode, request, { intent, connected }), /connected repositories/u, `${mode} ${intent}`);
+  }
+  assert.doesNotMatch(assistantModePrompt("ui_pass", request), /connected repositories/u, "a session without copies");
+});
+
 test("routing receipts and reviewer identity survive transcript storage and reload", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-transcript-"));
   t.after(() => rm(root, { force: true, recursive: true }));

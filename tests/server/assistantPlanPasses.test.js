@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import path from "node:path";
 import test from "node:test";
 import { fixture, planCommands, publishPlanFixture, reportOutcome } from "../fixtures/assistantRouting.js";
 import { GENESIS_PASSES } from "../fixtures/genesisPasses.js";
@@ -277,6 +278,20 @@ test("Run in Passes with no open plan makes a small plan of its own and runs it 
   assert.equal(typed.title, `Passes: Security pass and Data pass, since ${base.slice(0, 7)}`);
   assert.deepEqual(workPlanPassItems(typed.text).map(({ text }) => text), [`Security pass: the changes since ${base}`, `Data pass: the changes since ${base}`]);
   assert.equal(requestOf(f.sends.at(-1)), since("Security pass", base));
+});
+
+test("a pass in a session with connected repositories covers them: its turn names each copy and asks which repositories it covered", async (t) => {
+  const f = await fixture(t, { mode: "senior" }, { readyPlan: false, source: true });
+  const commit = "a".repeat(40);
+  f.metadata.connected_copies = JSON.stringify(Object.fromEntries(["ui-kit", "billing"].map((name) => [name, {
+    repository: `example/${name}`, branch: "main", path: path.join(path.dirname(f.source.source), "connected", name),
+    baseCommit: commit, canonicalCommit: commit
+  }])));
+  await f.service.send("session-1", { ...request, genesisTask: "security-pass", passRun: "whole", message: "Security pass the whole app." }, f.context);
+  const { message } = f.sends[0].input;
+  assert.match(message, /this session's own copies at `\.\.\/connected\/ui-kit` and `\.\.\/connected\/billing`, which you edit like this source and Save covers\./u);
+  assert.match(message, /Say in your final reply which repositories it covered\./u);
+  assert.equal(requestOf(f.sends[0]), "Security pass the whole app.");
 });
 
 test("passes asked for while the plan is still being worked on join its Passes, and Senior says so without running one", async (t) => {

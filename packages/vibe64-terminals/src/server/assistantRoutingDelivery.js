@@ -2,6 +2,7 @@ import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import { workPlanInstructions } from "./assistantWorkPlanInstructions.js";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import {
   VIBE64_ASSISTANT_SELECTION_METADATA,
   serializeVibe64AssistantSelection,
@@ -45,6 +46,19 @@ const FOLLOWUP_OVERTAKEN_CODES = Object.freeze([
   "vibe64_assistant_routing_question_pending",
   "vibe64_assistant_routing_continuation_changed"
 ]);
+
+/**
+ * The names of the session's own copies of its connected repositories, each at ../connected/<name>.
+ * @param {{ metadata?: Record<string, string> }} session
+ */
+function connectedCopyNames(session) {
+  try {
+    return sessionConnectedCopies(session).map((copy) => copy.name);
+  } catch {
+    // Unreadable copy records are Save's and Update's to report; the pass still runs on this repository.
+    return [];
+  }
+}
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
@@ -252,6 +266,8 @@ function createAssistantRoutingDelivery({
       browserReview: assistantPlanCompletionFollows(state),
       // Auto's Senior hands rework to Junior; a direct chat's own agent does it in its workflow.
       rework: state.mode === "auto" ? "junior" : state.workflow ? "self" : "report",
+      // A pass covers the connected repositories the app is built from as it does this one.
+      connected: taskPurpose ? connectedCopyNames(context.session) : [],
       planInstructions: pass ? passInstructions
         : checks
           ? assistantWholeChecksInstructions({ autoSave: savesAutomatically(context.session.metadata), passes: state.wholeChecks?.passes })

@@ -2609,7 +2609,15 @@ never a list. Each pass is its own Senior turn (a Custom chat's on its own model
 with `genesisTask` set to the pass id, announced by **<title> started: the plan's
 next pass (<item>)** (`planPassNotice`); `assistantPassInstructions` take the
 plan-instructions slot and its request stays the message's last paragraph, so
-Genesis renders that run. The pass fixes what it finds within its scope, writes
+Genesis renders that run. Every pass turn, a plan's or one the person starts
+(Deslop, the UI pass, any other), covers the connected repositories the app is
+built from: in a session with connected copies, delivery passes their names
+(`connectedCopyNames`, from `sessionConnectedCopies`) to `assistantModePrompt`,
+whose pass instructions (`connectedPassScope`) name each `../connected/<name>`,
+take them into the pass's scope as this repository (a whole-app or section run
+reads and fixes that code wherever it is; a run over changes reads the changes
+made in the copies too) and ask the final reply to say which repositories it
+covered. The pass fixes what it finds within its scope, writes
 one line in Progress, may change only its own Passes item's tick (plan role
 `pass`, `vibe64_work_plan_pass_item_only`), and reports continue, wait or
 complete; handoff is refused. Complete needs its item ticked

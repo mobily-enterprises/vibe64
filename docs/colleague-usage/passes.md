@@ -46,6 +46,12 @@ Under each pass is a button for each run Genesis offers for it:
   evidence you can check. The list says **Deep reads every file: it takes much
   longer and uses far more of your AI's allowance.**
 
+When the project has connected repositories (**Project settings → Connected
+repositories**), every run covers this session's own copies of them too, at
+`../connected/<name>`: a whole-app or section run reads and fixes the code
+there that the app is built from, a run over changes reads the changes made
+there as well, and the pass's final reply says which repositories it covered.
+
 Select a run. The list closes and main chat sends that run's own request,
 which Genesis writes, as your message, such as **Deslop the whole app.** Then:
 
