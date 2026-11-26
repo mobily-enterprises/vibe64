@@ -102,11 +102,14 @@ What a preparation holds follows the one record it converts, not the whole
 state: an update may give `originalDigest` (the sha256 of what it read, null
 for none) instead of `original`, and a `replacementPath` it staged instead of
 `contents`; `stagedUpgradeFile` makes one (unstaged for a check that publishes
-nothing). `20261124-chat-transcript-log` writes each live chat's new file to
-`temporaryRoot` as it makes it and keeps only digests, and converts each chat in
-a frame of its own, so a chat is held as two parsed copies at most while it is
-converted and not at all after; an archive is extracted, changed and repacked
-one at a time. `20261125-agent-run-history` stages each run's new history and
+nothing). `20261124-chat-transcript-log` writes each chat's new file to `temporaryRoot`
+as it makes it and keeps only digests, and converts each chat in a frame of its
+own, so a chat is held as two parsed copies at most while it is converted and
+not at all after. An archive is extracted to `temporaryRoot` by `tar`, its
+chats are converted one at a time, each new file moves into the extracted copy,
+and `tar` repacks it: what the upgrade holds follows the largest chat, not the
+archive or the workspace. A standalone check (`stage: false`) extracts and
+reads each archive but never repacks one. `20261125-agent-run-history` stages each run's new history and
 run the same way. Everything an apply stages before its first change (each
 replacement, each repacked archive) is in `temporaryRoot`, the system's
 temporary folder: a host whose `/tmp` is memory gives the command a `TMPDIR`

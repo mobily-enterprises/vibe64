@@ -52,9 +52,10 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
    * since; publishedEarlier says whether a new file is still exactly what an
    * earlier run published.
    * `stage: false` (a standalone check) converts and compares every chat but stages nothing and repacks no archive.
-   * A live chat's new file goes to `temporaryRoot` as it is made, and its updates keep the digests of what was read,
-   * never the chat: what a preparation holds follows the one chat it converts, not every chat of the workspace. An
-   * archive's changes are written into its extracted copy, one archive at a time.
+   * Each chat's new file goes to `temporaryRoot` as it is made, a live one's and an archived one's alike, and its
+   * updates keep the digests of what was read, never the chat: what a preparation holds follows the one chat it
+   * converts, not every chat of an archive or of the workspace. An archive's staged files are moved into its extracted
+   * copy, which is repacked, one archive at a time.
    * @param {{ temporaryRoot: string, apply: boolean, stage?: boolean, publishedEarlier: (filePath: string, contents: string) => Promise<boolean> }} options
    * @returns {Promise<{ updates: object[], chats: number, perTurnLayouts: number }>}
    */
@@ -64,7 +65,7 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
     const updates = await prepareSessionStateUpgrade({
       temporaryRoot,
       stage,
-      async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText, archiveRecord }) {
+      async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText }) {
         await checkedPath(sessionPaths.sessionRoot, true);
         const scopes = [sessionPaths];
         for (const entry of await inventory(sessionPaths.conversationsRoot)) {
@@ -112,13 +113,6 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
             throw new Error(`Chat transcript ${legacyPath} did not convert exactly, and nothing was changed. Inspect it before upgrading.`);
           }
           chats += 1;
-          if (archiveRecord) {
-            changes.push(
-              { filePath: logPath, original: leftover, contents },
-              { filePath: legacyPath, original, contents: MOVED_TRANSCRIPT_NOTE }
-            );
-            continue;
-          }
           changes.push(
             await stagedUpgradeFile({ temporaryRoot, stage, filePath: logPath, original: leftover, contents }),
             { filePath: legacyPath, originalDigest: sha256Hex(original), contents: MOVED_TRANSCRIPT_NOTE }

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { lstat, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isMissingPathError, isPlainObject } from "@local/vibe64-core/server/core";
 import { explicitPathIsManagedSessionSource } from "@local/vibe64-core/server/sessionSourcePath";
@@ -286,7 +286,8 @@ function createSessionStateUpgrades({
    * Stage through the session/archive owner, which the offline publisher backs up. `finishArchive` runs before repacking.
    * With `stage: false` (a standalone check, whose preparation nothing publishes) each archive's records are read and
    * inspected as for an apply, refusing what an apply refuses, but no changed archive is finished or repacked: its update is
-   * `{ filePath, unstaged: true }`, which the publisher counts and never publishes.
+   * `{ filePath, unstaged: true }`, which the publisher counts and never publishes. An archived session's change gives
+   * `contents` (null removes) or a `replacementPath` staged in temporaryRoot, moved into the extracted copy.
    */
   async function prepareSessionStateUpgrade({
     temporaryRoot, inspectSession, transformRenewal, transformArchiveRecord, preparedRenewalsOnly = false, finishArchive = null,
@@ -373,7 +374,8 @@ function createSessionStateUpgrades({
               continue;
             }
             await mkdir(path.dirname(change.filePath), { recursive: true, mode: 0o700 });
-            await writeFile(change.filePath, change.contents, { mode: 0o600 });
+            if (change.replacementPath) await rename(change.replacementPath, change.filePath);
+            else await writeFile(change.filePath, change.contents, { mode: 0o600 });
           }
           if (finishArchive) await finishArchive(sessionPaths);
           const replacementPath = path.join(temporaryRoot, `${randomUUID()}.tar.gz`);
