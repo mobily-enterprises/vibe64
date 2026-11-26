@@ -432,7 +432,7 @@ function createAgentSessionCommandService({
   }
 
   async function managePlan(sessionId, input) {
-    return runInSessionProject(sessionId, async ({ store, descriptor, sourceRoot }) => {
+    return runInSessionProject(sessionId, async ({ store, descriptor }) => {
       const request = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
       if (input.operation === "outcome") {
         return reportWorkflowOutcome(sessionId, input, { vibe64User: request?.submittedBy || null });
@@ -442,11 +442,7 @@ function createAgentSessionCommandService({
       }
       // A plan's pass ticks only its own Passes item, and a new plan in a chat whose plans run passes gets them.
       const role = assistantPlanRole(request);
-      const readListing = planPassListing(listPasses, async () => ({
-        ...descriptor,
-        sessionId,
-        metadata: { ...descriptor.metadata, connected_copies: await store.readMetadataValue(sessionId, "connected_copies") }
-      }));
+      const readListing = planPassListing(listPasses, { store, sessionId, descriptor });
       const planInput = input.operation === "new" && request?.afterPlan && ["senior", "review"].includes(role)
         ? { ...input, text: await withAfterPlanPasses(input.text, store, sessionId, readListing) } : input;
       let result;

@@ -67,12 +67,17 @@ function listSessionPasses(listPasses, session) {
  * Genesis's pass list for a plan command, read at most once and only when asked: for a new plan's After a
  * plan passes, or a Passes item a write adds or changes.
  * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} listPasses
- * @param {() => Promise<object>} readSession the session, with its source and connected copies
+ * @param {{ store: object, sessionId: string, descriptor: object }} command the session's store and source descriptor,
+ *   with which its connected copies' record is read once the listing is asked for
  * @returns {() => Promise<{ passes: object[] }>}
  */
-function planPassListing(listPasses, readSession) {
+function planPassListing(listPasses, { store, sessionId, descriptor }) {
   let listing = null;
-  return () => (listing ??= readSession().then((session) => listSessionPasses(listPasses, session)));
+  return () => (listing ??= (async () => listSessionPasses(listPasses, {
+    ...descriptor,
+    sessionId,
+    metadata: { ...descriptor.metadata, connected_copies: await store.readMetadataValue(sessionId, "connected_copies") }
+  }))());
 }
 
 /**

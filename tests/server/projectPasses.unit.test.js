@@ -104,7 +104,8 @@ test("the Passes list and a suggestion's Later give Genesis the session's connec
   const f = await project(t, { connected });
   assert.equal((await f.read()).ok, true);
   assert.equal((await f.passes.changePassRecommendation("session-1", { passId: "deslop", action: "snooze" })).ok, true);
-  assert.deepEqual(f.listed, [{ projectRoot: "", connectedRoots: connected }, { projectRoot: "", connectedRoots: connected }]);
+  // The list lists once; Later lists to check the pass, then for the list it answers with.
+  assert.deepEqual(f.listed, [1, 2, 3].map(() => ({ projectRoot: "", connectedRoots: connected })));
 });
 
 test("a project whose own Genesis runs no pass lists its passes with Genesis's reason and suggests none", async (t) => {
