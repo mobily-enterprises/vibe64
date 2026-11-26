@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHeldRequests } from "@local/vibe64-core/server/heldRequests";
 import { createHeldWork } from "@local/vibe64-core/server/heldWork";
 
 // Held work is what a request starts and answers before it ends, so a slow dependency (a workspace preparation, a
@@ -112,6 +113,65 @@ test("held work awaits its held hook before the held answer and its settled hook
       await work.close();
     }
   });
+
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+test("an archive's timing names its session and request, and gives each stage's duration beside its start", async () => {
+  const { logged, logger } = recordingLogger();
+  const archives = createHeldRequests({
+    component: "vibe64.session_archive",
+    heldAs: "archiving",
+    logger,
+    notFollowed: { code: "not_followed", error: "Not followed." },
+    scopeNames: ["sessionId"]
+  });
+  try {
+    const result = await archives.run(["session-7"], { requestId: "request-1" }, async (request, { stage }) => {
+      stage("stopping");
+      await pause(20);
+      stage("preparing");
+      await pause(80);
+      stage("source");
+      return { ok: true };
+    });
+    assert.deepEqual(result, { ok: true });
+    const timing = logged.find(entry => entry.event === "vibe64.session_archive.timing");
+    assert.equal(timing.sessionId, "session-7");
+    assert.equal(timing.requestId, "request-1");
+    assert.deepEqual(Object.keys(timing.stageMs), ["received", "stopping", "preparing", "source"]);
+    // Each stage lasts until the next starts; the last until the work finished.
+    assert.equal(timing.stageMs.stopping, timing.stages.preparing - timing.stages.stopping);
+    assert.equal(timing.stageMs.preparing, timing.stages.source - timing.stages.preparing);
+    assert.equal(timing.stageMs.source, timing.stages.finished - timing.stages.source);
+    assert.ok(timing.stageMs.preparing >= 75, `preparing took ${timing.stageMs.preparing} ms`);
+    assert.ok(timing.stageMs.stopping < timing.stageMs.preparing);
+  } finally {
+    await archives.close();
+  }
+});
+
+test("a held answer going out inside a stage is no stage of its own in the timing's durations", async () => {
+  const { logged, logger } = recordingLogger();
+  const work = createHeldWork({ component: "test.answered", logger, answerMs: 20 });
+  try {
+    const answer = await work.run("slow", async ({ stage }) => {
+      stage("stopping");
+      await pause(60);
+      stage("source");
+      return { ok: true };
+    }, { sessionId: "session-8" });
+    assert.equal(answer.settled, false);
+    await eventually(() => work.inspect("slow")?.settled, "the work did not settle");
+    const timing = logged.find(entry => entry.event === "test.answered.timing");
+    assert.ok(Number.isFinite(timing.stages.answered));
+    assert.equal("answered" in timing.stageMs, false);
+    assert.equal(timing.stageMs.stopping, timing.stages.source - timing.stages.stopping);
+    assert.equal(timing.sessionId, "session-8");
+    assert.equal(logged.find(entry => entry.event === "test.answered.held").sessionId, "session-8");
+  } finally {
+    await work.close();
+  }
+});
 
 test("closing held work aborts each running work's signal and waits for it to end", async () => {
   const work = createHeldWork({ component: "test.close", answerMs: 20 });

@@ -333,7 +333,8 @@ function createSessionArchive({
     component: "vibe64.session_archive",
     heldAs: "archiving",
     logger,
-    notFollowed: ARCHIVE_NOT_FOLLOWED
+    notFollowed: ARCHIVE_NOT_FOLLOWED,
+    scopeNames: ["sessionId"]
   });
 
   /**

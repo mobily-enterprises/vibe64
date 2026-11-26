@@ -19,18 +19,32 @@ function noFields() {
 }
 
 /**
+ * How long each stage took: from its start to the next stage's, the last to `finished`. `answered` marks when the
+ * held answer went out, inside a stage, so it is no stage of its own.
+ * @param {Record<string, number>} stages each stage's start, in ms from the work's arrival
+ */
+function stageDurations(stages) {
+  const starts = Object.entries(stages)
+    .filter(([name]) => name !== "answered")
+    .sort(([, left], [, right]) => left - right);
+  return Object.fromEntries(starts
+    .filter(([name]) => name !== "finished")
+    .map(([name, start], index) => [name, starts[index + 1][1] - start]));
+}
+
+/**
  * Work a request starts and answers before it ends. Each key runs one work at a time: a run for a key whose work
  * is still going (a Retry, a second tab, a reload) joins it and never starts a second, and a run for a key whose work
  * has ended starts it again under a new operation id. A run whose work ends within `answerMs` answers with its
  * result, or rejects with its error, as the request always did; a later one answers that the work is held, with its
  * operation id and what it waits for (`stage`), and `inspect` reports it and, for `outcomeMs` after it ends, its
- * outcome. Each work's timing from its arrival is logged when it ends (`<component>.timing`, at warn when held or
- * slow), and each held answer (`<component>.held`).
+ * outcome. Each work's timing is logged when it ends (`<component>.timing`, at warn when held or slow): each stage's
+ * start from its arrival (`stages`) and how long it took (`stageMs`); and each held answer (`<component>.held`).
  *
  * `held(operation)` is awaited once, before a work's first held answer goes out, and `settled(operation)` when it
  * ends, before its outcome is read; a hook's failure is logged, never the work's. Both receive the live operation:
  * `{ operationId, key, receivedAt, settled, waitingFor, stages, heldAnswer, elapsedMs, result, error }`, which is
- * also what `inspect` returns. `fields(operation)` adds fields to each log line.
+ * also what `inspect` returns. `fields(operation)` adds fields to each log line, as does each run's own `fields`.
  * @param {object} options
  * @param {string} options.component
  * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} [options.logger]
@@ -62,7 +76,13 @@ function createHeldWork({
   /** Logging and hooks are the work's diagnostics and bookkeeping, never its outcome. */
   function log(level, event, entry, extra, message) {
     try {
-      logOperationalEvent(logger, level, { ...extra, ...fields(entry.operation), component, event }, message);
+      logOperationalEvent(logger, level, {
+        ...extra,
+        ...entry.fields,
+        ...fields(entry.operation),
+        component,
+        event
+      }, message);
     } catch {
       // Diagnostic only.
     }
@@ -76,9 +96,10 @@ function createHeldWork({
     }
   }
 
-  function start(key, work) {
+  function start(key, work, runFields) {
     const entry = {
       key,
+      fields: runFields,
       operationId: crypto.randomUUID(),
       receivedAt: Date.now(),
       stage: "received",
@@ -131,6 +152,7 @@ function createHeldWork({
           elapsedMs,
           held: entry.heldAnswer,
           stages: entry.stages,
+          stageMs: stageDurations(entry.stages),
           outcome: outcome.error ? "failed" : "finished"
         }, "Held work timing, from its arrival.");
         const forget = setTimeout(() => {
@@ -148,11 +170,12 @@ function createHeldWork({
    * @template T
    * @param {string} key
    * @param {(controls: { stage: (name: string) => void, signal: AbortSignal }) => T | Promise<T>} work
+   * @param {object} [runFields] fields the work's log lines carry, such as the session it is for
    * @returns {Promise<{ settled: true, result: Awaited<T> } | { settled: false, operationId: string, waitingFor: string }>}
    */
-  async function run(key, work) {
+  async function run(key, work, runFields = {}) {
     const existing = entries.get(key);
-    const entry = existing && !existing.settled ? existing : start(key, work);
+    const entry = existing && !existing.settled ? existing : start(key, work, runFields);
     const answered = new AbortController();
     const outcome = await Promise.race([
       entry.done,
