@@ -35,8 +35,8 @@ import { turnInterruptionCarriedOn, turnInterruptionLines } from "@local/vibe64-
 import { useProblemReport } from "@/composables/useProblemReport.js";
 
 // A turn interruption's permanent entry in a chat's history (turnInterruptions.js writes it), with times on the
-// viewer's own clock: in red, what ended the turn, then whether Vibe64 resumed it or why not; in green, one line for a
-// planned stop (a release, a restart) that the work carried on through, since nothing went wrong.
+// viewer's own clock: in red, what ended the turn, then whether Vibe64 resumed it or why not, and Report a problem; in
+// green, one line for a planned stop (a release, a restart) that the work carried on through, since nothing went wrong.
 const props = defineProps({ entry: { type: Object, required: true } });
 const problemReport = useProblemReport();
 

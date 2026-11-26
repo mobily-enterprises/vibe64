@@ -33,8 +33,9 @@ The app's shell (`StudioAppShellLayout`) makes the page's Report a problem once
 (`provideProblemReport`) and holds its dialog; it records the errors the page
 sees from its mount (window errors, unhandled rejections, and the shell error
 runtime's reported errors and warnings), the newest 50. Inside the shell the
-Account menu opens it on every page, and a failed routed request and a turn
-interruption open it with the chat ticked in; a view that shows a session names
+Account menu opens it on every page, and a failed routed request and a red turn
+interruption open it with the chat ticked in (a planned stop's green line, which
+the work carried on through, offers none); a view that shows a session names
 it while shown (`useProblemReportPlace`), the newest such view being the place
 a report describes. Outside the shell nothing opens it.
 
