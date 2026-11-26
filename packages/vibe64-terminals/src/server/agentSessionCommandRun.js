@@ -9,8 +9,12 @@ import { agentControlIdentitySource } from "@local/vibe64-execution/server";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
 import { commandLineFailure } from "./commandFailure.js";
+import { unixCommandSocketPath } from "./unixJsonCommand.js";
 
 const AGENT_SESSION_COMMAND_NAME = "vibe64-session-command";
+const AGENT_SESSION_COMMAND_RUNNER_NAME = "vibe64-session-command-runner";
+const AGENT_SESSION_COMMAND_SOCKET_NAME = "session-command.sock";
+const AGENT_SESSION_COMMAND_RUNS_DIR_NAME = "session-command-runs";
 
 // The fields each session command reads, as its route hands them over: any other, and a missing one it needs, is
 // refused before the command acts (refuseUnreadFields). The session client below sends each command only its own.
@@ -62,6 +66,23 @@ const AGENT_SESSION_DESKTOP_BUS_ENV_NAMES = new Set([
   "DBUS_STARTER_BUS_TYPE"
 ]);
 
+/** Where the session command's wrapper, runner, socket and runs live in its host wrapper folder. */
+function wrapperHostPath(wrapperHostDir = "") {
+  return path.join(wrapperHostDir, AGENT_SESSION_COMMAND_NAME);
+}
+
+function runnerHostPath(wrapperHostDir = "") {
+  return path.join(wrapperHostDir, AGENT_SESSION_COMMAND_RUNNER_NAME);
+}
+
+/** The command's socket, under this server process's temporary directory. */
+function commandSocketHostPath(wrapperHostDir = "") {
+  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_SESSION_COMMAND_SOCKET_NAME), { env: process.env });
+}
+
+function commandRunsHostPath(wrapperHostDir = "") {
+  return path.join(wrapperHostDir, AGENT_SESSION_COMMAND_RUNS_DIR_NAME);
+}
 
 function commandWrapperSource() {
   return `#!/usr/bin/env node
@@ -407,9 +428,12 @@ export {
   AGENT_SESSION_COMMAND_NAME,
   AGENT_SESSION_COMMAND_TIMEOUT_MS,
   commandRunnerSource,
+  commandRunsHostPath,
+  commandSocketHostPath,
   commandWrapperSource,
   decodedCommand,
   readBoundedFile,
+  runnerHostPath,
   sanitizedCommandEnvironment,
   SESSION_RENAME_CONTROL_ENV,
   sessionCommandCwd,
@@ -425,5 +449,6 @@ export {
   VIBE64_AGENT_SESSION_RUN_RESULT_ENV,
   VIBE64_WRAPPER_ENV,
   waitForCommandResult,
-  waitForSessionCommand
+  waitForSessionCommand,
+  wrapperHostPath
 };

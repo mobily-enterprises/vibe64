@@ -804,11 +804,17 @@ delivery; Core's problemReport module owns the bundle's shape and masking. The
 routing's delivery is observed for the session's timeline (its failed and
 refused deliveries), without changing a routing decision.
 
+Owns each Main turn's count of its repeated shell commands
+(`agentCommandRepeats.js`), in memory and for the running turn only: a turn
+that clearly reruns too much tells its AI once through Main chat's note and
+shows the person its numbers when it ends, never stopping or slowing a command.
+
 ### Source
 - Directory `packages/vibe64-terminals`
 
 ### Program
 - `genesis/program/conversation/direct-chat.md`
+- `genesis/program/conversation/repeated-commands.md`
 - `genesis/program/conversation/temporary-assistance.md`
 - `genesis/program/execution/workspace-setup.md`
 - `genesis/program/operations/problem-reports.md`

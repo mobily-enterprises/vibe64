@@ -207,6 +207,7 @@ function createService({
     continueGoalWhenLimitResets: (sessionId) => goals.continueGoalWhenLimitResets(sessionId),
     resumeGoalAfterTurn: (sessionId) => goals.resumeGoalAfterTurn(sessionId),
     restorePreviewAfterTurn: (sessionId) => commands.outputTarget.restorePreviewAfterTurn(sessionId),
+    summarizeTurnCommands: (sessionId) => commands.agentSessionCommand.summarizeTurnCommands(sessionId),
     logger,
     providerUsage,
     publishSessionChanged,
@@ -231,6 +232,7 @@ function createService({
     savedEnvValueLinks,
     helperCommandGroups,
     sendAgentMessage: (sessionId, message, options) => assistant.sendAgentMessage(sessionId, message, options),
+    noteMainChat: (sessionId, input, options) => noteMainChat(sessionId, input, options),
     sessionAccess,
     state,
     workspacePreparation
@@ -505,6 +507,8 @@ function createService({
     sessionNaming,
     plannedRestart
   });
+  // Vibe64's note to Main chat's AI: Update and Save's, and the command services' note of a turn's repeated commands.
+  const noteMainChat = createMainChatNote({ assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent });
   const hostSlots = createServiceHostSlots({ state });
 
   const terminalControls = createTerminalControls({
@@ -664,7 +668,7 @@ function createService({
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,
     sessionAssistantWorking,
-    noteMainChat: createMainChatNote({ assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent }),
+    noteMainChat,
     prepareAssistantChangeover: assistantPreparation.prepareAssistantChangeover,
     prepareRoutingSelection: assistantPreparation.prepareRoutingSelection,
     applyGoalSelection: goals.applyGoalSelection,
