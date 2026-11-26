@@ -383,6 +383,41 @@ function createExplanationOperations({
   });
 }
 
+// The selection an indexed symbol names in `file` ({ path, hash }, read as `lines`), from Genesis's validated
+// architecture facts: refused when the symbol or its file changed after analysis or its range does not fit the file.
+function indexedSymbolSelection(architecture, symbolId, file, lines, presentation) {
+  const symbol = architecture.symbols.find(entry => entry.id === symbolId);
+  const indexedFile = architecture.files.find(entry => entry.id === symbol?.fileId);
+  if (!symbol?.rangeAvailable ||
+      symbol.path !== file.path ||
+      indexedFile?.path !== file.path ||
+      indexedFile.hash !== `sha256:${file.hash}`) {
+    throw sourceEditorError(
+      "This symbol changed after analysis. Refresh analysis before describing it.",
+      "vibe64_source_explanation_symbol_changed",
+      {},
+      409
+    );
+  }
+  for (const point of [symbol.start, symbol.end]) {
+    if (point.line > lines.length || point.column > lines[point.line - 1].length + 1) {
+      throw sourceEditorError(
+        "The indexed symbol range is invalid for this file. Refresh analysis.",
+        "vibe64_source_explanation_symbol_range_invalid",
+        {},
+        409
+      );
+    }
+  }
+  if (presentation === "steps" && !Array.isArray(symbol.parameters)) {
+    throw sourceEditorError(
+      "Explain function is available for callable declarations. Use Explain file or Code for other declarations.",
+      "vibe64_source_explanation_not_callable"
+    );
+  }
+  return { startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column };
+}
+
 async function sourceEditorExplanationInput(context, input) {
   const file = await readSourceEditorFile(context, input.path);
   if (input.expectedHash && input.expectedHash !== file.hash) {
@@ -446,36 +481,7 @@ async function sourceEditorExplanationInput(context, input) {
         409
       );
     }
-    const symbol = architecture.symbols.find(entry => entry.id === symbolId);
-    const indexedFile = architecture.files.find(entry => entry.id === symbol?.fileId);
-    if (!symbol?.rangeAvailable ||
-        symbol.path !== file.path ||
-        indexedFile?.path !== file.path ||
-        indexedFile.hash !== `sha256:${file.hash}`) {
-      throw sourceEditorError(
-        "This symbol changed after analysis. Refresh analysis before describing it.",
-        "vibe64_source_explanation_symbol_changed",
-        {},
-        409
-      );
-    }
-    for (const point of [symbol.start, symbol.end]) {
-      if (point.line > lines.length || point.column > lines[point.line - 1].length + 1) {
-        throw sourceEditorError(
-          "The indexed symbol range is invalid for this file. Refresh analysis.",
-          "vibe64_source_explanation_symbol_range_invalid",
-          {},
-          409
-        );
-      }
-    }
-    if (presentation === "steps" && !Array.isArray(symbol.parameters)) {
-      throw sourceEditorError(
-        "Explain function is available for callable declarations. Use Explain file or Code for other declarations.",
-        "vibe64_source_explanation_not_callable"
-      );
-    }
-    selection = { startLine: symbol.start.line, startColumn: symbol.start.column, endLine: symbol.end.line, endColumn: symbol.end.column };
+    selection = indexedSymbolSelection(architecture, symbolId, file, lines, presentation);
   }
   const scope = symbolId !== undefined ? "selection" : toText(input.scope) === "file" ? "file" : "selection";
   if (scope === "file" && presentation === "description") {
@@ -715,6 +721,7 @@ async function streamSourceEditorExplanation(context, input, options) {
 export {
   createExplanationOperations,
   describeSourceEditorAgentProvider,
+  indexedSymbolSelection,
   sourceEditorInterfacePromptVersion,
   sourceEditorVibe64UserIdentity
 };
