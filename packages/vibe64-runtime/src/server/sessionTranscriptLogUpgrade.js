@@ -20,14 +20,11 @@ import {
 /** @typedef {import("./sessionTemporaryConversationRemoval.js").PrepareSessionStateUpgrade} PrepareSessionStateUpgrade */
 
 /**
- * The new file for a chat's old record, in a frame of its own: the record it parses is garbage once it returns, before
- * the comparison after it parses the chat twice more, so a chat is held as two parsed copies at most, not three.
+ * The new file for a chat's old record, in a frame of its own, so the record it parses is garbage once it returns.
  * @param {string} original
  */
 function transcriptLogFromLegacy(original) {
   const record = parseLegacyTranscript(original);
-  const unknown = Object.keys(JSON.parse(original)).filter((key) => !["version", "metadata", "rewound", "turns", "summary"].includes(key));
-  if (unknown.length) throw new Error(`fields this upgrade does not know (${unknown.join(", ")})`);
   for (const [turnId, turn] of record.turns) {
     const fields = Object.keys(turn).filter((key) => !["messages", "metadata"].includes(key));
     if (fields.length) throw new Error(`turn ${turnId} has fields this upgrade does not know (${fields.join(", ")})`);
@@ -52,9 +49,10 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
    * since; publishedEarlier says whether a new file is still exactly what an
    * earlier run published.
    * `stage: false` (a standalone check) converts and compares every chat but stages nothing and repacks no archive.
-   * A live chat's new file goes to `temporaryRoot` as it is made, and its updates keep the digests of what was read,
-   * never the chat: what a preparation holds follows the one chat it converts, not every chat of the workspace. An
-   * archive's changes are written into its extracted copy, one archive at a time.
+   * Each chat's new file goes to `temporaryRoot` as it is made, a live one's and an archived one's alike, and its
+   * updates keep the digests of what was read, never the chat: what a preparation holds follows the one chat it
+   * converts, not every chat of an archive or of the workspace. An archive's staged files are moved into its extracted
+   * copy, which is repacked, one archive at a time.
    * @param {{ temporaryRoot: string, apply: boolean, stage?: boolean, publishedEarlier: (filePath: string, contents: string) => Promise<boolean> }} options
    * @returns {Promise<{ updates: object[], chats: number, perTurnLayouts: number }>}
    */
@@ -64,7 +62,7 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
     const updates = await prepareSessionStateUpgrade({
       temporaryRoot,
       stage,
-      async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText, archiveRecord }) {
+      async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText }) {
         await checkedPath(sessionPaths.sessionRoot, true);
         const scopes = [sessionPaths];
         for (const entry of await inventory(sessionPaths.conversationsRoot)) {
@@ -86,7 +84,7 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
             }
             continue;
           }
-          const original = await readRegularText(legacyPath);
+          let original = await readRegularText(legacyPath);
           const converted = await checkedPath(logPath);
           if (original === MOVED_TRANSCRIPT_NOTE) {
             if (!converted) throw new Error(`A converted chat has lost its transcript: ${logPath}. Restore it from the upgrade backup before upgrading.`);
@@ -102,26 +100,30 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
               throw new Error(`A chat has both an old transcript and a new one this upgrade did not publish or that has been written to since: ${scope.conversationLogRoot}. Inspect it and the upgrade backups before upgrading.`);
             }
           }
+          const originalDigest = sha256Hex(original);
           let contents;
+          let expected;
           try {
-            contents = transcriptLogFromLegacy(original);
+            contents = Buffer.from(transcriptLogFromLegacy(original), "utf8");
+            // The old record parsed once more, for the comparison: what it holds that the new file has no place for
+            // is refused by name first.
+            expected = JSON.parse(original);
+            const unknown = Object.keys(expected).filter((key) => !["version", "metadata", "rewound", "turns", "summary"].includes(key));
+            if (unknown.length) throw new Error(`fields this upgrade does not know (${unknown.join(", ")})`);
           } catch (error) {
             throw new Error(`Chat transcript ${legacyPath} cannot be converted: ${error.message} Inspect it, or restore it from a backup, before upgrading.`);
           }
-          if (!isDeepStrictEqual(legacyTranscriptJson(parseTranscriptLog(Buffer.from(contents, "utf8")).record), JSON.parse(original))) {
+          // The chat's text is let go before its new file is read back, so a chat is held as its new bytes and two
+          // parsed copies at most, never its text as well.
+          original = null;
+          if (!isDeepStrictEqual(legacyTranscriptJson(parseTranscriptLog(contents).record), expected)) {
             throw new Error(`Chat transcript ${legacyPath} did not convert exactly, and nothing was changed. Inspect it before upgrading.`);
           }
+          expected = null;
           chats += 1;
-          if (archiveRecord) {
-            changes.push(
-              { filePath: logPath, original: leftover, contents },
-              { filePath: legacyPath, original, contents: MOVED_TRANSCRIPT_NOTE }
-            );
-            continue;
-          }
           changes.push(
             await stagedUpgradeFile({ temporaryRoot, stage, filePath: logPath, original: leftover, contents }),
-            { filePath: legacyPath, originalDigest: sha256Hex(original), contents: MOVED_TRANSCRIPT_NOTE }
+            { filePath: legacyPath, originalDigest, contents: MOVED_TRANSCRIPT_NOTE }
           );
         }
         return changes;
