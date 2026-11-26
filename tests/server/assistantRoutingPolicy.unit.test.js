@@ -279,7 +279,7 @@ test("Auto distinguishes plan execution and confirmations from planning while pr
 });
 
 // The owner's messages in Auto chats that Router labelled conversation or implementation and sent to
-// Junior (mercbot-online, 2026-11-12; mobilynet, 2026-11-23, after a question Junior answered);
+// Junior (another project's chats, 2026-11-12; mobilynet, 2026-11-23, after a question Junior answered);
 // "…" stands for text the record elides.
 const PLAN_REQUESTS_ROUTED_TO_JUNIOR = [
   "[1] Yes, make a plan from it [2] … IN THE SAME PLAN: …",

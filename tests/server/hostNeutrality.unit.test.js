@@ -81,6 +81,41 @@ test("public sources read no private workspace variable", () => {
   assert.deepEqual(findings, []);
 });
 
+// Public Vibe64 is the editor every host runs, so its files speak of a machine, a workspace and a host, never of one
+// hosting platform's machines, customers, repositories, accounts or pages. Each term is written here so it never
+// matches itself, beside the neutral word that replaces it.
+const PLATFORM_TERMS = [
+  { term: /\bV[P]S\b/u, neutral: "machine (\"a machine restart\")" },
+  { term: /\b[Tt]enants?\b/u, neutral: "workspace, or the person or team it is for" },
+  { term: /\b[Ff]leet\b/u, neutral: "the machines" },
+  { term: /\bO[n]line\b/u, neutral: "a host" },
+  // A hosting platform's own repositories; npm's --prefer-online and systemd's network-online.target are not.
+  { term: /(?<!prefer|network)-o[n]line\b/u, neutral: "a host's own repository" },
+  { term: /\bv64d[_]/u, neutral: "the workspace's own account (DAEMON_USERNAME_PREFIX, in the helper alone)" },
+  { term: /\bKeys (?:&|and) a[c]counts\b|\bkeys-(?:and)-accounts\b|\/api\/vibe64\/k[e]ys\b/u, neutral: "the host's own pages" }
+];
+// Integrations keep their provider's own word for a customer (Microsoft directory IDs, Workday and Xero, multi-customer
+// apps), as does the voice access token API; Genesis's Agent Skills, synced verbatim into .agents/skills, keep its
+// generic guidance on another customer's ids.
+const PROVIDER_VOCABULARY = {
+  term: PLATFORM_TERMS[1].term,
+  files: /^(?:genesis\/program\/source\/edit-and-review\.md$|packages\/vibe64-source-editor\/docs\/|tests\/e2e\/integrations\.spec\.ts$|tests\/server\/vibe64Voice\.unit\.test\.js$|\.agents\/skills\/genesis-)/u
+};
+
+test("public sources use no hosting platform's words, only the neutral ones", () => {
+  const findings = [];
+  for (const file of trackedFiles()) {
+    if (ALLOWED_FILES.has(file)) continue;
+    readText(file).split("\n").forEach((line, index) => {
+      for (const { term, neutral } of PLATFORM_TERMS) {
+        if (!term.test(line) || (term === PROVIDER_VOCABULARY.term && PROVIDER_VOCABULARY.files.test(file))) continue;
+        findings.push(`${file}:${index + 1}: say ${neutral}: ${line.trim().slice(0, 160)}`);
+      }
+    });
+  }
+  assert.deepEqual(findings, []);
+});
+
 test("the allowed exceptions still exist", () => {
   for (const file of ALLOWED_FILES) assert.ok(existsSync(path.join(REPO_ROOT, file)), file);
 });
