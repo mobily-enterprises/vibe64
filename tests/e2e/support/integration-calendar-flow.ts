@@ -34,3 +34,59 @@ export const INTEGRATIONS_AFTER_CALENDAR_FLOW = `{
   }
 }
 `;
+
+// The file the existing and responsive tests leave once they have also saved
+// Resend and Firecrawl with key references after that flow. They pin it byte
+// for byte; the compact Env test starts from it instead of repeating them.
+export const INTEGRATIONS_AFTER_TOKEN_FLOW = `{
+  "schemaVersion": 1,
+  "integrations": {
+    "google-calendar": {
+      "provider": "google-calendar",
+      "displayName": "After CLI update",
+      "accountMode": "shared",
+      "scopes": [
+        "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+        "https://www.googleapis.com/auth/calendar.events.readonly"
+      ],
+      "authentication": {
+        "method": "oauth2",
+        "registrationRef": "google-calendar"
+      }
+    },
+    "resend": {
+      "provider": "resend",
+      "displayName": "Resend",
+      "accountMode": "shared",
+      "scopes": [],
+      "authentication": {
+        "method": "api-key",
+        "secretRef": "env:RESEND_KEY"
+      }
+    },
+    "firecrawl": {
+      "provider": "firecrawl",
+      "displayName": "Firecrawl",
+      "accountMode": "shared",
+      "scopes": [],
+      "authentication": {
+        "method": "api-key",
+        "secretRef": "env:FIRECRAWL_KEY"
+      }
+    }
+  },
+  "registrations": {
+    "google-calendar": {
+      "source": "own",
+      "clientId": "fixture.apps.googleusercontent.com",
+      "clientSecretRef": "env:GOOGLE_CALENDAR_CLIENT_SECRET",
+      "callbackUrlRef": "env:GOOGLE_CALENDAR_CALLBACK_URL"
+    }
+  },
+  "extensions": {
+    "application": {
+      "keep": true
+    }
+  }
+}
+`;
