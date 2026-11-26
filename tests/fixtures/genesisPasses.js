@@ -91,7 +91,7 @@ const GENESIS_PASSES = Object.freeze([
 const GENESIS_MASTER_PASS = Object.freeze({
   id: "master-pass",
   title: "Master pass",
-  description: "Runs every pass deeply, one after another, or the passes you choose, committing and running the whole test suite after each.",
+  description: "Runs every pass deeply, one after another, or the passes you choose, committing each, and asks you before one whole test suite run at the end.",
   request: "Master pass the whole app.",
   skill: "genesis-master-pass",
   lastRun: null,
