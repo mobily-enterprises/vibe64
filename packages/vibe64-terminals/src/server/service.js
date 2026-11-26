@@ -28,6 +28,7 @@ import { createMainTurnAuthority } from "./mainTurnAuthority.js";
 import { createServiceAssistant } from "./serviceAssistant.js";
 import { createServiceMainConversationHost } from "./serviceMainConversationHost.js";
 import { createServiceAgentConversations } from "./serviceAgentConversations.js";
+import { createProblemReportSessionReader } from "./problemReport/problemReportSession.js";
 import { createServiceSessionWork } from "./serviceSessionWork.js";
 import { createMainChatNote, MAIN_CHAT_NOTE_METADATA_KEY, messageWithMainChatNote, pendingMainChatNote } from "./mainChatNote.js";
 import { prepareConnectedRepositories } from "./serviceSessionConnectedCopies.js";
@@ -617,6 +618,7 @@ function createService({
     updateCanonicalAgentGoal: goals.updateCanonicalAgentGoal,
     readAgentPlanUsage: assistant.readAgentPlanUsage,
     readSessionWorkPlan: agentConversations.readSessionWorkPlan,
+    readProblemReportSession: createProblemReportSessionReader({ sessionAccess, projectRuntime }).read,
     readSessionPasses: passes.readSessionPasses,
     changePassRecommendation: passes.changePassRecommendation,
     archiveSessionWorkPlan: agentConversations.archiveSessionWorkPlan,
@@ -644,9 +646,7 @@ function createService({
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,
     sessionAssistantWorking,
-    noteMainChat: createMainChatNote({
-      assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent
-    }),
+    noteMainChat: createMainChatNote({ assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent }),
     prepareAssistantChangeover: assistantPreparation.prepareAssistantChangeover,
     prepareRoutingSelection: assistantPreparation.prepareRoutingSelection,
     applyGoalSelection: goals.applyGoalSelection,

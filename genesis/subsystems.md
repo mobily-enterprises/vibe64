@@ -796,6 +796,13 @@ the next run how this one ended, and the restart recovery that resumes each
 interrupted Main chat, temporary chat and goal turn once and writes its red
 history entry; AI Tasks resumes its own tasks' turns through the same rule and
 entry. Core's crash records describe a crash and count the turns it resumed.
+Owns Report a problem's collection: one masked report of what the editor saw
+around a person's problem (the page, the session's described turns, timeline,
+plan and routed request, its Preview, crashes, versions, and the chat only when
+included), kept as that person's draft and handed to an optional host's
+delivery; Core's problemReport module owns the bundle's shape and masking. The
+routing's delivery is observed for the session's timeline (its failed and
+refused deliveries), without changing a routing decision.
 
 ### Source
 - Directory `packages/vibe64-terminals`
@@ -804,6 +811,7 @@ entry. Core's crash records describe a crash and count the turns it resumed.
 - `genesis/program/conversation/direct-chat.md`
 - `genesis/program/conversation/temporary-assistance.md`
 - `genesis/program/execution/workspace-setup.md`
+- `genesis/program/operations/problem-reports.md`
 - `genesis/program/preview/managed-application.md`
 - `genesis/program/source/save-work.md`
 

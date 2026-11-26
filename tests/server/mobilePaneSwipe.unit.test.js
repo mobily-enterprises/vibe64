@@ -5,7 +5,8 @@ import { parse } from "@vue/compiler-sfc";
 import { effectScope, nextTick, reactive, watch } from "vue";
 
 const { descriptor } = parse(await readFile(new URL("../../src/components/StudioAppShellLayout.vue", import.meta.url), "utf8"));
-const setup = new Function("defineProps", "defineEmits", "watch", "useShellAppBar", "window",
+// The shell's own Report a problem (provideProblemReport) is a stand-in here: this test is about the pane swipe.
+const setup = new Function("defineProps", "defineEmits", "watch", "useShellAppBar", "provideProblemReport", "window",
   descriptor.scriptSetup.content.replace(/^import .*;$/gmu, "")
   + "\nreturn { startPaneSwipe, movePaneSwipe, endPaneSwipe, cancelPaneSwipe };");
 
@@ -22,7 +23,7 @@ function fixture(t, overrides = {}) {
   const handlers = scope.run(() => setup(() => props, () => (name, value) => {
     assert.equal(name, "update:chatCollapsed");
     changes.push(value);
-  }, watch, () => {}, window));
+  }, watch, () => {}, () => null, window));
   t.after(() => scope.stop());
 
   function event(x, y = 100, options = {}) {

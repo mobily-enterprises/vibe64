@@ -51,6 +51,8 @@ test("navigation.guide opens studio places by route, project places in the proje
   { id: "two", projectSlug: "alpha", sessionId: "s1", conversationId: "", pane: "deploy", status: "pending" });
   assert.deepEqual(trainingGuideCommand(trainingGuideRequest({ target: "account-settings" }), { id: "three" }).guide.steps.map(step => step.id),
     ["account-menu", "account-settings"]);
+  assert.deepEqual(trainingGuideCommand(trainingGuideRequest({ target: "report-a-problem" }), { id: "four" }).guide.steps.map(step => step.id),
+    ["account-menu", "report-a-problem"]);
   assert.throws(() => trainingGuideRequest({ target: "account-menu", navigate: true }), /has no view to open/u);
   assert.throws(() => trainingGuideRequest({ target: "manage-users" }), /guide places: preview, .*ai-setup\./u, "without the host, its places are unknown");
   assert.throws(() => trainingGuideRequest({ target: "workspace-preview" }), /guide places/u, "retired aliases are gone");

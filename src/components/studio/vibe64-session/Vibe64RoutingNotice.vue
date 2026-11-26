@@ -21,6 +21,8 @@
       <!-- A held action says why it can't be pressed, in the words the plan's status line uses. -->
       <span v-if="action.waits" :id="waitsId" class="text-body-small vibe64-routing-notice__waits">{{ action.waits.charAt(0).toUpperCase() + action.waits.slice(1) }}.</span>
     </div>
+    <!-- A request that failed can be reported from where it shows, with this chat. -->
+    <v-btn v-if="request.error && problemReport.available" variant="text" size="small" density="compact" data-vibe64-report-problem @click="problemReport.open({ includeChat: true })">Report a problem</v-btn>
   </v-alert>
 </template>
 
@@ -28,6 +30,7 @@
 import { computed, useId, watch } from "vue";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { assistantRoutingNotice } from "@local/vibe64-runtime/shared/assistantRoutingNotice";
+import { useProblemReport } from "@/composables/useProblemReport.js";
 
 const props = defineProps({ request: { type: Object, default: null }, selection: { type: Object, default: null }, mode: { type: String, default: "" }, active: Boolean, pendingAction: { type: String, default: "" }, actionError: { type: String, default: "" },
   // What holds the chat: "turn" (the assistant's turn), "message" (the person's message being sent) or "voice".
@@ -35,6 +38,7 @@ const props = defineProps({ request: { type: Object, default: null }, selection:
 // checks: the answer to the whole-project checks question once a plan is finished, "yes" or "no".
 const emit = defineEmits(["retry", "skip", "implement", "view-plan", "checks"]);
 const feedback = useShellWebErrorRuntime();
+const problemReport = useProblemReport();
 const waitsId = `vibe64-routing-notice-waits-${useId()}`;
 const notice = computed(() => assistantRoutingNotice(props.request, {
   mode: props.mode, selection: props.selection, busy: props.busy, pendingAction: props.pendingAction

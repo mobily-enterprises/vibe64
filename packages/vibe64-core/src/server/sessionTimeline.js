@@ -4,8 +4,10 @@ import { sanitizeLogText } from "./logging.js";
 import { currentProjectRuntimeRoot } from "./projectRequestContext.js";
 
 // A session's timeline says what happened to it: its turns, conversations, AI
-// engine processes, browser connections and failed requests, one JSON line per
-// event in <projectRuntimeRoot>/timeline/<sessionId>.jsonl, beside the
+// engine processes, browser connections, failed requests and the routed
+// requests Vibe64 could not deliver to the AI (Senior, Junior and their automatic
+// next steps), one JSON line per event in
+// <projectRuntimeRoot>/timeline/<sessionId>.jsonl, beside the
 // session's state. A line holds event metadata only (ids, states, codes,
 // reasons and who asked), never message text, prompts, tool output, secrets
 // or file contents; each value is a short string, a number or a boolean.
@@ -22,7 +24,7 @@ import { currentProjectRuntimeRoot } from "./projectRequestContext.js";
 const SESSION_TIMELINE_DIRECTORY = "timeline";
 const SESSION_TIMELINE_FILE_BYTES = 1024 * 1024;
 const SESSION_TIMELINE_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
-const SESSION_TIMELINE_KINDS = Object.freeze(["turn", "conversation", "process", "connection", "request", "server"]);
+const SESSION_TIMELINE_KINDS = Object.freeze(["turn", "conversation", "process", "connection", "request", "server", "routing"]);
 const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const VALUE_MAX_CHARACTERS = 200;
 const FIELD_LIMIT = 24;
