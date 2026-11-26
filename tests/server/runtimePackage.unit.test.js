@@ -469,7 +469,8 @@ test("runtime release relocates, runs native and browser services, and packs wit
         systemRoot: ${JSON.stringify(path.join(root, "boot-state"))}, logLevel: "silent" });
       console.log("started");
       process.exit(0);
-    `], { cwd: installed, timeout: 60_000 });
+    `], { cwd: installed, timeout: 60_000, env: { ...process.env, APP_ENV: "production", NODE_ENV: "production",
+      VIBE64_RUNTIME_NAMESPACE: `boot-proof-${process.pid}` } });
     await assert.rejects(start, error => error.code === 1 && !/started/u.test(error.stdout) &&
       /command spawner could not run a command, and every command goes through it/u.test(error.stderr));
   } finally {
