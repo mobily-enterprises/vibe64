@@ -7,27 +7,26 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import {
-  endCaptures,
-  runCaptureCommand,
-  stopCaptureExecution
-} from "../../packages/vibe64-execution/src/server/engines/capture.js";
+import { runCaptureCommand, stopCaptureExecution } from "../../packages/vibe64-execution/src/server/engines/capture.js";
 import {
   COMMAND_SPAWNER_FAILED,
-  STUCK_AFTER_MS,
   execFileCommand,
   spawnCommand,
   startCommandSpawner
 } from "../../packages/vibe64-execution/src/server/engines/commandSpawner.js";
 import { START_RECORD_CAP } from "../../packages/vibe64-execution/src/server/engines/commandExecutor.js";
 import { processGroupHasLiveMember } from "../../packages/vibe64-execution/src/server/runtime/processStart.js";
+import { gitIdentityEnv } from "../../packages/vibe64-execution/src/server/env/gitIdentityEnv.js";
+import { endRunningCommands } from "../../server/lib/stopGate.js";
 import { processRuns } from "../fixtures/processGroupMembers.js";
 
 // The rules of the editor's command spawner (packages/vibe64-execution/src/server/engines/commandSpawner.js), one
 // test each. This process sends its commands to a spawner, as the editor server does from its boot. The capture
 // engine's own results and messages, which run on top of it, are pinned by vibe64CaptureCommand.unit.test.js, in a
-// process that runs its commands itself and again through a spawner (vibe64CaptureThroughSpawner.unit.test.js).
-startCommandSpawner();
+// process that runs its commands itself and again through a spawner (vibe64CaptureThroughSpawner.unit.test.js). Its
+// spawners count as stuck after STUCK_MS instead of the editor's 5 s, so the tests about a stuck spawner wait that long.
+const STUCK_MS = 1_500;
+startCommandSpawner({ stuckAfterMs: STUCK_MS });
 const posix = { skip: process.platform === "win32" };
 const linux = { skip: process.platform !== "linux" };
 const env = { PATH: process.env.PATH };
@@ -36,6 +35,7 @@ const SPAWNER_PROCESS = fileURLToPath(new URL(
 ));
 const CAPTURE_MODULE = new URL("../../packages/vibe64-execution/src/server/engines/capture.js", import.meta.url).href;
 const SPAWNER_MODULE = new URL("../../packages/vibe64-execution/src/server/engines/commandSpawner.js", import.meta.url).href;
+const EDITOR_PROBE = fileURLToPath(new URL("fixtures/commandSpawnerEditorProbe.mjs", import.meta.url));
 
 /** Resolves with everything one spawnCommand child reports, in order. */
 function events(child) {
@@ -185,7 +185,7 @@ test("a call that cannot be carried out throws to its caller alone, and the spaw
 test("an environment the channel cannot carry throws to its caller and leaves no request waiting, so the spawner is not stopped as stuck", { ...posix, timeout: 30_000 }, async () => {
   const spawner = await spawnerPid();
   // It runs past the watchdog's limit, so a request left counted as unanswered would stop the spawner under it.
-  const other = runCaptureCommand("sh", ["-c", `sleep ${(STUCK_AFTER_MS + 1_000) / 1_000}; echo carried on`], {
+  const other = runCaptureCommand("sh", ["-c", `sleep ${(STUCK_MS + 1_000) / 1_000}; echo carried on`], {
     env,
     timeout: 30_000
   });
@@ -199,20 +199,41 @@ test("an environment the channel cannot carry throws to its caller and leaves no
   }, { outcome: "TypeError: Cannot convert a Symbol value to a string", other: "carried on", sameSpawner: true });
 });
 
-test("a command that cannot start fails with Node's own spawn error, and no other event follows it", posix, async () => {
-  const child = spawnCommand("vibe64-missing-command", [], { env });
-  const seen = [];
-  for (const name of ["spawn", "error", "exit", "close", "stdout", "stderr", "input-error"]) {
-    child.on(name, (value) => seen.push([name, value?.code]));
-  }
-  assert.equal(await child.spawned, undefined);
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  assert.deepEqual(seen, [["error", "ENOENT"]]);
+test("a command that cannot start fails with Node's own spawn error and then closes, as a ChildProcess does, also when spawn refuses it", posix, async () => {
+  const everything = async (child) => {
+    const seen = [];
+    for (const name of ["spawn", "error", "exit", "close", "stdout", "stderr", "input-error"]) {
+      child.on(name, (value, signal) => seen.push(name === "close" ? [name, value, signal] : [name, value?.code]));
+    }
+    const pid = await child.spawned;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    return { pid, seen };
+  };
+  // A missing command, then two spawn() refuses: an environment value over Linux's 128 KiB, and one with a NUL byte.
+  assert.deepEqual(await everything(spawnCommand("vibe64-missing-command", [], { env })), {
+    pid: undefined,
+    seen: [["error", "ENOENT"], ["close", -2, null]]
+  });
+  assert.deepEqual(await everything(spawnCommand("true", [], { env: { ...env, BIG: "x".repeat(200_000) } })), {
+    pid: undefined,
+    seen: [["error", "E2BIG"], ["close", null, null]]
+  });
+  assert.deepEqual(await everything(spawnCommand("true", [], { env: { BAD: "a\u0000b" } })), {
+    pid: undefined,
+    seen: [["error", "ERR_INVALID_ARG_VALUE"], ["close", null, null]]
+  });
   const error = await new Promise((resolve) => spawnCommand("vibe64-missing-command", [], { env }).once("error", resolve));
   assert.equal(error.message, "spawn vibe64-missing-command ENOENT");
-  await assert.rejects(spawnCommand("sh", ["-c", "true"], { env: { BAD: "a\u0000b" } }).spawned, {
-    code: "ERR_INVALID_ARG_VALUE"
-  });
+});
+
+test("the Git identity read settles when spawn refuses git's environment, so no caller waits on it for ever", posix, async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), "v64-spawner-identity-"));
+  try {
+    const read = gitIdentityEnv({ env: {}, gitConfig: { cwd: home, env: { ...env, HOME: home, BIG: "x".repeat(200_000) } } });
+    assert.notEqual(await within(read, 5_000, "never settled"), "never settled");
+  } finally {
+    await rm(home, { force: true, recursive: true });
+  }
 });
 
 test("execFileCommand resolves with a command's output and rejects with its exit code, as execFile does", posix, async () => {
@@ -265,11 +286,81 @@ test("the editor's stop ends the whole process group of a command the spawner st
     timeout: 30_000
   });
   assert.ok(await waitUntil(() => groupId > 0));
-  const { ended, scopeEmpty } = await endCaptures({ termTimeoutMs: 75, killTimeoutMs: 75 });
+  const { ended, scopeEmpty } = await endRunningCommands();
   assert.equal(ended, 1);
   assert.equal(scopeEmpty, true);
   assert.equal(await processGroupHasLiveMember(groupId), false);
   assert.equal((await running).signal, "SIGTERM");
+});
+
+test("the editor's stop ends every command it started, a plain spawnCommand and execFileCommand as well as a capture", posix, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-spawner-stop-all-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const pidFile = (name) => path.join(root, `${name}.pid`);
+  const run = (name) => ["sh", ["-c", `echo $$ > ${pidFile(name)}; exec sleep 30`]];
+  const plain = spawnCommand(...run("plain"), { env });
+  const plainClosed = new Promise((resolve) => plain.once("close", (code, signal) => resolve(signal)));
+  const execFile = execFileCommand(...run("execFile"), { env }).catch((error) => error.signal);
+  const capture = runCaptureCommand(...run("capture"), { env, timeout: 30_000 });
+  const names = ["plain", "execFile", "capture"];
+  assert.ok(await waitUntil(() => names.every((name) => readPid(pidFile(name)))));
+  const pids = names.map((name) => readPid(pidFile(name)));
+  t.after(() => killGroups(pids));
+  const { ended, scopeEmpty } = await endRunningCommands();
+  assert.deepEqual({
+    ended,
+    scopeEmpty,
+    endedBy: [await within(plainClosed, 5_000), await within(execFile, 5_000), (await capture).signal],
+    running: pids.filter((pid) => processRuns(pid)).length
+  }, { ended: 3, scopeEmpty: true, endedBy: ["SIGTERM", "SIGTERM", "SIGTERM"], running: 0 });
+});
+
+test("when the editor ends in any way, the commands it started end with it: Ctrl-C on its process group, or kill -9", { ...linux, timeout: 30_000 }, async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-spawner-editor-ends-"));
+  const started = [];
+  t.after(async () => {
+    killGroups(started);
+    await rm(root, { force: true, recursive: true });
+  });
+  // An editor that has started its spawner, then one command each through execFileCommand, runCaptureCommand and
+  // spawnCommand, ends.
+  const endEditor = async (how) => {
+    const dir = path.join(root, how.replace(/\W/gu, ""));
+    const editor = spawn(process.execPath, [EDITOR_PROBE, dir], { detached: true, env: process.env, stdio: "ignore" });
+    started.push(editor.pid);
+    const exited = new Promise((resolve) => editor.once("exit", resolve));
+    const files = ["execFile", "capture", "spawn"].map((name) => path.join(dir, `${name}.pid`));
+    assert.ok(await waitUntil(() => files.every(readPid), 10_000), `${how}: the editor started its commands`);
+    const pids = files.map(readPid);
+    started.push(...pids);
+    if (how === "Ctrl-C") process.kill(-editor.pid, "SIGINT");
+    else process.kill(editor.pid, "SIGKILL");
+    await exited;
+    await waitUntil(() => pids.every((pid) => !processRuns(pid)), 5_000);
+    return pids.filter((pid) => processRuns(pid)).length;
+  };
+  assert.deepEqual({
+    "Ctrl-C": await endEditor("Ctrl-C"),
+    "kill -9": await endEditor("kill -9")
+  }, { "Ctrl-C": 0, "kill -9": 0 });
+});
+
+test("a stuck verdict counts the answers already waiting: an editor whose event loop was held past the limit keeps a spawner that answered", posix, async () => {
+  const spawner = await spawnerPid();
+  // From a known point of the loop (its check phase), so the watchdog's timer comes due before the answer is read.
+  await new Promise((resolve) => setImmediate(resolve));
+  const asked = runCaptureCommand("sh", ["-c", "echo $PPID"], { env, timeout: 30_000 });
+  // The spawner answers at once; the answer waits, unread, while this process's loop is held past the stuck limit.
+  holdEventLoop(STUCK_MS + 500);
+  const result = await asked;
+  // The command may have finished during the hold either way: what a wrong verdict leaves is a killed spawner.
+  const next = await runCaptureCommand("sh", ["-c", "echo $PPID"], { env, timeout: 30_000 });
+  assert.deepEqual({
+    ok: result.ok,
+    error: result.error,
+    spawnerRuns: processRuns(spawner),
+    nextOnSameSpawner: Number(next.stdout.trim()) === spawner
+  }, { ok: true, error: "", spawnerRuns: true, nextOnSameSpawner: true });
 });
 
 test("a capture can be stopped, by its execution or by the server's stop, the moment it is asked for, before the spawner has answered", posix, async () => {
@@ -277,7 +368,7 @@ test("a capture can be stopped, by its execution or by the server's stop, the mo
   const stoppedRun = runCaptureCommand("sleep", ["30"], { env, execution, timeout: 3_000 });
   const stopped = await stopCaptureExecution(execution.id);
   const endedRun = runCaptureCommand("sleep", ["30"], { env, timeout: 3_000 });
-  const { ended } = await endCaptures({ startedBefore: Date.now() + 1, termTimeoutMs: 75, killTimeoutMs: 75 });
+  const { ended } = await endRunningCommands(Date.now() + 1);
   const endedBy = (result) => result.timedOut ? "its own timeout" : result.signal;
   assert.deepEqual({
     stopped: stopped.ok ? "stopped" : stopped.code,
@@ -358,9 +449,9 @@ test("whatever output waits unread, a spawner that dies leaves no command the ed
     killGroups(started);
     await rm(root, { force: true, recursive: true });
   });
-  // Unread output fills the channel, then the spawner's own queue; past about 128 KB, a pid answer waits in the
-  // spawner's memory behind it.
-  const sizes = [0, 64 * 1024, 128 * 1024, 131 * 1024, 256 * 1024, 8_000_000];
+  // Unread output fills the channel, then the spawner's own queue: none; just past about 128 KB, where a pid answer
+  // starts to wait in the spawner's memory behind it; and far past it.
+  const sizes = [0, 131 * 1024, 8_000_000];
   const outcomes = {};
   for (const bytes of sizes) {
     const reported = path.join(root, `reported-${bytes}.pid`);
@@ -479,9 +570,9 @@ test("a spawner that stops answering is stopped, and the command waiting on it f
   process.kill(stuck, "SIGSTOP");
   const started = Date.now();
   const result = await runCaptureCommand("sh", ["-c", "true"], { env, timeout: 60_000 });
-  assert.ok(Date.now() - started >= STUCK_AFTER_MS - 100);
+  assert.ok(Date.now() - started >= STUCK_MS - 100);
   assert.equal(result.code, COMMAND_SPAWNER_FAILED);
-  assert.match(result.error, new RegExp(`command spawner did not answer for ${STUCK_AFTER_MS} ms and was stopped`, "u"));
+  assert.match(result.error, new RegExp(`command spawner did not answer for ${STUCK_MS} ms and was stopped`, "u"));
   assert.ok(await waitUntil(() => !processRuns(stuck)), "the stuck spawner was killed");
   assert.equal((await runCaptureCommand("sh", ["-c", "true"], { env })).ok, true);
 });
@@ -490,7 +581,7 @@ test("a request made long after the spawner's last answer gets its full time to 
   // An answered request leaves nothing outstanding; a later one, made just before the first one's timer would have
   // struck, is not counted stuck for the time the spawner sat idle.
   const spawner = await spawnerPid();
-  await new Promise((resolve) => setTimeout(resolve, STUCK_AFTER_MS - 300));
+  await new Promise((resolve) => setTimeout(resolve, STUCK_MS - 300));
   process.kill(spawner, "SIGSTOP");
   const next = runCaptureCommand("sh", ["-c", "echo $PPID"], { env, timeout: 30_000 });
   await new Promise((resolve) => setTimeout(resolve, 900));
@@ -525,8 +616,11 @@ test("the test host's path guard reaches the spawner: no command runs in a syste
   skip: !String(process.env.NODE_OPTIONS || "").includes("test-host-path-guard") &&
     "runs where the tests load the host path guard (tooling/run-targeted-tests.mjs)"
 }, async () => {
-  await assert.rejects(spawnCommand("pwd", [], { cwd: "/etc", env }).spawned, {
-    message: "test changed a system location: /etc (spawn cwd)"
+  const refused = spawnCommand("pwd", [], { cwd: "/etc", env });
+  const error = await within(new Promise((resolve) => refused.once("error", resolve)), 5_000);
+  assert.deepEqual({ message: error?.message, pid: await within(refused.spawned, 1_000, "rejected or pending") }, {
+    message: "test changed a system location: /etc (spawn cwd)",
+    pid: undefined
   });
 });
 
