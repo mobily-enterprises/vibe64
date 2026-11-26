@@ -79,7 +79,13 @@
     "npm-publish": "jskit-release publish"
   },
   "jskitRelease": {
-    "pack": "node ./tooling/release/pack-release.mjs"
+    "pack": "node ./tooling/release/pack-release.mjs",
+    "afterPin": [
+      "node",
+      "node_modules/genesis-compiler/bin/genesis.js",
+      "skills",
+      "sync"
+    ]
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",
