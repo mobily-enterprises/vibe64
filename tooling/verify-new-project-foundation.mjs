@@ -129,6 +129,8 @@ async function main() {
       cwd: checkoutRoot,
       env: {
         ...process.env,
+        // A JSKIT app refuses to start without its APP_ENV; this local start is a developer's, as a Preview's is.
+        APP_ENV: "development",
         HOST: "127.0.0.1",
         PORT: String(port)
       },
