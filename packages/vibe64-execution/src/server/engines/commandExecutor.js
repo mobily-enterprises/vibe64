@@ -18,29 +18,41 @@
 //   { type: "exit", id, code, signal }
 //   { type: "close", id, code, signal }          the last message about a command that started
 // It refuses any other message (`refuse`), so the two sides never guess at each other.
+//
+// It starts a command only once every message it sent before has been written to the channel, and holds the commands'
+// output meanwhile, so the answer carrying the new pid is written in the same step that starts it, never queued behind
+// output in this process's memory: a spawner that dies after that step has handed the pid on. The messages that came
+// after a held spawn wait behind it, in order.
 
 import { spawn } from "node:child_process";
 
 /**
  * @param {object} channel
  * @param {(message: object) => boolean} channel.send delivers one message; false while its backlog is full
- * @param {(onDrained: () => void) => void} channel.whenDrained calls back once a full backlog has drained
+ * @param {() => boolean} channel.written true once every message sent so far has been written
+ * @param {(onWritten: () => void) => void} channel.whenWritten calls back once every message sent so far has been written
  * @param {(message: unknown) => void} channel.refuse called with a message it does not know
  * @returns {(message: unknown) => void} receives one message
  */
-function createCommandExecutor({ send: deliver, whenDrained, refuse }) {
+function createCommandExecutor({ send: deliver, written, whenWritten, refuse }) {
   const children = new Map();
-  let paused = false;
+  const waiting = [];
+  let backlogFull = false;
+  let holdingSpawn = false;
 
   // While the channel's backlog is full, the commands' output waits instead of piling up here.
   function send(message) {
-    if (deliver(message) || paused) return;
-    setOutputFlowing(false);
-    whenDrained(() => setOutputFlowing(true));
+    if (deliver(message) || backlogFull) return;
+    backlogFull = true;
+    updateOutputFlow();
+    whenWritten(() => {
+      backlogFull = false;
+      updateOutputFlow();
+    });
   }
 
-  function setOutputFlowing(flowing) {
-    paused = !flowing;
+  function updateOutputFlow() {
+    const flowing = !backlogFull && !holdingSpawn;
     for (const child of children.values()) {
       for (const stream of [child.stdout, child.stderr]) {
         if (flowing) stream?.resume();
@@ -73,7 +85,7 @@ function createCommandExecutor({ send: deliver, whenDrained, refuse }) {
     });
     for (const name of ["stdout", "stderr"]) {
       child[name]?.on("data", (chunk) => send({ type: name, id, chunk }));
-      if (paused) child[name]?.pause();
+      if (backlogFull) child[name]?.pause();
     }
     if (child.stdin) {
       child.stdin.on("error", (error) => send({ type: "input-error", id, error: errorFields(error) }));
@@ -86,7 +98,24 @@ function createCommandExecutor({ send: deliver, whenDrained, refuse }) {
     });
   }
 
-  return function receive(message) {
+  // Handles the messages in order; a spawn waits until everything sent before it has been written.
+  function handleWaiting() {
+    while (waiting.length > 0 && !holdingSpawn) {
+      if (waiting[0]?.type === "spawn" && !written()) {
+        holdingSpawn = true;
+        updateOutputFlow();
+        whenWritten(() => {
+          holdingSpawn = false;
+          handleWaiting();
+          updateOutputFlow();
+        });
+        return;
+      }
+      handle(waiting.shift());
+    }
+  }
+
+  function handle(message) {
     if (!knownMessage(message, children)) {
       refuse(message);
     } else if (message.type === "spawn") {
@@ -97,6 +126,11 @@ function createCommandExecutor({ send: deliver, whenDrained, refuse }) {
     } else {
       children.get(message.id)?.[message.stream]?.destroy();
     }
+  }
+
+  return function receive(message) {
+    waiting.push(message);
+    handleWaiting();
   };
 }
 

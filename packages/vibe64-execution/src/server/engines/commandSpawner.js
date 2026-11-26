@@ -50,8 +50,16 @@
 // commands still running until the editor exits, which ends it. If it dies or stops answering, its commands fail with
 // vibe64_command_spawner_failed, naming it (runCaptureCommand then ends each one's process group), and the next command
 // starts a new spawner. It is stuck when a spawn or kill goes unanswered for STUCK_AFTER_MS, the grace a timed-out
-// command gets before SIGKILL; the editor then kills it. A command it started but died before reporting is unknown to
-// the editor, so nothing ends its group (the rundown's Failure behaviour has the window).
+// command gets before SIGKILL; the editor then kills it.
+//
+// No command runs unknown to the editor, but for one window. The executor starts a command only once everything sent
+// before it has been written, so the answer with its pid is written in the same step, and the editor fails a dead
+// spawner's commands only once its channel has closed, so every answer written reaches it first. What is left is an
+// outside SIGKILL or OOM kill of the spawner between spawn() returning and that write. A command started then is unknown
+// to the editor: on a managed host, the host's managed execution stops its unit by execution id when the command fails;
+// elsewhere it runs until it exits, or until it next writes output, which SIGPIPE then ends, since nothing reads its
+// pipes. Closing that window too needs prctl (a subreaper, or a parent-death signal), which Node lacks without native
+// code.
 
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
@@ -232,8 +240,9 @@ function startInProcess() {
       queueMicrotask(() => table.receive(message));
       return true;
     },
-    // Its messages never wait in a backlog.
-    whenDrained: () => {},
+    // Its messages are never held in a backlog.
+    written: () => true,
+    whenWritten: (onWritten) => onWritten(),
     refuse: (message) => {
       throw new TypeError(`The command executor does not know this message (${describeMessage(message)}).`);
     }
@@ -307,8 +316,17 @@ function startSpawner() {
     table.receive(message);
   });
   spawnerProcess.once("error", (error) => failAll(`could not run (${error.message})`));
+  // Its commands fail once it has exited and its channel has closed: Node may report the exit before the answers still
+  // waiting on the channel, and those carry the pids of commands it started.
+  let exitReason = "";
+  let channelClosed = false;
   spawnerProcess.once("exit", (code, signal) => {
-    failAll(`stopped (${signal ? `signal ${signal}` : `exit code ${code}`}) while this command ran`);
+    exitReason = `stopped (${signal ? `signal ${signal}` : `exit code ${code}`}) while this command ran`;
+    if (channelClosed) failAll(exitReason);
+  });
+  spawnerProcess.once("disconnect", () => {
+    channelClosed = true;
+    if (exitReason) failAll(exitReason);
   });
   hold(false);
   return table;

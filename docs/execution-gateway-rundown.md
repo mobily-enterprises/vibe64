@@ -191,22 +191,37 @@ exactly as before.
 Nothing ever falls back to starting a command in the editor.
 
 - **It dies** (a crash, an out-of-memory kill, a signal): every command it was
-  running fails at once with `vibe64_command_spawner_failed`, and the error
-  names the spawner and how it stopped. `runCaptureCommand` then ends each of
-  those commands' process groups, as it ends every command's. The next command
-  starts a new spawner.
+  running fails with `vibe64_command_spawner_failed`, and the error names the
+  spawner and how it stopped. They fail once it has exited and its channel has
+  closed, so every answer it wrote, each command's pid included, reaches the
+  editor first. `runCaptureCommand` then ends each of those commands' process
+  groups, as it ends every command's. The next command starts a new spawner.
 - **It stops answering**: the spawner answers each spawn and kill at once. One
   left unanswered for 5 s (`STUCK_AFTER_MS`, the grace a timed-out command gets
   before SIGKILL) means it is stuck. The editor kills it, and its commands fail
   as above. The decision waits one turn of the event loop, so answers already
   read on a starved loop still count.
 - **It cannot start**: the command fails with the same code, naming the error.
-- **It dies just after starting a command**, before the answer carrying the
-  command's pid reached the editor: the editor never learns that command's
-  process group, so nothing ends it, and the command runs on, orphaned, until
-  it exits. The spawner writes that answer in the same step that starts the
-  command, so the window is that step, or longer only while the channel is
-  backed up with output the editor has yet to read. No test covers it.
+- **It is killed just after starting a command.** The executor starts a
+  command only once everything it sent before has been written to the channel,
+  holding the commands' output meanwhile, so the answer with the new pid is
+  written in the same step as `spawn()`, never queued behind output in the
+  spawner's memory (`commandSpawner.unit.test.js` floods the channel while the
+  editor reads nothing, kills the spawner, and finds no command running that
+  the editor does not know). The one window left is an outside SIGKILL or
+  out-of-memory kill of the spawner between `spawn()` returning and that
+  write. A command started then is unknown to the editor, so nothing ends its
+  process group:
+  - on a managed host, a command run through the host's managed execution is
+    stopped with its unit, by execution id, when the command fails (a unit its
+    orphaned helper creates only after that stop is not);
+  - elsewhere it runs until it exits, or until it next writes output, which
+    SIGPIPE then ends, since nothing reads its pipes.
+
+  The capture timeout does not reach it, and nothing adopts it but init.
+  Closing this window too needs `prctl` (making the editor a subreaper, or
+  giving each command a parent-death signal), which Node does not offer without
+  native code.
 
 ### Lifecycle
 

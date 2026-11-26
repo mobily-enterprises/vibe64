@@ -12,23 +12,23 @@ import { createCommandExecutor, describeMessage } from "./commandExecutor.js";
 for (const signal of ["SIGHUP", "SIGINT", "SIGTERM"]) process.on(signal, () => {});
 process.on("disconnect", () => process.exit(0));
 
-// Output resumes once the message that found the channel's backlog full has been written.
+// Messages are numbered as they are sent, and the channel writes them in order, so the last one written tells what is
+// still in this process's memory. Each waiter waits for the messages sent before it asked.
 let sent = 0;
-let resumeAfter = 0;
-let onDrained = null;
+let written = 0;
+const waiters = [];
 const receive = createCommandExecutor({
   send: (message) => {
     const number = ++sent;
     return process.send(message, () => {
-      if (!onDrained || number < resumeAfter) return;
-      const resume = onDrained;
-      onDrained = null;
-      resume();
+      written = number;
+      while (waiters.length > 0 && waiters[0].after <= written) waiters.shift().onWritten();
     });
   },
-  whenDrained: (resume) => {
-    resumeAfter = sent;
-    onDrained = resume;
+  written: () => written === sent,
+  whenWritten: (onWritten) => {
+    if (written === sent) onWritten();
+    else waiters.push({ after: sent, onWritten });
   },
   refuse: (message) => {
     process.stderr.write(`Vibe64's command spawner refused a message it does not know (${describeMessage(message)}) and stops.\n`);
