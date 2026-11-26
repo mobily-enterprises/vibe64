@@ -645,9 +645,7 @@ function createService({
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,
     sessionAssistantWorking,
-    noteMainChat: createMainChatNote({
-      assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent
-    }),
+    noteMainChat: createMainChatNote({ assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent }),
     prepareAssistantChangeover: assistantPreparation.prepareAssistantChangeover,
     prepareRoutingSelection: assistantPreparation.prepareRoutingSelection,
     applyGoalSelection: goals.applyGoalSelection,
