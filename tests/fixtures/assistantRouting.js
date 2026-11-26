@@ -17,6 +17,7 @@ import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { ASSISTANT_FINISHING_DEFAULTS } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "./genesisPasses.js";
 import { createAgentSessionCommandService } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
+import { timelineTrigger } from "../../packages/vibe64-terminals/src/server/sessionTurnTimeline.js";
 
 const { workPlanPath } = __testables;
 const run = promisify(execFile);
@@ -237,7 +238,8 @@ async function fixture(t, preferences = { mode: "auto" }, {
       await manager.requireAssistantAccessForSelection(selected.assistantSelection || JSON.parse(selected.session.metadata.assistant_selection), selected);
       await input.onPromptSending?.({ threadId: "native-thread" });
       if (dispatchGate) { dispatchGate.started.resolve(); await dispatchGate.held.promise; }
-      sends.push({ input, selection: selected.assistantSelection });
+      // trigger: what the turn's session timeline line names as having asked for it.
+      sends.push({ input, selection: selected.assistantSelection, trigger: timelineTrigger(selected) });
       if (failAdmission) throw new Error("Lost admission response.");
       receipts.set(input.messageId, input);
       return { ok: true, delivered: true, threadId: "native-thread", turnId: `turn-${sends.length}` };
@@ -257,8 +259,9 @@ async function fixture(t, preferences = { mode: "auto" }, {
       const held = Promise.withResolvers();
       const started = Promise.withResolvers();
       const hold = () => { started.resolve(); return held.promise; };
-      void exclusive("session-1", {}, () => whileAssistantWorks ? writes.hold("session-1", hold) : hold());
-      return { started: started.promise, release: () => held.resolve() };
+      const done = exclusive("session-1", {}, () => whileAssistantWorks ? writes.hold("session-1", hold) : hold());
+      // ended: the write let the lock go, whatever its outcome.
+      return { started: started.promise, release: () => held.resolve(), ended: done.then(() => {}, () => {}) };
     },
     // A new routing, as the next server makes; `overrides` replace its options (its server run, say).
     restart: (overrides = {}) => createAssistantRouting({ ...routingOptions, ...overrides }),
