@@ -2549,13 +2549,18 @@ test("a Claude account change goes through the terminals service without touchin
       }
     });
     const owner = { role: "owner", username: "owner" };
-    assert.equal((await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner })).code, "fixture_terminal");
-    refusal = { ok: false, failed: [{ ok: false, providerId: "claude", error: "The Claude runtime is shutting down." }] };
-    const refused = await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner });
-    assert.equal(refused.ok, false);
-    assert.equal(refused.error, "The Claude runtime is shutting down.",
-      "the refusal itself names why, so the person sees it instead of a generic failure");
-    assert.equal(requests.length, 1, "a refused change does not start a login");
+    try {
+      assert.equal((await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner })).code, "fixture_terminal");
+      refusal = { ok: false, failed: [{ ok: false, providerId: "claude", error: "The Claude runtime is shutting down." }] };
+      const refused = await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner });
+      assert.equal(refused.ok, false);
+      assert.equal(refused.error, "The Claude runtime is shutting down.",
+        "the refusal itself names why, so the person sees it instead of a generic failure");
+      assert.equal(requests.length, 1, "a refused change does not start a login");
+    } finally {
+      // The service writes this run's record in the system folder as it starts: it finishes before the folder goes.
+      await terminals.close();
+    }
   });
 });
 
