@@ -11,7 +11,7 @@ const readThroughOf = (plan) => sha256Hex("vibe64-plan-read-through-v1\0" + plan
  * Refuses an agent's write or progress-write without the current pair's readThrough, and a progress-write (or a
  * complete, for the current Progress) whose Leftovers hold a failing or flaky test. Vibe64's own writes skip it.
  * @param {string} operation
- * @param {{ text?: string, readThrough?: string }} input
+ * @param {{ progressText?: string, readThrough?: string }} input
  * @param {object | null} current the current plan, or null
  */
 function refuseUnprovenAgentWrite(operation, input, current) {
@@ -24,7 +24,7 @@ function refuseUnprovenAgentWrite(operation, input, current) {
     );
   }
   const leftovers = ["progress-write", "complete"].includes(operation) &&
-    fixableLeftoversRefusal(operation === "complete" ? current?.progressText : input.text);
+    fixableLeftoversRefusal(operation === "complete" ? current?.progressText : input.progressText);
   if (leftovers) throw planError(leftovers, "vibe64_work_plan_leftover_fixable");
 }
 

@@ -15,7 +15,7 @@ ${agentControlIdentitySource(controlFilePath)}
 const [operation, ...extra] = process.argv.slice(2);
 if (!operation || ["--help", "-h"].includes(operation)) {
   console.log('Usage: vibe64-helper plan <read|history|new|write|progress-write|checked|complete|archive|reopen|outcome|handoff>\\n'
-    + 'Mutations take JSON input on stdin. new/write require text (Markdown title and checklists: - [ ] not done yet, - [~] built, - [x] proven). progress-write requires text too: the whole new Progress. A field an operation does not read is refused, never ignored.\\n'
+    + 'Mutations take JSON input on stdin. new/write require text (Markdown title and checklists: - [ ] not done yet, - [~] built, - [x] proven). progress-write requires progressText: the whole new Progress, under the name read returns it. A field an operation does not read is refused, never ignored.\\n'
     + 'write and progress-write replace the whole Plan or Progress, so they also require readThrough: the last page of a read (hasMore false) returns it, and so does the answer of each write.\\n'
     + 'For read pagination or archive selection, use read --input with JSON on stdin. Bare read/history never wait for stdin.\\n'
     + 'Mutations require expectedRevision and expectedProgressRevision from the current paired read, unless no current plan exists.\\n'

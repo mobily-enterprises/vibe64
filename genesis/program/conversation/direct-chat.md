@@ -2727,12 +2727,15 @@ again, and those changed then and not now. The plan command's `new`, `write`,
 write `plans/updated.json` beside `current.json`: when (the source state's
 time, read before Git), how (`updated` or `checked`) and that source state.
 `checked` takes the paired revisions and changes nothing else: it is the AI's
-explicit answer that nothing needs a new mark. Each operation reads only its own
-fields (`OPERATION_FIELDS`: `text` for `new`, `write` and `progress-write`, the
-paired revisions, `archiveId`, `archiveCurrent`, a read's `offset` and `limit`);
-`refuseUnreadInput` refuses any other field and a missing or empty `text`,
-naming what the operation takes, so a Progress sent as `progressText` is never
-accepted as an empty Progress. The session command server hands the plan route
+explicit answer that nothing needs a new mark. Each document has one name both
+ways (`TEXT_OPERATIONS`): a read returns the Plan as `text` and the Progress as
+`progressText`, and `new` and `write` take the Plan as `text`, `progress-write`
+the Progress as `progressText`, so an agent reusing the name it just read sends
+the right one. Each operation reads only its own fields (`OPERATION_FIELDS`:
+that document, the paired revisions, `readThrough`, `archiveId`,
+`archiveCurrent`, a read's `offset` and `limit`); `refuseUnreadInput` refuses
+any other field and a missing or empty document, naming what the operation
+takes, so a Progress sent as `text` is never accepted as an empty Progress. The session command server hands the plan route
 the agent's own fields (`fields`), without the token, session and generation
 that admitted the request. A plan replaced or archived drops
 the record; a plan without one (from before it) reports its pair's save time as

@@ -24,7 +24,10 @@ Both roles must read the full Plan, including its technical details, and Progres
 before implementing or reviewing. Collapsing details in the viewer does not hide
 them from the agent. The agent reads a long plan in pages, and Vibe64 refuses
 its rewrite of the whole Plan or Progress unless it read both to the last page,
-so a long Progress is never cut to the part one page returned. Junior updates Progress and the marks of existing checklist
+so a long Progress is never cut to the part one page returned. The agent writes
+each document under the name it reads it by (the Plan as `text`, Progress as
+`progressText`); a write under any other name is refused, saying the names the
+command takes, so a misnamed Progress is never saved empty or reported as saved. Junior updates Progress and the marks of existing checklist
 items as the work goes: a half tick once an item is built, a full tick once
 Senior's review proves it (see [Checklist marks](#checklist-marks)); Senior
 owns agreed Plan scope changes. Creating,

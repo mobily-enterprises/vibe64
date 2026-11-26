@@ -450,20 +450,21 @@ const OPERATION_FIELDS = Object.freeze({
   history: [],
   new: ["text", ...PAIRED, "archiveCurrent"],
   write: ["text", ...PAIRED, "readThrough"],
-  "progress-write": ["text", ...PAIRED, "readThrough"],
+  "progress-write": ["progressText", ...PAIRED, "readThrough"],
   checked: PAIRED,
   complete: PAIRED,
   archive: PAIRED,
   reopen: [...PAIRED, "archiveId", "archiveCurrent"]
 });
-// What an operation's text is: the whole new Plan, or the whole new Progress.
+// The operations that take a whole new document, under the one name it has both ways: a read returns the Plan as
+// text and the Progress as progressText, and new, write and progress-write take each under that same name.
 const TEXT_OPERATIONS = Object.freeze({
-  new: "Plan",
-  write: "Plan",
-  "progress-write": "Progress"
+  new: { document: "Plan", field: "text" },
+  write: { document: "Plan", field: "text" },
+  "progress-write": { document: "Progress", field: "progressText" }
 });
 
-/** Refuses a field the operation does not read, and a text operation's missing or empty text, naming what it takes. */
+/** Refuses a field the operation does not read, and a whole document missing or empty, naming what it takes. */
 function refuseUnreadInput(input) {
   const { operation } = input;
   const fields = OPERATION_FIELDS[operation];
@@ -477,9 +478,9 @@ function refuseUnreadInput(input) {
       { unread, fields }
     );
   }
-  if (TEXT_OPERATIONS[operation] && (typeof input.text !== "string" || !input.text.trim())) {
-    const where = operation === "progress-write" ? " A read returns the current Progress as progressText." : "";
-    const message = `plan ${operation} takes the whole new ${TEXT_OPERATIONS[operation]} as text, a string that is not empty: nothing changed.${where}`;
+  const whole = TEXT_OPERATIONS[operation];
+  if (whole && (typeof input[whole.field] !== "string" || !input[whole.field].trim())) {
+    const message = `plan ${operation} takes the whole new ${whole.document} as ${whole.field}, a string that is not empty: nothing changed.`;
     throw planError(message, "vibe64_work_plan_text_required");
   }
 }
@@ -590,7 +591,7 @@ async function manageWorkPlan(context, input, role, { passItem = "", sourceState
         return { ...await readWorkPlanPageUnlocked(context), notice: "Recorded that the plan was checked: its marks and Progress stay as they are." };
       case "progress-write":
         next = current.text;
-        progressText = input.text;
+        progressText = input.progressText;
         if (Buffer.byteLength(progressText) > PLAN_LIMIT) throw planError("Progress is too large.", "vibe64_work_plan_progress_too_large");
         break;
       case "complete": {
