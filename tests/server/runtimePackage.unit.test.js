@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmod, cp, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -69,6 +69,117 @@ test("bundled Genesis ownership hook defers the compiler until instructions are 
   await assert.rejects(run(request), /JSON/u);
   const input = { projectRoot: root, scope: "session", providerSessionId: "main" };
   assert.equal(await run(input, true), `instructions:${JSON.stringify(input)}`);
+});
+
+// Folders of a package whose code never runs in the editor server or its helpers.
+const NOT_SERVER = new Set(["client", "docs", "examples", "node_modules", "test", "tests", "__tests__"]);
+// A module that computes paths from its own location: import.meta.url, dirname or resolve(), or require.resolve().
+const LOCATES_FILES = /import\.meta\.(?:url|dirname|filename|resolve)|require\.resolve\(/u;
+// Static imports and exports, side-effect imports and literal dynamic imports, which a bundle includes.
+const BUNDLED_IMPORTS = [
+  /\b(?:import|export)\b[^;"'`]*?\bfrom\s*(["'])[^"'\n]+\1/gu,
+  /^\s*import\s*(["'])[^"'\n]+\1/gmu,
+  /\bimport\s*\(\s*(["'])[^"'\n]+\1\s*\)/gu
+];
+// A path in a string: relative ("./x.js", "../bin/x"), a file name (path.join(directory, "build.mjs")), or a package
+// specifier (import.meta.resolve("@local/x/server/y")).
+const PATH_LITERAL = /(["'`])((?:\.\.?\/)[^"'`\s]+|[\w.-]+\.[cm]?js|@local\/[\w./-]+)\1/gu;
+
+/** Every file below `directory` outside NOT_SERVER folders, as absolute paths. */
+async function serverFiles(directory) {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const filename = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (!NOT_SERVER.has(entry.name)) files.push(...await serverFiles(filename));
+    } else if (entry.isFile()) {
+      files.push(filename);
+    }
+  }
+  return files;
+}
+
+/** Whether a file is a JavaScript program: a .js, .mjs or .cjs module, or a script whose first line runs Node. */
+async function isScript(filename) {
+  if (/\.[cm]?js$/u.test(filename)) return readFile(filename).then(() => true, () => false);
+  if (path.extname(filename)) return false;
+  const text = await readFile(filename, "utf8").catch(() => "");
+  return /^#!.*\bnode\b/u.test(text.split("\n", 1)[0]);
+}
+
+/** The file a package export names, for a string or a conditional export. */
+function exportTarget(target) {
+  if (typeof target === "string") return target;
+  return target && exportTarget(target.node ?? target.import ?? target.default);
+}
+
+/**
+ * Each JavaScript program a server module of public's source names by a path it computes at run time (from its own
+ * URL, or by resolving a workspace package's export), at its path in a release: node_modules/<package name>/<path in
+ * the package> for a workspace package, its own path for the app's bin and server.
+ */
+async function locatedScripts(root) {
+  const scanned = [];
+  const packages = new Map();
+  for (const name of await readdir(path.join(root, "packages"))) {
+    const packageRoot = path.join(root, "packages", name);
+    const manifest = JSON.parse(await readFile(path.join(packageRoot, "package.json"), "utf8").catch(() => "null"));
+    if (!manifest?.name) continue;
+    packages.set(manifest.name, { exports: manifest.exports || {}, root: packageRoot });
+    scanned.push({ files: await serverFiles(packageRoot), from: packageRoot, to: `node_modules/${manifest.name}` });
+  }
+  scanned.push({ files: [...await serverFiles(path.join(root, "bin")), ...await serverFiles(path.join(root, "server")),
+    path.join(root, "server.js")], from: root, to: "" });
+  const releasePath = (target) => {
+    for (const { from, to } of scanned) {
+      const relative = path.relative(from, target);
+      if (!relative.startsWith("..") && !path.isAbsolute(relative)) return path.posix.join(to, relative.split(path.sep).join("/"));
+    }
+    return null;
+  };
+  const located = new Set();
+  for (const { files } of scanned) {
+    for (const filename of files) {
+      if (!await isScript(filename)) continue;
+      let source = await readFile(filename, "utf8");
+      if (!LOCATES_FILES.test(source)) continue;
+      for (const pattern of BUNDLED_IMPORTS) source = source.replace(pattern, "");
+      for (const [, , literal] of source.matchAll(PATH_LITERAL)) {
+        let target = null;
+        if (literal.startsWith("@local/")) {
+          const name = literal.split("/").slice(0, 2).join("/");
+          const workspace = packages.get(name);
+          const file = workspace && exportTarget(workspace.exports[`.${literal.slice(name.length)}`]);
+          if (file) target = path.join(workspace.root, file);
+        } else {
+          target = path.resolve(path.dirname(filename), literal);
+        }
+        if (target && await isScript(target)) {
+          const entry = releasePath(target);
+          if (entry) located.add(entry);
+        }
+      }
+    }
+  }
+  return [...located].sort();
+}
+
+// A bundle keeps each module's own URL, so a server module that forks, spawns or loads a program by a path it computes
+// (new URL("./x.js", import.meta.url), path.join(its directory, "x.mjs"), import.meta.resolve or require.resolve of a
+// workspace export) finds it at that path in a release too. A release copies a package's data files beside their
+// modules, but its JavaScript only as a runtime entry: commandSpawner.js's commandSpawnerProcess.js was not one
+// (68705fca2, 26 Nov), so the released editor could start no command at all.
+test("every program a server module locates at run time ships as a runtime entry", async () => {
+  const located = await locatedScripts(sourceRoot);
+  for (const known of [
+    "node_modules/@local/vibe64-execution/src/server/engines/commandSpawnerProcess.js",
+    "node_modules/@local/vibe64-genesis/bin/vibe64-genesis-host-context",
+    "node_modules/@local/vibe64-accounts/bin/claude-auth-browser",
+    "node_modules/@local/vibe64-database-tools/src/server/sqliteWorker.js",
+    "node_modules/@local/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js",
+    "node_modules/@local/vibe64-usage-recording/runtime/php/build.mjs"
+  ]) assert.ok(located.includes(known), `the scan finds ${known}`);
+  assert.deepEqual(located.filter((entry) => !RUNTIME_ENTRIES.includes(entry)), []);
 });
 
 test("every Genesis server export ships as a runtime entry", async () => {
@@ -239,9 +350,20 @@ test("runtime release relocates, runs native and browser services, and packs wit
         await assert.rejects(knex.raw("DELETE FROM proof"));
       });
     `);
+    // The editor server sends every finite command to its command spawner (server.js starts it at boot).
+    await writeFile(path.join(appRoot, "bin/spawner-proof.js"), `
+      import assert from "node:assert/strict";
+      import { execFileCommand, startCommandSpawner } from "@local/vibe64-execution/server/commandSpawner";
+      startCommandSpawner();
+      const { stdout } = await execFileCommand(process.execPath, ["-e", "process.stdout.write(String(process.ppid))"], {
+        env: { PATH: process.env.PATH || "" }
+      });
+      assert.notEqual(Number(stdout), process.pid, "the command ran in the spawner's child, not in this process's");
+      console.log("a command ran through the packaged spawner");
+    `);
     await assert.rejects(createRuntimePackage({ appRoot, releaseAppRoot: appRoot }), /must not contain/u);
     const staged = path.join(root, "staged");
-    await createRuntimePackage({ appRoot, releaseAppRoot: staged, extraEntries: ["bin/sqlite-proof.js"] });
+    await createRuntimePackage({ appRoot, releaseAppRoot: staged, extraEntries: ["bin/sqlite-proof.js", "bin/spawner-proof.js"] });
     await assert.rejects(createRuntimePackage({ appRoot, releaseAppRoot: staged }), /must be empty/u);
     assert.equal(await readFile(source, "utf8"), before);
     const installed = path.join(root, "relocated");
@@ -255,6 +377,8 @@ test("runtime release relocates, runs native and browser services, and packs wit
     const templateValidation = await execute(process.execPath, [path.join(installed, "bin/run.js"), "training", "validate", authorTemplate]);
     assert.equal(JSON.parse(templateValidation.stdout).lessons[0].status, "draft");
     await execute(process.execPath, [path.join(installed, "bin/sqlite-proof.js"), path.join(root, "proof.sqlite")]);
+    const spawned = await execute(process.execPath, [path.join(installed, "bin/spawner-proof.js")], { cwd: installed, timeout: 30_000 });
+    assert.match(spawned.stdout, /a command ran through the packaged spawner/u);
     // Hosts load the public host profile by its package export before any entry point.
     const hostProfile = await import(pathToFileURL(createRequire(path.join(installed, "bin/upgrade-state.js"))
       .resolve("@local/vibe64-execution/server/hostProfile")).href);
