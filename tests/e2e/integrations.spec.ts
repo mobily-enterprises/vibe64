@@ -9,7 +9,7 @@ import { mockDirectChatSession } from "./support/base-shell-mocks";
 import { mockIntegrationShellReads } from "./support/integration-shell-mocks";
 import { DASHBOARD_PATH, directChatSessionId, viewports } from "./support/base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./support/base-shell/http";
-import { INTEGRATIONS_AFTER_CALENDAR_FLOW } from "./support/integration-calendar-flow";
+import { INTEGRATIONS_AFTER_CALENDAR_FLOW, INTEGRATIONS_AFTER_TOKEN_FLOW } from "./support/integration-calendar-flow";
 
 // On a compact screen the Dashboard's sections are a "Dashboard section" select.
 async function openCompactDashboardSection(page: Page, name: string) {
@@ -70,6 +70,8 @@ for (const { viewport, providerBatch } of [
   { viewport: viewports.find((viewport) => viewport.name === "expanded")!, providerBatch: "google-docs" },
   { viewport: viewports.find((viewport) => viewport.name === "expanded")!, providerBatch: "calendar" },
   ...viewports.map((viewport) => ({ viewport, providerBatch: viewport.name === "expanded" ? "existing" : "responsive" })),
+  // The compact screen's Env, per-user and verification-input steps, from the file the tests above leave.
+  { viewport: viewports.find((viewport) => viewport.name === "compact")!, providerBatch: "compact-env" },
   { viewport: viewports.find((viewport) => viewport.name === "expanded")!, providerBatch: "existing-tokens" },
   { viewport: viewports.find((viewport) => viewport.name === "expanded")!, providerBatch: "existing-google" },
   { viewport: viewports.find((viewport) => viewport.name === "expanded")!, providerBatch: "microsoft-excel" },
@@ -371,9 +373,11 @@ for (const { viewport, providerBatch } of [
       ? "Figma and Miro forms save assistant registrations and independent design permissions"
     : providerBatch === "wordpress-com"
       ? `WordPress.com form saves OAuth registration and selected permissions (${viewport.name})`
+    : providerBatch === "compact-env"
+      ? "compact integration form sets the callback and credentials in Env, switches to per-user accounts and checks verification inputs"
     : `integration form saves the CLI configuration and protects drafts (${viewport.name})`;
   test(name, async ({ page }) => {
-    test.setTimeout(providerBatch === "responsive" && viewport.name === "compact" ? 180_000 : 120_000);
+    test.setTimeout(120_000);
     await page.setViewportSize(viewport);
     const root = await mkdtemp(path.join(tmpdir(), "vibe64-integration-browser-"));
     const source = path.join(root, "sessions", "active", directChatSessionId, "source");
@@ -480,7 +484,8 @@ for (const { viewport, providerBatch } of [
       });
       const calendarFlow = ["calendar", "existing", "responsive"].includes(providerBatch);
       if (!calendarFlow && !["google-ads-search", "analytics", "bigquery", "aws"].includes(providerBatch)) {
-        await writeFile(path.join(source, "integrations.json"), INTEGRATIONS_AFTER_CALENDAR_FLOW);
+        await writeFile(path.join(source, "integrations.json"),
+          providerBatch === "compact-env" ? INTEGRATIONS_AFTER_TOKEN_FLOW : INTEGRATIONS_AFTER_CALENDAR_FLOW);
       }
       await page.goto(`${DASHBOARD_PATH}/integrations`);
       const showProject = page.getByRole("button", { name: "Show project", exact: true });
@@ -931,7 +936,7 @@ for (const { viewport, providerBatch } of [
         expect(errors).toEqual([]);
         return;
       }
-      const tokenProviders = providerBatch === "resend" ? [["Resend", "resend"]] : providerBatch === "replicate" ? [["Replicate", "replicate"]] : providerBatch === "pipedrive" ? [["Pipedrive", "pipedrive"]] : providerBatch === "perplexity" ? [["Perplexity", "perplexity"]] : providerBatch === "notion" ? [["Notion", "notion"]] : providerBatch === "mapbox" ? [["Mapbox", "mapbox"]] : providerBatch === "mailgun" ? [["Mailgun", "mailgun"]] : providerBatch === "logo-dev" ? [["Logo.dev", "logo-dev"]] : providerBatch === "lexware" ? [["Lexware", "lexware"]] : providerBatch === "klipy" ? [["KLIPY", "klipy"]] : providerBatch === "incident-io" ? [["incident.io", "incident-io"]] : providerBatch === "google-maps" ? [["Google Maps Platform", "google-maps-platform"]] : ["gmail", "google-docs", "google-drive", "google-search-console", "google-sheets", "google-slides", "heygen", "hubspot", "lightspeed", "linear", "linkedin", "microsoft-excel", "microsoft-onedrive", "microsoft-onenote", "microsoft-outlook", "microsoft-sharepoint", "microsoft-teams", "fabric", "miro", "n8n", "oura", "existing-tokens", "existing-google"].includes(providerBatch) ? [] : providerBatch === "gitlab-api" ? [["GitLab API", "gitlab-api"]] : providerBatch === "github-api" ? [["GitHub API", "github-api"]] : providerBatch === "gatewayapi" ? [["GatewayAPI", "gatewayapi"]] : providerBatch === "fireflies" ? [["Fireflies", "fireflies"]] : providerBatch === "firecrawl" ? [["Firecrawl", "firecrawl"]] : providerBatch === "elevenlabs" ? [["ElevenLabs", "elevenlabs"]] : providerBatch === "contentful" ? [["Contentful", "contentful"]] : providerBatch === "clay" ? [["Clay", "clay"]] : providerBatch === "calendly" ? [["Calendly", "calendly"]] : providerBatch === "airtable" ? [["Airtable", "airtable"]] : providerBatch === "apify" ? [["Apify", "apify"]] : providerBatch === "apollo" ? [["Apollo.io", "apollo-io"]] : providerBatch === "asana" ? [["Asana", "asana"]] : providerBatch === "brevo" ? [["Brevo", "brevo"]] : providerBatch === "attention" ? [["Attention", "attention"]] : providerBatch === "ashby" ? [["Ashby", "ashby"]] : [["Resend", "resend"], ["Firecrawl", "firecrawl"]];
+      const tokenProviders = providerBatch === "resend" ? [["Resend", "resend"]] : providerBatch === "replicate" ? [["Replicate", "replicate"]] : providerBatch === "pipedrive" ? [["Pipedrive", "pipedrive"]] : providerBatch === "perplexity" ? [["Perplexity", "perplexity"]] : providerBatch === "notion" ? [["Notion", "notion"]] : providerBatch === "mapbox" ? [["Mapbox", "mapbox"]] : providerBatch === "mailgun" ? [["Mailgun", "mailgun"]] : providerBatch === "logo-dev" ? [["Logo.dev", "logo-dev"]] : providerBatch === "lexware" ? [["Lexware", "lexware"]] : providerBatch === "klipy" ? [["KLIPY", "klipy"]] : providerBatch === "incident-io" ? [["incident.io", "incident-io"]] : providerBatch === "google-maps" ? [["Google Maps Platform", "google-maps-platform"]] : ["gmail", "google-docs", "google-drive", "google-search-console", "google-sheets", "google-slides", "heygen", "hubspot", "lightspeed", "linear", "linkedin", "microsoft-excel", "microsoft-onedrive", "microsoft-onenote", "microsoft-outlook", "microsoft-sharepoint", "microsoft-teams", "fabric", "miro", "n8n", "oura", "existing-tokens", "existing-google", "compact-env"].includes(providerBatch) ? [] : providerBatch === "gitlab-api" ? [["GitLab API", "gitlab-api"]] : providerBatch === "github-api" ? [["GitHub API", "github-api"]] : providerBatch === "gatewayapi" ? [["GatewayAPI", "gatewayapi"]] : providerBatch === "fireflies" ? [["Fireflies", "fireflies"]] : providerBatch === "firecrawl" ? [["Firecrawl", "firecrawl"]] : providerBatch === "elevenlabs" ? [["ElevenLabs", "elevenlabs"]] : providerBatch === "contentful" ? [["Contentful", "contentful"]] : providerBatch === "clay" ? [["Clay", "clay"]] : providerBatch === "calendly" ? [["Calendly", "calendly"]] : providerBatch === "airtable" ? [["Airtable", "airtable"]] : providerBatch === "apify" ? [["Apify", "apify"]] : providerBatch === "apollo" ? [["Apollo.io", "apollo-io"]] : providerBatch === "asana" ? [["Asana", "asana"]] : providerBatch === "brevo" ? [["Brevo", "brevo"]] : providerBatch === "attention" ? [["Attention", "attention"]] : providerBatch === "ashby" ? [["Ashby", "ashby"]] : [["Resend", "resend"], ["Firecrawl", "firecrawl"]];
       if (providerBatch === "existing-tokens") tokenProviders.push(
         ["Airtable", "airtable"], ["Notion", "notion"], ["Brevo", "brevo"],
         ["ElevenLabs", "elevenlabs"], ["GitHub API", "github-api"], ["Apify", "apify"],
@@ -1252,6 +1257,8 @@ for (const { viewport, providerBatch } of [
             "href", "https://support.airtable.com/docs/creating-personal-access-tokens");
         }
       }
+      // The compact-env test starts from this file.
+      if (["existing", "responsive"].includes(providerBatch)) expect(await readFile(filePath, "utf8")).toBe(INTEGRATIONS_AFTER_TOKEN_FLOW);
       if (["account-readers", "sales-readers", "path-readers", "public-resources"].includes(providerBatch)) {
         await page.reload();
         const restoredProviders = providerBatch === "public-resources" ? [
@@ -4683,7 +4690,9 @@ for (const { viewport, providerBatch } of [
         }
       }
       expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-      if (providerBatch === "responsive" && viewport.name === "compact") {
+      if (providerBatch === "compact-env") {
+        // The Env writes below leave feedback that times out on the page's own timers (see waitForFeedbackToClear).
+        await page.clock.install();
         await panel.getByRole("list", { name: "Configured integrations" }).getByText("After CLI update", { exact: true }).click();
         const url = "https://person-dogandgroom.apps.example.test/integrations/google/callback";
         await panel.getByRole("textbox", { name: "Suggested callback URL", exact: true }).fill(url);
