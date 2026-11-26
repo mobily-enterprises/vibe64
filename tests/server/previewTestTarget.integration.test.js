@@ -29,19 +29,16 @@ const browsersPath = path.dirname(path.dirname(path.dirname(chromium.executableP
 
 test.after(() => configureVibe64Host(null));
 
-test("shared assistant instructions explain target discovery, safe setup, invocation and restoration", () => {
+test("shared assistant instructions point browser suites at the browser-tests spec", () => {
   const instructions = vibe64Driver({
     conversationKind: "main", scope: "session",
     session: { managedPreview: true, managedEnvironment: true, managedDatabaseRefresh: false, managedGit: false }
   });
+  // Target discovery, safe setup, invocation and restoration are in `vibe64-helper spec browser-tests`, whose text
+  // vibe64AgentSpecs.unit.test.js checks; the always-loaded guidance names it and keeps the one rule for writes.
   for (const required of [
-    "vibe64-helper preview targets --json", "vibe64-helper playwright --target", "npm-run <script>",
-    "restores the previous Preview", "application must verify the server's actual test database",
-    "preview-identity command must use the same database", "Never spoof safety checks",
-    "add one through the project's existing Outputs contract", "external-effect controls are missing",
-    "Each such target is a test server the project declares", "the project's own Run command and disposable data",
-    "points `PLAYWRIGHT_BASE_URL` at it", "Specs create the data they need in fixtures",
-    "tests that write never use the person's development target"
+    "vibe64-helper spec browser-tests", "declared test targets (`vibe64-helper playwright --target <id>`)",
+    "Tests that write never use the person's development target"
   ]) assert.ok(instructions.includes(required), required);
 });
 
