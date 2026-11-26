@@ -16,6 +16,14 @@ slows or refuses a command.
 - `tests/server/agentCommandRepeats.unit.test.js`
 - `docs/colleague-usage/repeated-commands.md`
 
+## Public contract
+
+A Main turn whose own shell commands cross `COMMAND_REPEAT_LIMITS` gets one
+Vibe64 note to its AI while it runs, and its chat gets one system row with the
+turn's numbers when it ends. Counting never stops, slows or refuses a command,
+never changes its answer, exit code or timing, and keeps nothing beyond the
+running turn.
+
 ## What is counted
 
 Every shell command an AI runs reaches the session command wrapper
