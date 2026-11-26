@@ -1086,7 +1086,8 @@ test("OpenCode persists a user message and its display attachments only after up
     entry.options.execution.operationId === "opencode-server"
   ));
   assert.deepEqual(sessionProcess.options.execution, {
-    label: "OpenCode assistant",
+    aiPurpose: "agent-turn",
+    label: "OpenCode assistant (agent-turn)",
     operationId: "opencode-server",
     ownerId: "opencode"
   });
