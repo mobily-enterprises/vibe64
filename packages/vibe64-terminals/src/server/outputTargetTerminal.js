@@ -4,6 +4,7 @@ import {
   stopVibe64Execution,
   runVibe64Command
 } from "@local/vibe64-execution/server";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { createHeldWork } from "@local/vibe64-core/server/heldWork";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { startResourceWorkflow } from "./resourceWorkflow.js";
@@ -41,6 +42,9 @@ const REPORTED_STARTS = 5;
  * @param {typeof finishVibe64Workflow} [dependencies.finishWorkflow]
  * @param {typeof setVibe64WorkflowPhase} [dependencies.setWorkflowPhase]
  * @param {(sessionId: string) => object | null} dependencies.sessionAdmissionFailure
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} [dependencies.logger] where each replaced Preview run
+ *   is logged
+ * @param {number} [dependencies.previewPrepareWaitMs] how long a restart waits at most for its run's Prepare steps
  */
 function createOutputTargetTerminalController({
   ensureWorkspacePrepared,
@@ -54,7 +58,9 @@ function createOutputTargetTerminalController({
   stopPreviewBrowsers,
   finishWorkflow = finishVibe64Workflow,
   setWorkflowPhase = setVibe64WorkflowPhase,
-  sessionAdmissionFailure
+  sessionAdmissionFailure,
+  logger = silentLogger,
+  previewPrepareWaitMs
 }) {
   const state = createOutputTargetTerminalState({ env });
   const launchCoordination = createOutputTargetLaunchCoordination({
@@ -77,7 +83,9 @@ function createOutputTargetTerminalController({
     runCommand,
     startWorkflow,
     finishWorkflow,
-    setWorkflowPhase
+    setWorkflowPhase,
+    logger,
+    prepareWaitMs: previewPrepareWaitMs
   });
   const previewTests = createOutputTargetPreviewTests({
     state,

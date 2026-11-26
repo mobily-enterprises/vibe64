@@ -34,6 +34,7 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * @param {RuntimeEnv} dependencies.env
  * @param {ServiceAssistant["inspectAssistantAccess"]} dependencies.inspectAssistantAccess
  * @param {RuntimeLogger} dependencies.logger
+ * @param {number} [dependencies.previewPrepareWaitMs] how long a Preview restart waits at most for its run's Prepare steps
  * @param {StagingEnvironmentProvider} dependencies.stagingEnvironmentProvider
  * @param {ProjectService} dependencies.project
  * @param {ProjectServices} dependencies.projectServices
@@ -52,6 +53,7 @@ function createServiceCommandServices({
   env,
   inspectAssistantAccess,
   logger,
+  previewPrepareWaitMs,
   stagingEnvironmentProvider,
   project,
   projectServices,
@@ -77,6 +79,8 @@ function createServiceCommandServices({
   const outputTarget = createOutputTargetTerminalController({
     ensureProjectServices: projectServices.ensure,
     env,
+    logger,
+    previewPrepareWaitMs,
     ensureWorkspacePrepared: (sessionId, context = {}) => workspacePreparation.ensureWorkspacePrepared(sessionId, context, {
       rerunFailed: context.rerunFailedSetup === true
     }),

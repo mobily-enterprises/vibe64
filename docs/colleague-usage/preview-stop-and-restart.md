@@ -45,6 +45,22 @@ agent's start is booting the app, pressing **Start preview** or **Restart
 preview** there shows the run that is starting or running instead of replacing
 it; the tab's own automatic start and recovery do the same. Press **Restart
 preview** again on that run to restart it.
+Restarts asked for close together, from tabs, the coding agent or the restart
+after workspace setup, give one new run: a restart finds the run another one
+started after it was asked for, and keeps it. A restart asked for after that run
+started replaces it as usual.
+A restart never cuts the application's Prepare steps (its database migration or
+seed, before the server starts). When the run is still in one, the restart waits
+for it to finish, and Preview reads **Waiting for the database step to finish**
+meanwhile; the coding agent's `preview restart --wait` and `preview status` say
+the same. It waits at most five minutes, as long as Preview may take to become
+ready, then restarts anyway, so a restart never stays stuck behind a step that
+does not end. **Stop preview** stays immediate, also during that step: it stops
+at once, and the stopped Preview says **Preview was stopped during its database
+step (Prepare), which may be half done**, which also ends a restart that was
+waiting for it. Start Preview again to run the step again; if it then fails on
+what the cut step left (for example a migration lock), fix that in the
+application's database before starting again.
 Stopping or restarting a Preview includes processes in its child groups,
 that are owned by that output. Wait for cleanup to finish before starting
 another run. If cleanup fails, open **Resources** for the reported operation

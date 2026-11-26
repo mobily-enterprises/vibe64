@@ -194,9 +194,25 @@ function composeLaunchTerminalEnvironment({
   };
 }
 
+/**
+ * The running launch terminals a start replaces: every one but the terminal it reuses, if any.
+ * @param {string} namespace
+ * @param {{ id?: string } | null} [reusableTerminal]
+ */
+function replacedLaunchTerminals(namespace, reusableTerminal = null) {
+  return listTerminalSessions({ namespace })
+    .filter((terminal) => terminal.id && terminal.id !== reusableTerminal?.id && launchTerminalIsRunning(terminal));
+}
+
+/**
+ * Closes the session's launch terminals other than the one a start reuses, with the reason they close.
+ * @param {object} input
+ * @param {string} [input.reason] `superseded:<start id>` for the runs a start replaces
+ */
 async function cleanupSupersededLaunchTerminals({
   launchPreviewProxies,
   namespace = "",
+  reason = "close",
   reusableTerminal = null,
   sessionId = ""
 } = {}) {
@@ -208,7 +224,8 @@ async function cleanupSupersededLaunchTerminals({
       continue;
     }
     const result = await closeTerminalSession(terminal.id, {
-      namespace
+      namespace,
+      reason
     });
     if (result.closed) {
       closed += 1;
@@ -236,5 +253,6 @@ export {
   launchSpecEnvironment,
   launchSpecAllowedRoots,
   composeLaunchTerminalEnvironment,
-  cleanupSupersededLaunchTerminals
+  cleanupSupersededLaunchTerminals,
+  replacedLaunchTerminals
 };

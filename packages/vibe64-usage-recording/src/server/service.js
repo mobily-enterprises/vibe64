@@ -373,18 +373,20 @@ function createService({
       let result = null;
       try {
         if (target.kind === "web") {
-          result = await terminals.startOutputTargetTerminal(record.sessionId, { restartPreview: true });
+          result = await terminals.startOutputTargetTerminal(record.sessionId, { restartPreview: true, requestedBy: "usage-recording" });
           if (result?.ok === false && result.code === "vibe64_preview_not_started") {
             result = await terminals.startOutputTargetTerminal(record.sessionId, {
               ensurePreview: true,
-              outputTargetId: target.outputTargetId
+              outputTargetId: target.outputTargetId,
+              requestedBy: "usage-recording"
             });
           }
         } else {
           result = await terminals.startOutputTargetTerminal(record.sessionId, {
             forceRestart: true,
             outputParameters,
-            outputTargetId: target.outputTargetId
+            outputTargetId: target.outputTargetId,
+            requestedBy: "usage-recording"
           });
         }
       } catch (error) {

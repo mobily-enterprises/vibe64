@@ -425,7 +425,11 @@ function createTerminalActions({ terminals }) {
         ),
         vibe64: PROJECT_OPERATION
       },
-      execute: (input) => terminals.startOutputTargetTerminal(input.sessionId, input)
+      // Who asked is recorded with the run it starts and any run it replaces: the page (`http`) or an assistant.
+      execute: (input, context) => terminals.startOutputTargetTerminal(input.sessionId, {
+        ...input,
+        requestedBy: context?.channel === "api" ? "http" : "assistant-tool"
+      })
     }),
     Object.freeze({
       ...VIBE64_COMMAND,

@@ -86,6 +86,8 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
  * @param {typeof inspectGenesisSkills} [dependencies.inspectAgentSkills]
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
+ * @param {number} [dependencies.previewPrepareWaitMs] how long a Preview restart waits at most for its run's Prepare
+ *   steps before it replaces the run
  * @param {StagingEnvironmentProvider} dependencies.stagingEnvironmentProvider a host's staging Env, or none
  * @param {ProjectServices} dependencies.projectServices
  * @param {ProjectService} dependencies.project
@@ -106,6 +108,7 @@ function createService({
   logger,
   // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
   opencodeTerminalController = {},
+  previewPrepareWaitMs,
   stagingEnvironmentProvider,
   projectServices,
   project,
@@ -162,11 +165,7 @@ function createService({
       project
     })
   });
-  const sessionAccess = createServiceSessionAccess({
-    logger,
-    project,
-    publishSessionChanged
-  });
+  const sessionAccess = createServiceSessionAccess({ logger, project, publishSessionChanged });
   // The authority a Main turn Vibe64 sends for a person carries for its application tools (mainTurnAuthority.js).
   const { turnAuthorityFor } = createMainTurnAuthority({ actions, state, sessionAccess, logger });
   const passes = createProjectPasses({ sessionContext: (sessionId) => sessionAccess.sessionContext(sessionId) });
@@ -196,6 +195,7 @@ function createService({
     env,
     inspectAssistantAccess: (sessionId, options) => assistant.inspectAssistantAccess(sessionId, options),
     logger,
+    previewPrepareWaitMs,
     stagingEnvironmentProvider,
     project,
     projectServices,

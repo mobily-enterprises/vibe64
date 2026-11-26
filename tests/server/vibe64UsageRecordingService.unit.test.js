@@ -267,7 +267,7 @@ test("a Preview recording numbers requests, follows its tracers and stops with r
   assert.deepEqual(recording.target, { id: "preview", kind: "web", label: "Preview" });
   assert.deepEqual(recording.tracers, [{ runtime: "nodejs", state: "starting", reason: "" }]);
   await waitFor(async () => starts.length, (count) => count === 1, "the Preview restart");
-  assert.deepEqual(starts[0], { restartPreview: true });
+  assert.deepEqual(starts[0], { restartPreview: true, requestedBy: "usage-recording" });
   await assert.rejects(call("start", { targetId: "preview" }), { statusCode: 409, code: "vibe64_usage_recording_active" });
 
   // Every web launch of the session carries the recorder; terminal targets do not.
@@ -446,7 +446,9 @@ test("a terminal target records its run and stops when it exits", async (t) => {
     { statusCode: 422, code: "vibe64_usage_recording_parameters_invalid" });
   const { recording } = await call("start", { targetId: "output:sessions-cli", parameters: { limit: "5" } });
   await waitFor(async () => starts.length, (count) => count === 1, "the target start");
-  assert.deepEqual(starts[0], { forceRestart: true, outputParameters: { limit: "5" }, outputTargetId: "sessions-cli" });
+  assert.deepEqual(starts[0], {
+    forceRestart: true, outputParameters: { limit: "5" }, outputTargetId: "sessions-cli", requestedBy: "usage-recording"
+  });
   assert.equal(launchOf({ web: true, outputTargetId: "web" }), null);
   const launch = launchOf({ web: false, outputTargetId: "sessions-cli" });
   assert.equal(launch.environment.VIBE64_USAGE_TARGET_KIND, "terminal");
@@ -546,7 +548,7 @@ test("a target that cannot start or never loads the recorder ends without result
     });
     await call("start", { targetId: "preview" });
     await waitFor(async () => starts.length, (count) => count === 2, "the first Preview start");
-    assert.deepEqual(starts[1], { ensurePreview: true, outputTargetId: "web" });
+    assert.deepEqual(starts[1], { ensurePreview: true, outputTargetId: "web", requestedBy: "usage-recording" });
   });
 });
 

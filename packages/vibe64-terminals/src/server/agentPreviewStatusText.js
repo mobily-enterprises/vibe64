@@ -213,6 +213,10 @@ function previewStatusSummary(status = {}, options = {}) {
       reason: normalizeText(identity?.reason)
     }));
   const identityFileProblem = normalizeText(status.previewIdentity?.fileProblem);
+  // What a restart waiting for the run's database step, or a Stop that cut it, says.
+  const note = ["restart_waiting_for_prepare", "prepare_cut"].includes(normalizeText(status.preview?.reason))
+    ? normalizeText(status.preview?.message)
+    : "";
   return {
     currentPage: previewCurrentPage(previewState, {
       browserUrl
@@ -230,6 +234,7 @@ function previewStatusSummary(status = {}, options = {}) {
     // Only when the project's identity file has invalid entries or is not an identity list.
     ...(skippedIdentities.length > 0 ? { skippedIdentities } : {}),
     ...(identityFileProblem ? { identityFileProblem } : {}),
+    ...(note ? { note } : {}),
     outputTargetId: outputTargetIdFromStatus(status),
     stoppedIntent: status.preview?.stoppedIntent === true,
     ready: previewReady(status),
@@ -243,6 +248,7 @@ function previewSummaryLines(summary = {}) {
     `Preview ready: ${summary.ready ? "yes" : "no"}`,
     `Preview running: ${summary.terminal?.running ? "yes" : "no"}`,
     `Preview explicitly stopped: ${summary.stoppedIntent ? "yes" : "no"}`,
+    summary.note ? `Preview note: ${summary.note}` : "",
     summary.outputTargetId ? `Output target: ${summary.outputTargetId}` : "",
     summary.endpoints?.browser?.url ? `Browser URL (Preview proxy): ${summary.endpoints.browser.url}` : "Browser URL: unavailable",
     summary.currentPage?.route ? `Current page: ${summary.currentPage.route}` : "Current page: not observed",
@@ -330,8 +336,13 @@ function previewStartStdout(summary = {}, options = {}) {
   }
   return [
     command === "restart" ? "Restarted preview." : "Preview is ready.",
+    // A restart whose run was in its database step waited for it (`waitedForPrepare`) rather than cut it, unless it
+    // was still running when the restart's wait ended (`prepareCut`).
+    payload.prepareCut
+      ? "The database step was still running when the restart stopped waiting for it, so the restart cut it."
+      : payload.waitedForPrepare ? "Waited for the database step to finish before restarting." : "",
     ...previewSummaryLines(payload)
-  ].join("\n") + "\n";
+  ].filter(Boolean).join("\n") + "\n";
 }
 
 function outputTargetIdFromStatus(status = {}) {

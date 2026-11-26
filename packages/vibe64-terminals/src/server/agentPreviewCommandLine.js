@@ -409,11 +409,12 @@ function createAgentPreviewCommandLine({
 
     let started;
     if (ensuring) {
-      started = parsed.targetId
-        ? await launchTarget.ensurePreview(sessionId, { outputTargetId: parsed.targetId })
-        : await launchTarget.ensurePreview(sessionId);
+      started = await launchTarget.ensurePreview(sessionId, {
+        ...(parsed.targetId ? { outputTargetId: parsed.targetId } : {}),
+        requestedBy: "agent-preview-command"
+      });
     } else {
-      started = await launchTarget.restartPreview(sessionId);
+      started = await launchTarget.restartPreview(sessionId, { requestedBy: "agent-preview-command" });
     }
     if (started?.ok === false) {
       return finish({
@@ -459,7 +460,11 @@ function createAgentPreviewCommandLine({
     return finish({
       exitCode: 0,
       ok: true,
-      stdout: previewStartStdout(statusSummary(status || {}, sessionId), {
+      stdout: previewStartStdout({
+        ...statusSummary(status || {}, sessionId),
+        ...(started?.waitedForPrepare ? { waitedForPrepare: true } : {}),
+        ...(started?.prepareCut ? { prepareCut: true } : {})
+      }, {
         command: parsed.command,
         json: parsed.json
       })

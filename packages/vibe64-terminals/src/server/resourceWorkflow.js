@@ -187,6 +187,7 @@ async function startResourceWorkflow({
   environment = "development",
   kind,
   label,
+  request,
   env
 }) {
   if (!vibe64ManagedExecutionProvider() && !vibe64ManagedExecutionRequired(env)) return { ok: true, workflow: null };
@@ -202,6 +203,8 @@ async function startResourceWorkflow({
     label,
     estimates,
     mode: configuration?.mode || "finite",
+    // Who asked for the work and what it replaces, for the workflow's record (a Preview start's `launchRequest`).
+    ...(request ? { request } : {}),
     ...await resourceWorkflowIdentity({ sourceRoot, operation, runtimes, steps, configuration, env })
   }, env);
 }

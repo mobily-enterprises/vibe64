@@ -39,9 +39,16 @@ function scheduleDetachedCleanup(session = {}, namespace = "default") {
   }, remainingMs);
 }
 
+/**
+ * Closes a terminal session: stops its process, waits for its hooks and forgets it.
+ * @param {string} id
+ * @param {{ namespace?: string, reason?: string }} [options] reason: why it closes, which its stop and close hooks
+ *   receive (`close` by default; a Preview run another start replaces closes `superseded:<that start's id>`)
+ */
 async function closeTerminalSession(id, options = {}) {
   const {
-    namespace = "default"
+    namespace = "default",
+    reason = "close"
   } = options;
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
@@ -59,7 +66,7 @@ async function closeTerminalSession(id, options = {}) {
     const fatalFailures = [];
     clearDetachedCleanupTimer(session);
     if (!session.processExited) {
-      const stopped = await beginTerminalStop(session, "close");
+      const stopped = await beginTerminalStop(session, reason);
       if (stopped.failures.length) {
         throw terminalCloseAggregateFailure(session, stopped.failures);
       }

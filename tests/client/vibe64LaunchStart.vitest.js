@@ -28,6 +28,7 @@ describe("a Preview start the server holds", () => {
     expect(launchStartAnswerHeld({ ok: true, id: "terminal-1" })).toBe(false);
     expect(launchStartWaitingLabel("workspace-preparation")).toBe("Waiting for the workspace preparation to finish");
     expect(launchStartWaitingLabel("launch-queue")).toBe("Waiting for another Preview change to finish");
+    expect(launchStartWaitingLabel("prepare-step")).toBe("Waiting for the database step to finish");
     expect(launchStartWaitingLabel("starting")).toBe("Starting Preview");
     expect(launchStartWaitingLabel("unconfirmed")).toBe("Checking whether Preview is starting");
   });

@@ -124,7 +124,9 @@ function normalizeLaunchCommands({
         command: normalizedCommand,
         commandPreview: toText(entry?.commandPreview || normalizedCommand),
         label: toText(entry?.label),
-        networkEnv: entry?.networkEnv !== false
+        networkEnv: entry?.networkEnv !== false,
+        // A line the launch prints for Vibe64 alone (the Prepare steps' end), with no step heading.
+        ...(entry?.quiet === true ? { quiet: true } : {})
       };
     })
     .filter(Boolean);
@@ -354,7 +356,7 @@ function normalizeHttpLaunchReadiness(readiness = null) {
 }
 
 function launchCommandLines(commands = []) {
-  return commands.flatMap((entry) => [
+  return commands.flatMap((entry) => entry.quiet ? [entry.command] : [
     entry.label ? `printf '\\n[studio] %s\\n' ${shellQuote(entry.label)}` : "",
     entry.networkEnv
       ? `printf '\\n[studio] $ HOST=%s PORT=%s %s\\n\\n' "$HOST" "$PORT" ${shellQuote(entry.commandPreview || entry.command)}`
@@ -631,7 +633,8 @@ async function createVibe64WebLaunchTargetTerminalSpec({
     return Object.freeze({
       args,
       command: "bash",
-      commandPreview: startupCommands.map((entry) => entry.commandPreview || entry.command).join("\n"),
+      commandPreview: startupCommands.filter((entry) => !entry.quiet)
+        .map((entry) => entry.commandPreview || entry.command).join("\n"),
       cwd: workdir,
       env,
       metadata,
