@@ -39,6 +39,8 @@ const ALLOWED_FILES = new Set([
   "tests/server/vibe64ExecutionHostSettings.unit.test.js",
   "tests/server/vibe64ExecutionStagingAccess.unit.test.js",
   "tests/server/vibe64ManagedWorkflow.unit.test.js",
+  // That test's real-host proof, which makes the helper's host inside its disposable VM.
+  "tooling/proof/systemd-workflow/run.sh",
   "tooling/release/runtime-package.mjs"
 ]);
 

@@ -18,6 +18,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/engines/terminalSessionClosing.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessionRegistry.js`
 - `packages/vibe64-execution/src/host/managedWorkflows.js`
+- `tooling/proof/systemd-workflow/run.sh`
 - `packages/vibe64-execution/src/host/stagingAccess.js`
 - `packages/vibe64-execution/src/host/hostFiles.js`
 - `packages/vibe64-execution/src/host/personRegistry.js`
@@ -851,6 +852,17 @@ and after configured/effective limits, and limiting-ancestor readings. Missing
 or inconsistent readings are not treated as successful changes. A refusal at a
 target or ancestor names that group, the limiting field, its observed maximum
 and the requested allowance so the provider can explain the actual constraint.
+
+These workflow actions are proved on a real systemd only by the real-host case
+of `tests/server/vibe64ManagedWorkflow.unit.test.js`, which every ordinary run
+skips (it needs root's systemd, `sudo -n` and a workspace account).
+`tooling/proof/systemd-workflow/run.sh` runs it in a disposable Incus VM it
+deletes by exact name on every exit: a sudo-capable operator drives the helper
+for a hand-made workspace account, which stands in for the one a managed host's
+account step makes (mobilynet's accounts work-area, proved by mobilynet's own
+tests), under a hand-made work slice with a 2 GiB MemoryMax, which stands in
+for host setup's. It proves the helper's workflow groups, their limits, the
+`sudo -n` units, growth and its refusals, not how a host makes either.
 
 A failure reports `unchanged`, `partial` or `unknown` for this invocation. A
 failed write is not proof of no effect; only complete readback equal to the
