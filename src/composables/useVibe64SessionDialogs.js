@@ -102,7 +102,11 @@ function useVibe64SessionDialogs({
     try {
       const response = await archiveFollowed(sessionId);
       succeeded = true;
-      feedback.success("Vibe64 session archived.");
+      // A checkpoint backup that failed never fails the archive; its reason is said with the success.
+      const checkpointBackupError = String(response?.metadata?.source_recovery_checkpoint_backup_error || "").trim();
+      feedback.success(checkpointBackupError
+        ? `Vibe64 session archived without its turn checkpoints: ${checkpointBackupError}`
+        : "Vibe64 session archived.");
       return response;
     } catch (error) {
       // The failure goes to shared action feedback, out of the newly selected session's runtime, and the gray tab is

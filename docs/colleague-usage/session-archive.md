@@ -15,6 +15,21 @@ many and its button reads **Archive without saving**; choose **Cancel**, then
 **Save**, to keep them. When Vibe64 has not yet confirmed whether the work is
 saved, the dialog says so. A new session starts from the project's saved source,
 so it does not contain an archived session's unsaved work.
+Archiving also backs up the session's turn checkpoints (the snapshot Vibe64
+keeps after each AI turn) to **Project Backups** on the Dashboard's **Project
+files** page, as one file named
+`session-checkpoints-<session name>-<session id>.bundle` (a connected
+repository's has its name at the end). It takes seconds whatever the project's
+history, and Project Backups deletes it 2 weeks later like any backup. Download it
+to keep it longer. If that backup cannot be made, the session is still archived:
+the message reads **Vibe64 session archived without its turn checkpoints:** and
+the reason, and nothing is left in Project Backups. An archived session never
+comes back with its old turn checkpoints by itself; restoring them from the file
+is a Git task for a coding agent: in a clone of the project, run
+`git fetch <file> 'refs/vibe64/checkpoints/*:refs/vibe64/checkpoints/*'`.
+Archiving does not wait for, or stop, a Save in another session; a **Save
+work** card you see after confirming belongs to the session the page switched
+to, not the one being archived.
 An OpenCode session can be archived before its main chat has started; an idle
 assistant with no native conversation does not need a main-turn Stop request.
 Its helper conversations and terminals still go through normal cleanup.

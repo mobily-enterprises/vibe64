@@ -12,6 +12,7 @@ import { GENESIS_SESSION_KIND, assertSupportedSession } from "./sessionRuntimeCh
 import { VIBE64_SESSION_STATUS } from "./sessionStore.js";
 import {
   commitRenewalSessionSourceStage,
+  logCheckpointBackupFailures,
   prepareRenewalSessionSource,
   restoreRenewalSessionSourceStage,
   stagePreparedRenewalSessionSource
@@ -208,11 +209,13 @@ async function prepareSessionSourceForRenewal(runtime, sessionId, options) {
         { params: { sessionId: toText(sessionId) } }
       );
     }
-    return prepareRenewalSessionSource({
+    const prepared = await prepareRenewalSessionSource({
       renewalId,
       session,
       store: runtime.store
     });
+    logCheckpointBackupFailures(runtime.logger, sessionId, prepared.checkpointBackupFailures);
+    return prepared;
   });
 }
 

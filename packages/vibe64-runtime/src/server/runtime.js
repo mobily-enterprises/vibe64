@@ -30,7 +30,10 @@ import {
   sessionClosingMetadata,
   sessionIsClosing
 } from "./sessionLifecycle.js";
-import { archiveSessionSource as archiveStoredSessionSource } from "./sessionWorktreeArchive.js";
+import {
+  archiveSessionSource as archiveStoredSessionSource,
+  logCheckpointBackupFailures
+} from "./sessionWorktreeArchive.js";
 import { removeEmptySessionSourceFolder } from "./sessionWorktreeGit.js";
 import { removeSessionTempFolder } from "./sessionTempFolder.js";
 import {
@@ -436,11 +439,13 @@ class Vibe64SessionRuntime {
       if (!sessionSourceRecoveryWasSaved(session)) {
         await this.assertSourceHealthy(session);
       }
-      return archiveStoredSessionSource({
+      const archived = await archiveStoredSessionSource({
         reason,
         session,
         store: this.store
       });
+      logCheckpointBackupFailures(this.logger, sessionId, archived.checkpointBackupFailures);
+      return archived;
     });
   }
 

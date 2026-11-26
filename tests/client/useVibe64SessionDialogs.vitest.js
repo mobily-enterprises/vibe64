@@ -124,6 +124,22 @@ describe("useVibe64SessionDialogs", () => {
     expect(commandMocks.error).not.toHaveBeenCalled();
   });
 
+  it("says with the success that the session was archived without its turn checkpoints, and why", async () => {
+    commandMocks.save.mockResolvedValueOnce({
+      ok: true,
+      sessionId: "session-1",
+      status: "archived",
+      metadata: { source_recovery_checkpoint_backup_error: "Backing up the session's turn checkpoints took longer than 60 s." }
+    });
+    const dialogs = useVibe64SessionDialogs(dialogOptions());
+    dialogs.request();
+    await dialogs.confirm();
+    expect(commandMocks.success).toHaveBeenCalledWith(
+      "Vibe64 session archived without its turn checkpoints: Backing up the session's turn checkpoints took longer than 60 s."
+    );
+    expect(commandMocks.error).not.toHaveBeenCalled();
+  });
+
   it.each([0, 502, 504])("repeats an archive whose answer was lost with status %s, and never shows that failure", async (status) => {
     vi.useFakeTimers();
     try {

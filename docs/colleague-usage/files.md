@@ -163,7 +163,9 @@ after** and a date. Daily maintenance deletes each file 2 weeks after it was
 last written or changed; a newly copied or moved file starts a fresh 2 weeks even
 if it keeps an older modification date. Download, or copy to Project Dropzone,
 anything you want to keep. This folder does not snapshot your project
-automatically. Workspace upgrade recovery copies are kept separately and do not
+automatically. Archiving or renewing a session puts that session's turn
+checkpoints here, as `session-checkpoints-<session name>-<session id>.bundle`
+(see [Archive a session](session-archive.md)); they expire the same way. Workspace upgrade recovery copies are kept separately and do not
 appear here. Symbolic links are not shown or cleaned automatically.
 
 **Session Dropzone** belongs to one session and disappears when that session is

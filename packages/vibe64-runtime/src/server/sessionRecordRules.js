@@ -79,6 +79,9 @@ const SESSION_ARCHIVE_INDEX_METADATA_NAMES = Object.freeze([
   "source_recovery_base_commit",
   "source_recovery_branch",
   "source_recovery_bundle_artifact",
+  "source_recovery_checkpoint_backup",
+  "source_recovery_checkpoint_backup_error",
+  // Archives made before the checkpoints went to Project Backups name their bundle artifact.
   "source_recovery_checkpoint_bundle_artifact",
   "source_recovery_default_branch",
   "source_recovery_dirty",

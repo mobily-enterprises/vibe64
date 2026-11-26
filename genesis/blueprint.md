@@ -529,7 +529,11 @@ session of the project, outside Git and session archives: **Project Dropzone**,
 whose files stay until someone deletes them, and **Project Backups**, temporary
 storage whose daily maintenance deletes files 14 days after their last write or
 filesystem change; Files shows each backup's expiry date. Project Backups is not
-an automatic project snapshot. Users and coding agents can add files to both
+an automatic project snapshot. Archiving or renewing a session backs up its turn
+checkpoints there, as one Git bundle per repository holding only what the
+session's base commit lacks, so it takes seconds whatever the history; archive
+and renewal never wait or fail on it, and a backup that could not be made is
+said with the archive's success and recorded with the session. Users and coding agents can add files to both
 with the same Files controls.
 The project Dashboard's **Pages** list holds pages the AI made: reports,
 comparisons, dashboards, diagrams and status overviews that everyone with access

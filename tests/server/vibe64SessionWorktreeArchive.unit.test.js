@@ -477,13 +477,9 @@ async function bundleObjectCount(bundlePath) {
 }
 
 /** The session's archived turn checkpoints: the Project Backups file its recovery names. */
-function recordedCheckpointBundle(runtime, sessionId, metadata) {
-  if (metadata.source_recovery_checkpoint_backup) {
-    return path.join(runtime.store.paths().projectBackupsRoot, metadata.source_recovery_checkpoint_backup);
-  }
-  // Red only: where the archive put them before Project Backups, to show what that bundle held.
-  return metadata.source_recovery_checkpoint_bundle_artifact
-    ? path.join(runtime.store.paths(sessionId).artifactsRoot, metadata.source_recovery_checkpoint_bundle_artifact)
+function recordedCheckpointBundle(runtime, metadata) {
+  return metadata.source_recovery_checkpoint_backup
+    ? path.join(runtime.store.paths().projectBackupsRoot, metadata.source_recovery_checkpoint_backup)
     : "";
 }
 
@@ -551,8 +547,8 @@ async function archiveCheckpointedSessionIn({ checkpoints, commandRequests, hist
     assert.equal(archiveResult.removed, true);
     assert.equal(await pathExists(worktreePath), false);
     const metadata = await runtime.store.readMetadata(sessionId);
-    const bundlePath = recordedCheckpointBundle(runtime, sessionId, metadata);
-    assert.ok(bundlePath, "the archive records where the session's turn checkpoints went");
+    const bundlePath = recordedCheckpointBundle(runtime, metadata);
+    assert.ok(bundlePath, `no checkpoint backup: ${metadata.source_recovery_checkpoint_backup_error}`);
     const objectCount = await bundleObjectCount(bundlePath);
     const restoreVerificationCommands = commandRequests.filter(({ args = [] }) => (
       args.includes("--git-dir") || (args[0] === "init" && args[1] === "--bare")
@@ -593,7 +589,7 @@ test("archive backs up turn checkpoints to Project Backups with only their own o
 });
 
 test("a turn checkpoint backup that fails never fails the archive: it goes on without it and says why", async (t) => {
-  for (const failure of ["changed_ref", "interrupted_command"]) {
+  for (const failure of ["changed_ref", "interrupted_command", "missing_objects"]) {
     await t.test(failure, async (t) => {
       await withTemporaryRoot(async (targetRoot) => {
         const baseCommit = await createGitProject(targetRoot);
@@ -620,7 +616,7 @@ test("a turn checkpoint backup that fails never fails the archive: it goes on wi
         });
         await writeProjectFile(worktreePath, "app.txt", "checkpointed only\n");
         const outerTurnId = "client-message-archive";
-        await createGitTurnCheckpoint({
+        const checkpoint = await createGitTurnCheckpoint({
           outerTurnId,
           outcome: "completed",
           sessionId,
@@ -628,19 +624,25 @@ test("a turn checkpoint backup that fails never fails the archive: it goes on wi
           timestamp: "2026-08-18T09:00:00.000Z",
           worktreePath
         });
-        const refs = checkpointRefs({ outerTurnId, sessionId });
         let failureInjected = false;
         const releaseManagedExecution = installVibe64ManagedExecutionProvider({
           async runCommand(request, { runLocal }) {
             const args = request.args || [];
-            if (args[0] === "--git-dir" && args.includes("for-each-ref")) {
+            if (args[0] !== "--git-dir") return runLocal();
+            if (failure === "interrupted_command" && args.includes("unbundle")) {
               failureInjected = true;
-              if (failure === "interrupted_command") {
-                return { ok: false, stderr: "simulated managed command interruption" };
-              }
-              await git(args[1], ["update-ref", refs.turnRef, baseCommit]);
+              return { ok: false, stderr: "simulated managed command interruption" };
             }
-            return runLocal();
+            const result = await runLocal();
+            if (failure === "changed_ref" && args.includes("unbundle")) {
+              failureInjected = true;
+              return { ...result, stdout: String(result.stdout || "").replace(checkpoint.commit, baseCommit) };
+            }
+            if (failure === "missing_objects" && args.includes("--batch-all-objects")) {
+              failureInjected = true;
+              return { ...result, stdout: String(result.stdout || "").replace(checkpoint.commit, "") };
+            }
+            return result;
           },
           async stopExecution() {
             return { ok: true, stopped: false };
@@ -650,9 +652,11 @@ test("a turn checkpoint backup that fails never fails the archive: it goes on wi
 
         const archiveResult = await runtime.archiveSessionSource(await runtime.getSession(sessionId), { reason: "archived" });
         assert.equal(failureInjected, true);
-        const error = failure === "changed_ref"
-          ? /did not restore the exact checkpoint refs/u
-          : /simulated managed command interruption/u;
+        const error = {
+          changed_ref: /did not restore the exact checkpoint refs/u,
+          interrupted_command: /simulated managed command interruption/u,
+          missing_objects: /lacks 1 objects its checkpoints need/u
+        }[failure];
         assert.equal(archiveResult.removed, true);
         assert.equal(archiveResult.dirty, true);
         assert.equal(archiveResult.checkpointBackupFailures.length, 1);
