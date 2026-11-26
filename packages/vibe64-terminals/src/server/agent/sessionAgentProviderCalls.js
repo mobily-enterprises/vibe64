@@ -223,6 +223,8 @@ function createSessionAgentProviderCalls({
       session: operationOptions.session || null,
       sessionId: toText(sessionId),
       signal: operationOptions.signal || null,
+      // What started a follow-up turn Vibe64 sends by itself, for its timeline line (sessionTurnTimeline.js).
+      timelineTrigger: toText(operationOptions.timelineTrigger),
       transportId: provider.transportId,
       turnOwnership: operationOptions.turnOwnership || null,
       vibe64User: authorization ? authorization.vibe64User : assistantUser(operationOptions)

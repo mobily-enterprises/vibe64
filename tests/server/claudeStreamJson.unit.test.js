@@ -33,7 +33,7 @@ import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceColla
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
-import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { currentProjectActionRequestMeta, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { ACTION_READ_CONVERSATION_CONTEXT, createSessionActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
 import { createSessionsService as createSessionService, sendFollowed, withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
@@ -3939,6 +3939,37 @@ test("Claude delayed practice events retain only original control after admissio
   assert.ok(observed.some(scope => scope.access === "control"));
   assert.equal(f.written.filter(message => message.role === "user").length, 1);
   assert.equal(f.written.find(message => message.role === "assistant").text, "Preserved answer.");
+});
+
+test("a tool call in a follow-up turn runs under no request: not the send that started Claude's process, nor a page's read of the session since", async (t) => {
+  const f = await fixture(t);
+  const seen = [];
+  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions,
+    async publishSessionChanged() { seen.push(currentProjectActionRequestMeta()?.request?.method || "no request"); }
+  });
+  const project = { slug: "claude-fixture", projectRuntimeRoot: path.join(f.root, "fixture-runtime") };
+  const asRequest = (method, operation) => runWithProjectRequestContext(project, operation,
+    { requestMeta: { request: { method, routeOptions: { url: "/api/app/:slug/vibe64/sessions/:sessionId" } } } });
+  // The person's send starts Claude's process; its turn ends.
+  await asRequest("POST", async () => {
+    await provider.open(f.context);
+    await provider.sendMessage(f.context, { message: "Build it", messageId: "person-send" });
+  });
+  const native = f.processes.at(-1);
+  await native.options.onEvent({ type: "result", subtype: "success", result: "Built." });
+  // Vibe64's follow-up turn, which no request sends; a page reads the session while it runs.
+  await runWithProjectRequestContext(project, () => provider.sendMessage(f.context, { message: "Review it", messageId: "follow-up" }),
+    { requestMeta: null });
+  await asRequest("GET", () => provider.sessionState(f.context));
+  seen.length = 0;
+  // The follow-up's tool call and its end reach Vibe64 while that read's request is the current one.
+  await asRequest("GET", async () => {
+    await native.options.onEvent({ type: "assistant", uuid: "tool-call", message: { id: "tool-call", content: [
+      { type: "tool_use", id: "tool-1", name: "Bash", input: { command: "vibe64-helper session status" } }] } });
+    await native.options.onEvent({ type: "result", subtype: "success", result: "Reviewed." });
+  });
+  assert.ok(seen.length > 0, "the tool call and the turn's end were published");
+  assert.deepEqual([...new Set(seen)], ["no request"]);
 });
 
 test("Claude delayed practice failure proves native stop then publishes original inactive owner", async (t) => {

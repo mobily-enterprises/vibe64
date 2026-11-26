@@ -3,7 +3,8 @@
  * lock for its whole run. Stop and steers never wait for one: they run without the lock (`withoutLock`), and the
  * write lets the lock go only once they finish, so whatever waits for the lock reads what they wrote. Routing work
  * a turn leaves behind waits for such a write to end instead of giving up after the usual wait (`holds`,
- * `started`), and a Stop already waiting for the lock learns when one takes it (`nextHold`).
+ * `started`), and a Stop already waiting for the lock learns when one takes it (`nextHold`). Routing hears each one
+ * end (`onEnded`), still inside the lock: the session's source may have moved under a running turn.
  */
 // How long a finished write waits for the Stops and steers still running without the lock before letting it go.
 const LOCK_FREE_WAIT_MS = 30_000;
@@ -15,6 +16,8 @@ function createWritesWhileAssistantWorks() {
   const starts = new Map();
   // Per session: who waits for the next such write to hold its lock.
   const waiters = new Map();
+  // Who hears that such a write ended.
+  const endListeners = new Set();
 
   function started(sessionId) {
     return starts.get(sessionId) || 0;
@@ -36,6 +39,8 @@ function createWritesWhileAssistantWorks() {
       return await operation();
     } finally {
       holding.delete(sessionId);
+      // Before the lock goes, whatever the write's outcome: a failed Save may still have committed.
+      await Promise.allSettled([...endListeners].map(async (listener) => listener(sessionId)));
       let timer;
       await Promise.race([
         Promise.allSettled([...write.lockFree]),
@@ -96,10 +101,22 @@ function createWritesWhileAssistantWorks() {
     return holding.has(sessionId);
   }
 
+  /**
+   * Calls `listener(sessionId)` each time such a write ends, before it lets the lock go; a listener's failure is its
+   * own, never the write's.
+   * @param {(sessionId: string) => unknown} listener
+   * @returns {() => void} the listener's removal
+   */
+  function onEnded(listener) {
+    endListeners.add(listener);
+    return () => endListeners.delete(listener);
+  }
+
   return Object.freeze({
     hold,
     holds,
     nextHold,
+    onEnded,
     started,
     withoutLock
   });
@@ -110,6 +127,7 @@ const NO_WRITES_WHILE_ASSISTANT_WORKS = Object.freeze({
   hold: (_sessionId, operation) => operation(),
   holds: () => false,
   nextHold: () => new Promise(() => {}),
+  onEnded: () => () => {},
   started: () => 0,
   withoutLock: () => null
 });

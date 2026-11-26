@@ -264,7 +264,13 @@ replayed, while current effect failure still fails its own run.
 Public Claude captures the existing same-owner CONTROL projection at native
 process creation and re-enters it for event, failure and application-control
 callbacks. Its application event sink also re-enters the exact captured context
-for checkpoint and terminal publication. This replaces the finite practice
+for checkpoint and terminal publication. A captured projection never keeps the
+request it was taken in (`captureProjectRequestContext`), the send that started
+the process or a page's later read of the session: an engine's events, tool
+calls and control requests, like every other callback that re-enters a captured
+context (Codex's and OpenCode's events, a helper command's binding, a running
+process's callbacks), run under no request, and an application action they
+dispatch carries its authority's own. This replaces the finite practice
 admission’s inherited async context; it does not extend that expired grant or
 retain CREATE/WRITE authority. Fresh teaching effects continue through the
 original saved-attempt action contributor and preparation barrier. Ordinary
@@ -745,6 +751,19 @@ host no longer resolves, or who may no longer open the session, gets no
 authority: the turn still runs, each tool call is refused, and
 `vibe64.agent_message.tool_authority_refused` records why. The person's own
 Continue of a waiting workflow is their browser Send and keeps its authority.
+Vibe64's own send runs without any request (`runWithoutActionRequest`), as
+everything that follows a turn's end does
+([serviceTurnPublication.js](../../../packages/vibe64-terminals/src/server/serviceTurnPublication.js)):
+a running engine's turn events run in whichever request last read or used the
+session, often an open page's GET of it, which asked for nothing. Its session
+timeline line names its step instead of a request (`follow-up:plan-check`,
+`follow-up:whole-checks`, `follow-up:pass`, `follow-up:resume`, or the stage:
+`follow-up:planning`, `follow-up:implementation`, `follow-up:review`;
+[assistantRoutingDelivery.js](../../../packages/vibe64-terminals/src/server/assistantRoutingDelivery.js)).
+Main's copy of the person's Send request names its method and route, which a
+Fastify request holds as prototype getters a spread leaves behind
+([mainConversationAuthority.js](../../../packages/vibe64-sessions/src/server/mainConversationAuthority.js)),
+so their send's line names its route, also when it waits for a running turn.
 The existing SDK MCP transport validates the admitted top-level native tool use;
 the Main binding rechecks its authored request, actor, project and assistant
 access, then derives the native goal identity on the server. It invokes the same
@@ -2790,11 +2809,20 @@ tick an active plan (Senior's, Junior's or Senior's review, from
 which may tick the plan but is not asked to)
 reads the plan's revisions, its record and the source state while the turn's
 selection is prepared, and keeps them in memory by request key and message
-(`planCheckTurns`). When that turn completes, unless the person stopped it, a
-goal is active, or a restart or disconnected schedule lost the start, routing
-compares (a turn that ended asking the person is compared too): the same active plan, Progress and
-record, and changed files, send one follow-up (`preparePlanCheck`) to the same
-AI in the same stage before anything else follows. It is Vibe64's note
+(`planCheckTurns`). A Save, Update or Save recovery that held the session's
+lock while the AI worked (`writesWhileAssistantWorks.hold`) tells routing as it
+ends, before the lock goes (`onEnded`), and each of the session's kept starts
+reads the source again (`restartPlanCheckStarts`), so a Save's commit or the
+work Update brought in never reads as the turn's change; what the turn changes
+after it still does. When that turn completes, unless the person stopped it, a
+goal is active, its request is not implementing the plan (`planInvolved`:
+Implement plan, a plan's pass, Vibe64's own handoff of it, or an outcome the
+AI reported on the plan; a question or a fix the person asked for while a plan
+is active is not), or a restart or disconnected schedule lost the start,
+routing compares (a turn that ended asking the person is compared too): the
+same active plan, Progress and record, and changed files, send one follow-up
+(`preparePlanCheck`) to the same AI in the same stage before anything else
+follows. It is Vibe64's note
 (`vibe64Note`, shown as Vibe64's system row) whose display gives the file count
 and whose message names up to five files and asks the AI to walk the checklist
 item by item, not only the item it was on, half-tick what is built, record

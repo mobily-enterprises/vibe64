@@ -122,7 +122,7 @@ test("HTTP and automation establish the same project and trusted actor", async (
   assert.equal(currentProjectRequestContext(), null);
 });
 
-test("captured working context retains only the original request for freshly authorized actions", async () => {
+test("captured working context keeps no request: an action dispatched in it carries its own and is freshly authorized", async () => {
   const f = fixture();
   const requestMeta = { request: { params: { slug: "alpha" }, headers: { cookie: "original-test-credential" } } };
   await f.execute({ text: "prepare" }, { requestMeta, unrelatedActionState: "not-retained" });
@@ -141,17 +141,16 @@ test("captured working context retains only the original request for freshly aut
     captured = captureProjectRequestContext();
   });
   await runWithProjectRequestContext(captured, async () => {
-    assert.equal(currentProjectActionRequestMeta(), admittedRequestMeta);
-    const receivingRequestMeta = { ...currentProjectActionRequestMeta(), request: {
-      ...currentProjectActionRequestMeta().request, params: { slug: "beta" }
-    } };
+    assert.equal(currentProjectActionRequestMeta(), null, "what re-enters a capture was not caused by its request");
+    const receivingRequestMeta = { ...admittedRequestMeta, request: { ...admittedRequestMeta.request, params: { slug: "beta" } } };
     await f.execute({ text: "receiving work" }, { requestMeta: receivingRequestMeta });
     assert.equal(f.calls.at(-1).project.slug, "beta");
+    assert.equal(f.calls.at(-1).requestMeta.request, receivingRequestMeta.request, "the action runs under its own request");
     f.state.allowed = false;
     await assert.rejects(f.execute({ text: "revoked receiving work" }, { requestMeta: receivingRequestMeta }),
       { statusCode: 403 });
     assert.equal(f.calls.length, 2, "captured request metadata is not a cached permission grant");
-    assert.equal(currentProjectActionRequestMeta(), admittedRequestMeta, "nested dispatch preserves the originating scope");
+    assert.equal(currentProjectActionRequestMeta(), null, "nested dispatch preserves the originating scope");
   });
   assert.equal(currentProjectActionRequestMeta(), null);
 });

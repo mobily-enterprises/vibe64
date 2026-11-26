@@ -11,10 +11,11 @@ import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_PROJECT_ROUTE_BASE, vibe64RouteHandler, vibe64RouteHttp } from "@local/vibe64-core/server/featureRoutes";
-import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { currentProjectActionRequestMeta, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { flushSessionTimeline } from "@local/vibe64-core/server/sessionTimeline";
 import { readSessionTimeline, runSessionTimelineCli } from "@local/vibe64-core/server/sessionTimelineCli";
 import { createProjectWatchActions } from "../../packages/vibe64-sessions/src/server/sessionActions.js";
+import { mainConversationRequestContext } from "../../packages/vibe64-sessions/src/server/mainConversationAuthority.js";
 import { createRepositoryUpdates } from "../../packages/vibe64-sessions/src/server/repositoryUpdates.js";
 import { registerProjectWatch } from "../../packages/vibe64-sessions/src/server/projectWatch.js";
 import { PROJECT_WATCH, PROJECT_WATCH_RELEASE } from "../../packages/vibe64-sessions/src/shared/projectWatch.js";
@@ -33,6 +34,8 @@ const SESSION = "2026-11-14_05-00-00";
 const OWNER = Object.freeze({ uid: 42, username: "owner", role: "owner" });
 const TAB = "tab:5f0c2d6e-8b1a-4c3d-9e2f-7a6b5c4d3e2f";
 const INTERRUPT_ROUTE = "/api/app/:slug/vibe64/sessions/:sessionId/agent-turn/interrupt";
+const SEND_ROUTE = "/api/assistant/:surfaceId/conversations/:conversationId/messages";
+const SESSION_READ_ROUTE = "/api/app/:slug/vibe64/sessions/:sessionId";
 
 async function withStateRoot(t) {
   const stateRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-timeline-hooks-"));
@@ -91,12 +94,12 @@ function browserWatches(projectRuntimeRoot) {
   };
 }
 
-function turnPublication() {
+function turnPublication({ afterRoutedTurn = async () => {} } = {}) {
   const followUps = [];
   const { publishAgentSessionChanged } = createServiceTurnPublication({
     afterTemporaryTurn: async () => {},
     finishInterruptedCloses: async () => {},
-    afterRoutedTurn: async () => {},
+    afterRoutedTurn,
     cancelGoalIfMainAiChanged: async () => false,
     continueGoalWhenLimitResets: async () => {},
     resumeGoalAfterTurn: async () => false,
@@ -195,6 +198,45 @@ test("a session's timeline shows a turn, the connection lost and regained during
     ["server.stopping", { reason: "server-shutdown" }]
   ]);
   assert.doesNotMatch(JSON.stringify(events), /Words the timeline|More words/u, "a message's words never reach the timeline");
+});
+
+test("a person's send names its route, through Main's copy of their request too; what follows a turn runs without the read that last touched the session, and its follow-up turn names its step", async (t) => {
+  const { projectRuntimeRoot, stateRoot } = await withStateRoot(t);
+  const manager = createSessionAgentManager({
+    ...sessionAgentManagerDefaults,
+    defaultProviderId: "claude",
+    providers: [{ id: "claude", transportId: "claude_test",
+      async sendMessage(_context, input) { return { ok: true, delivered: true, turnId: `turn-${input.messageId}` }; } }]
+  });
+  const runtime = { stateRoot: projectRuntimeRoot };
+  const project = { projectRuntimeRoot, slug: "shop", vibe64User: OWNER };
+  // The person's send runs in Main's copy of their Fastify request, which outlives the request when the send is held.
+  const server = Fastify();
+  t.after(() => server.close());
+  server.post(SEND_ROUTE, async (request) => {
+    const { requestMeta } = mainConversationRequestContext({ requestMeta: { request } });
+    await runWithProjectRequestContext(project, () => manager.sendMessage(SESSION, { messageId: "message-1", message: "Build it" }, { runtime }),
+      { requestMeta });
+    return { ok: true };
+  });
+  assert.equal((await server.inject({ method: "POST", url: "/api/assistant/main/conversations/conversation-1/messages", payload: {} })).statusCode, 200);
+  // A running engine's turn events run in whichever request last read the session: a page's poll.
+  const asRead = (operation) => runWithProjectRequestContext(project, operation,
+    { requestMeta: { request: { method: "GET", routeOptions: { url: SESSION_READ_ROUTE } } } });
+  const followedIn = [];
+  const published = turnPublication({ afterRoutedTurn: async () => {
+    followedIn.push(currentProjectActionRequestMeta()?.request ?? null);
+    // Routing's next step names itself (assistantRoutingDelivery.js).
+    await manager.sendMessage(SESSION, { messageId: "follow-up-1", message: "Review the plan" }, { runtime, timelineTrigger: "follow-up:review" });
+  } });
+  await asRead(() => published.ended("turn-message-1", "completed"));
+  await published.settled();
+
+  const started = (await timelineJson(stateRoot)).filter(({ kind, event }) => kind === "turn" && event === "started");
+  assert.deepEqual({ followedIn, started: started.map(({ message, trigger }) => [message, trigger]) }, {
+    followedIn: [null],
+    started: [["message-1", `POST ${SEND_ROUTE}`], ["follow-up-1", "follow-up:review"]]
+  });
 });
 
 test("a session request that fails on Vibe64's side is in its timeline; a refusal and a request outside a session are not", async (t) => {

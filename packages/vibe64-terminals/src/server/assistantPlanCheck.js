@@ -1,8 +1,10 @@
 // The plan check at the end of a turn. Vibe64 knows two facts about a turn that may tick an active plan: whether
 // the session's source changed during it (files or commits), and whether the plan's marks, Progress or its check
-// record changed. When the source changed and the plan did not, the AI gets one note in the same chat, before the
-// request settles, asking it to walk the checklist and update it or record that nothing needs a new mark. Which item a
-// change belongs to is the AI's to judge: Vibe64 never infers it. The note is never repeated for its own turn.
+// record changed. When the source changed and the plan did not, and the turn's request implements the plan, the AI
+// gets one note in the same chat, before the request settles, asking it to walk the checklist and update it or record
+// that nothing needs a new mark. A Save or Update during the turn starts the source's comparison again, so their own
+// commits never count as the turn's change. Which item a change belongs to is the AI's to judge: Vibe64 never infers
+// it. The note is never repeated for its own turn.
 import { assistantGoalIsActive } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantPlanCompletionFollows } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { workPlanAtPasses, workPlanScope, workPlanStep } from "../shared/assistantWorkPlan.js";
@@ -45,7 +47,14 @@ async function planCheckStart(context, request) {
   if (plan?.status !== "active") return null;
   const [mark, source] = await Promise.all([readMark(context), readSourceState(context.session).catch(() => null)]);
   if (!source) return null;
-  return { planRevision: plan.revision, progressRevision: plan.progressRevision || "", mark: markIdentity(mark), source };
+  // The session is kept for a Save or Update during the turn, which starts the source's comparison again from it.
+  return {
+    planRevision: plan.revision,
+    progressRevision: plan.progressRevision || "",
+    mark: markIdentity(mark),
+    source,
+    session: context.session
+  };
 }
 
 /**
@@ -62,6 +71,24 @@ function rememberPlanCheckStart(routingState, key, messageId, start) {
   while (routingState.planCheckTurns.size > PLAN_CHECK_TURNS_KEPT) {
     routingState.planCheckTurns.delete(routingState.planCheckTurns.keys().next().value);
   }
+}
+
+/**
+ * A Save or Update of the session ended (writesWhileAssistantWorks.js): it committed the session's work or brought
+ * other saved work in, moving the session's source under any turn of it that may tick the plan. Each such turn's
+ * comparison starts again from the source as the write left it, so what Save committed or Update brought in never
+ * reads as the turn's own change; what the turn changes after it still does. A source that can't be read leaves
+ * nothing to compare, so no plan check follows.
+ * @param {AssistantRoutingState} routingState
+ * @param {string} sessionId
+ */
+async function restartPlanCheckStarts(routingState, sessionId) {
+  const starts = [...routingState.planCheckTurns].filter(([key]) => key.split("\0")[1] === sessionId);
+  await Promise.all(starts.map(async ([key, start]) => {
+    const source = await readSourceState(start.session).catch(() => null);
+    // A turn whose start a later delivery replaced meanwhile keeps that one.
+    if (routingState.planCheckTurns.get(key) === start) routingState.planCheckTurns.set(key, { ...start, source });
+  }));
 }
 
 /**
@@ -131,16 +158,20 @@ function planCheckNote(changes) {
  */
 function createAssistantPlanCheck({ routingState, records, delivery }) {
   /**
-   * Sends the check: when a turn that may tick the active plan completed, changing the session's source but not the
+   * Sends the check: when a turn implementing the active plan completed, changing the session's source but not the
    * plan's marks, Progress or record, the AI gets one note in the same chat (the request's next turn) asking it to
-   * bring the plan up to date or record that nothing needs a new mark. Never for a turn the person stopped or a goal's.
-   * A turn that ended asking the person gets it too: the note asks the AI to ask again, and Senior's review, the passes
-   * and Save are never such a question.
+   * bring the plan up to date or record that nothing needs a new mark. A request implements the plan when it is the
+   * plan's (Implement plan, Vibe64's own handoff of it) or its AI said so by reporting an outcome on the plan
+   * (`planInvolved`); any other request (a question, a small fix the person asked for) gets no check, and so no
+   * Senior's review it never asked for. Never for a turn the person stopped or a goal's. A turn that ended asking the
+   * person gets it too: the note asks the AI to ask again, and Senior's review, the passes and Save are never such a
+   * question.
    * @returns {Promise<boolean>} whether the check was sent and the request waits for its turn
    */
   async function send(context, state, run, start) {
     const sessionId = context.session.sessionId;
-    if (!routingState.allowAuto || run.state !== "completed" || state.stopped || !assistantPlanChecks(state)) return false;
+    if (!routingState.allowAuto || run.state !== "completed" || state.stopped || state.planInvolved !== true ||
+        !assistantPlanChecks(state)) return false;
     const { goal } = await records.currentGoal(sessionId, context);
     if (assistantGoalIsActive(goal)) return false;
     const changes = await planCheckChanges(context, start);
@@ -265,5 +296,6 @@ export {
   assistantPlanChecks,
   createAssistantPlanCheck,
   planCheckStart,
-  rememberPlanCheckStart
+  rememberPlanCheckStart,
+  restartPlanCheckStarts
 };

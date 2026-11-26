@@ -279,6 +279,19 @@ async function runWithProjectRequestContext(context, operation, options = {}) {
   return projectContextStorage.run(Object.freeze(scopedContext), operation);
 }
 
+/**
+ * Runs work that outlives the request it started in (what follows a turn's end, a follow-up turn Vibe64 sends by
+ * itself) in the current project context without that request: nothing it does reads as the request's, and no request
+ * that only read the session (a page's poll) is ever named as having asked for it.
+ * @template T
+ * @param {() => T | Promise<T>} operation
+ * @returns {Promise<T>}
+ */
+async function runWithoutActionRequest(operation) {
+  const context = currentProjectRequestContext();
+  return context ? runWithProjectRequestContext(context, operation, { requestMeta: null }) : operation();
+}
+
 async function runWithResolvedProjectRequestContext(options, operation) {
   const context = await resolveProjectRequestContext(options);
   return runWithProjectRequestContext(context, operation);
@@ -323,6 +336,7 @@ export {
   resolveProjectRequestContext,
   runWithResolvedProjectRequestContext,
   runWithProjectRequestContext,
+  runWithoutActionRequest,
   isProjectRequestError,
   projectRequestErrorStatusCode
 };

@@ -17,6 +17,7 @@ import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { ASSISTANT_FINISHING_DEFAULTS } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { GENESIS_MASTER_PASS, GENESIS_PASSES } from "./genesisPasses.js";
 import { createAgentSessionCommandService } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
+import { timelineTrigger } from "../../packages/vibe64-terminals/src/server/sessionTurnTimeline.js";
 
 const { workPlanPath } = __testables;
 const run = promisify(execFile);
@@ -86,6 +87,10 @@ async function fixture(t, preferences = { mode: "auto" }, {
   readyPlan = true,
   onPlanCompleted,
   source: withSource = false,
+  // Another session source's metadata (one the real Save saves, say) in place of the fixture's own repository.
+  sourceMetadata,
+  // The Saves and Updates that run while the AI works: the real service's registry, when a test runs the real Save.
+  writes = createWritesWhileAssistantWorks(),
   // false: a temporary chat, where Auto and plans are unavailable
   allowAuto = true,
   // The editor process's run (turnInterruptions.js); none by default, as routing has none without a system root.
@@ -110,7 +115,7 @@ async function fixture(t, preferences = { mode: "auto" }, {
   const configuration = createAssistantRoutingStore({ systemRoot: root });
   await configuration.write({ owner: assignments, nonOwner: {} }, 0);
   const sourceRepository = withSource ? await managedSource(root, "session-1") : null;
-  const metadata = { assistant_selection: JSON.stringify(assignments.senior), ...sourceRepository?.metadata,
+  const metadata = { assistant_selection: JSON.stringify(assignments.senior), ...sourceRepository?.metadata, ...sourceMetadata,
     // A saved chat mode carries its after-plan passes and save choice; unless a
     // test says otherwise, they are a new chat's defaults.
     ...(preferences ? { assistant_routing: JSON.stringify({ ...ASSISTANT_FINISHING_DEFAULTS, ...preferences }) } : {}) };
@@ -217,7 +222,6 @@ async function fixture(t, preferences = { mode: "auto" }, {
   const interrupts = [];
   const discards = [];
   let dispatchGate = null;
-  const writes = createWritesWhileAssistantWorks();
   // Genesis's pass list for the session's source; a test may change it, count its reads, read what each asked for or
   // make them fail.
   const genesis = { unavailable: null, passes: GENESIS_PASSES, master: GENESIS_MASTER_PASS };
@@ -239,7 +243,8 @@ async function fixture(t, preferences = { mode: "auto" }, {
       await manager.requireAssistantAccessForSelection(selected.assistantSelection || JSON.parse(selected.session.metadata.assistant_selection), selected);
       await input.onPromptSending?.({ threadId: "native-thread" });
       if (dispatchGate) { dispatchGate.started.resolve(); await dispatchGate.held.promise; }
-      sends.push({ input, selection: selected.assistantSelection });
+      // trigger: what the turn's session timeline line names as having asked for it.
+      sends.push({ input, selection: selected.assistantSelection, trigger: timelineTrigger(selected) });
       if (failAdmission) throw new Error("Lost admission response.");
       receipts.set(input.messageId, input);
       return { ok: true, delivered: true, threadId: "native-thread", turnId: `turn-${sends.length}` };
@@ -259,8 +264,9 @@ async function fixture(t, preferences = { mode: "auto" }, {
       const held = Promise.withResolvers();
       const started = Promise.withResolvers();
       const hold = () => { started.resolve(); return held.promise; };
-      void exclusive("session-1", {}, () => whileAssistantWorks ? writes.hold("session-1", hold) : hold());
-      return { started: started.promise, release: () => held.resolve() };
+      const done = exclusive("session-1", {}, () => whileAssistantWorks ? writes.hold("session-1", hold) : hold());
+      // ended: the write let the lock go, whatever its outcome.
+      return { started: started.promise, release: () => held.resolve(), ended: done.then(() => {}, () => {}) };
     },
     // A new routing, as the next server makes; `overrides` replace its options (its server run, say).
     restart: (overrides = {}) => createAssistantRouting({ ...routingOptions, ...overrides }),

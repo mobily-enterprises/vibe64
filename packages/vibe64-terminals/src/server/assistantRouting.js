@@ -11,6 +11,7 @@ import { createAssistantRoutingGoals } from "./assistantRoutingGoals.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { NO_WRITES_WHILE_ASSISTANT_WORKS } from "./writesWhileAssistantWorks.js";
 import { NO_SERVER_RUN } from "./turnInterruptions.js";
+import { restartPlanCheckStarts } from "./assistantPlanCheck.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -70,6 +71,9 @@ function createAssistantRouting({
   serverRun = NO_SERVER_RUN
 }) {
   const routingState = createAssistantRoutingState({ systemRoot, allowAuto });
+  // A Save or Update during a turn starts its plan check's comparison again (assistantPlanCheck.js). Main chat only:
+  // only it has plan checks, and its routing lives as long as the service that made it.
+  if (allowAuto) writesWhileAssistantWorks.onEnded((sessionId) => restartPlanCheckStarts(routingState, sessionId));
   /**
    * The lock for what a turn leaves behind (its reported outcome, its after-turn review): a Save or Update holds the
    * lock for its whole run, so rather than give up after the usual wait while one holds it, this queues again.

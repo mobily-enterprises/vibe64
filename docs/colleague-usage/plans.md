@@ -126,10 +126,14 @@ the marks can move as the work goes.
 
 ### The plan check after a turn
 
-When a turn of Senior, Junior or Senior's review changed the session's files
-(edited, added, deleted or committed) while a plan is active, but the plan's
-marks and Progress did not change, Vibe64 sends that AI one short note in the
-same chat before the turn counts as finished. The chat shows it as Vibe64's
+When a turn of Senior, Junior or Senior's review that is implementing the
+active plan changed the session's files (edited, added, deleted or committed),
+but the plan's marks and Progress did not change, Vibe64 sends that AI one
+short note in the same chat before the turn counts as finished. A turn is
+implementing the plan when you chose **Implement plan**, when Vibe64 runs the
+plan's next step, or when the AI reported its outcome on the plan. Any other
+request while a plan is active (a question, a small fix you asked for) gets no
+check, and so no Senior's review you didn't ask for. The chat shows it as Vibe64's
 note, not as your message, for example **4 files of the session's source
 changed in this turn, but the plan's checklist marks and Progress did not.
 Vibe64 asked the AI to bring the plan up to date.** The note names the changed
@@ -157,7 +161,10 @@ Vibe64 runs. While an item is still open, a question from the AI waits for your
 answer as usual.
 
 The check runs once per turn: its own turn never gets another. Outside Auto, if
-the AI ignores it, the turn ends normally and the plan shows it is behind. There
+the AI ignores it, the turn ends normally and the plan shows it is behind.
+**Save** or **Update this session** while a turn runs is not the turn's change:
+what Save commits or Update brings in never counts, and only the files the turn
+changes after it can bring the check. There
 is no check for a plan's pass, an AI task, an answer to a question, a Custom
 chat, a goal, a temporary chat, a turn you stopped or a turn that failed. After
 the editor restarts, the turn that was running when it stopped gets no check.

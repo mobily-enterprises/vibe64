@@ -7,6 +7,10 @@ import { getStudioProjectContext } from "@local/vibe64-core/server/studioProject
 /**
  * Original Main facade request projection. Keep contributor grants out of the
  * retained context so later native effects resolve current authority again.
+ * A Fastify request's method, route and headers are getters on its prototype,
+ * which a spread leaves behind: the copy names them, so what the send does
+ * (its session timeline line among them) still says which request asked, also
+ * while its delivery is held past the request's answer.
  */
 function mainConversationRequestContext(context = {}) {
   const request = context.requestMeta?.request;
@@ -15,7 +19,13 @@ function mainConversationRequestContext(context = {}) {
     channel: "internal",
     requestMeta: request ? {
       ...context.requestMeta,
-      request: { ...request, headers: request.headers, vibe64User: authenticatedVibe64User(context) }
+      request: {
+        ...request,
+        method: request.method,
+        routeOptions: request.routeOptions,
+        headers: request.headers,
+        vibe64User: authenticatedVibe64User(context)
+      }
     } : context.requestMeta
   };
 }

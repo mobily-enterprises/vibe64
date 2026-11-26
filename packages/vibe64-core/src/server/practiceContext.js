@@ -59,6 +59,11 @@ async function runWithPracticeProjectContext(owner, scope, operation) {
  * A practice project admitted as an ordinary project (admitPracticeRequest)
  * keeps its write: that admission depends only on the learner's ownership, not
  * on lesson activity, so later work (agent turns, helpers) behaves as in any project.
+ * The projection never keeps the request it was taken in: what re-enters it
+ * later (an engine's events, tool calls and control requests, a running
+ * process's callbacks) was not caused by that request, often a page's read of
+ * the session, so it runs under no request. An action it dispatches carries its
+ * own (actionContext.js).
  */
 function captureProjectRequestContext() {
   const grant = currentProjectRequestContext()?.[practiceScopeKey];
@@ -72,7 +77,12 @@ function captureProjectRequestContext() {
 function retainPracticeContext(access) {
   const context = currentProjectRequestContext();
   const grant = context?.[practiceScopeKey];
-  if (!grant) return context;
+  if (!grant) {
+    if (!context?.[actionRequestMetaKey]) return context;
+    const retained = { ...context };
+    delete retained[actionRequestMetaKey];
+    return Object.freeze(retained);
+  }
   const scope = Object.freeze({
     ...grant.scope,
     access,

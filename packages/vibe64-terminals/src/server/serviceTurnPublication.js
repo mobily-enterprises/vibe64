@@ -1,4 +1,4 @@
-import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
+import { currentProjectScopeKey, runWithoutActionRequest } from "@local/vibe64-core/server/projectRequestContext";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
@@ -106,8 +106,11 @@ function createServiceTurnPublication({
     recordSessionTurnChange(sessionId, payload);
     await publishSessionChanged.agentTerminal(sessionId, payload);
     if (state.lifecycle.closing) return;
+    // What follows a turn is Vibe64's own work: it runs without the request the engine's events last ran in, which
+    // for a running engine is whichever request last read or used the session (a page's poll, say), never one that
+    // asked for it.
     if (payload.reason === "temporary-agent-turn-idle") {
-      state.trackShutdownWork(afterTemporaryTurn(sessionId, payload.payload).catch((error) => {
+      state.trackShutdownWork(runWithoutActionRequest(() => afterTemporaryTurn(sessionId, payload.payload)).catch((error) => {
         logOperationalEvent(logger, "warn", {
           component: "vibe64.assistant_routing",
           event: "vibe64.assistant_routing.temporary_review_deferred",
@@ -121,14 +124,14 @@ function createServiceTurnPublication({
     if (!engineId) {
       return;
     }
-    state.trackShutdownWork(followMainTurn(sessionId, payload).then(() => conversationTurns.settled(sessionId, "")).catch((error) => {
+    state.trackShutdownWork(runWithoutActionRequest(() => followMainTurn(sessionId, payload).then(() => conversationTurns.settled(sessionId, "")).catch((error) => {
       logOperationalEvent(logger, "warn", {
         component: "vibe64.conversation",
         event: "vibe64.conversation.turn_settled_failed",
         sessionId,
         code: error.code
       }, "A finished Main turn could not be announced.");
-    }).then(() => state.lifecycle.closing ? null : finishInterruptedCloses(sessionId, engineId)));
+    }).then(() => state.lifecycle.closing ? null : finishInterruptedCloses(sessionId, engineId))));
   }
 
   return Object.freeze({

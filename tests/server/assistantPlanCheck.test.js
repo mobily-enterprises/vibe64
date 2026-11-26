@@ -4,15 +4,18 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { fixture, planCommands, reportOutcome } from "../fixtures/assistantRouting.js";
 import { manageWorkPlan, readWorkPlan, readWorkPlanPage } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { planChangesSinceMark, readSourceState } from "../../packages/vibe64-terminals/src/server/planSourceChanges.js";
 import { assistantPlanChecks } from "../../packages/vibe64-terminals/src/server/assistantPlanCheck.js";
 import { workPlanFreshness, workPlanStatusLine, workPlanStep } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
 
-// Vibe64's plan check, through the real routing service: when a turn that may tick the active plan
+// Vibe64's plan check, through the real routing service: when a turn implementing the active plan
 // changes the session's source but not the plan's marks or Progress, the AI gets one note in the same
-// chat asking it to walk the checklist. Vibe64 never judges which item a change built.
+// chat asking it to walk the checklist. Vibe64 never judges which item a change built. A direct chat's
+// request implements the plan once its AI reports an outcome on it (here a handoff with the plan's
+// revisions); a request that never does, and a Save's or Update's own commits, get no check.
 
 const run = promisify(execFile);
 const request = { messageId: "request-1", message: "Build the contact threads", submissionKind: "send" };
@@ -28,6 +31,19 @@ async function planned(t, mode = "junior") {
   const f = await fixture(t, { mode }, { readyPlan: false, source: true });
   await manageWorkPlan(f.context, { operation: "new", text: PLAN }, "senior", { sourceState: () => readSourceState(f.context.session) });
   return f;
+}
+
+/** The turn's AI says its work is the plan's: it reports its outcome with the plan's current revisions. */
+const onThePlan = (f, decision = "handoff") => reportOutcome(f, decision, { involved: true });
+
+/** A Save while the turn runs: it holds the session's lock as a write while the AI works and commits all work. */
+async function saveDuringTurn(f) {
+  const save = f.holdLock({ whileAssistantWorks: true });
+  await save.started;
+  await run("git", ["add", "-A"], { cwd: f.source.source });
+  await run("git", ["commit", "--quiet", "-m", "Saved session work"], { cwd: f.source.source });
+  save.release();
+  await save.ended;
 }
 
 /** The turn on item 1 builds the store, and on the way most of items 2 to 4: three files committed, one not. */
@@ -48,6 +64,7 @@ test("a turn on item 1 that also built items 2 to 4 without ticking gets one pla
   assert.match(f.sends[0].input.message, /tick each item the moment it is built and its own checks pass, not at the end of the turn/u);
   assert.match(f.sends[0].input.message, /When work on one item also builds others, walk the whole checklist/u);
   await buildAlongTheWay(f);
+  await onThePlan(f);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.equal(f.sends.length, 2, "the turn's end sends the check before the request settles");
   const check = f.sends[1].input;
@@ -86,10 +103,25 @@ test("a turn on item 1 that also built items 2 to 4 without ticking gets one pla
   assert.equal(workPlanFreshness(current).text, "Updated just now · no files changed since");
 });
 
+test("the plan check's turn, sent at a turn's end that ran in a page's read of the session, names its own step in the session timeline, never that GET; the person's send names its POST", async (t) => {
+  const SEND = "/api/assistant/:surfaceId/conversations/:conversationId/messages";
+  const READ = "/api/app/:slug/vibe64/sessions/:sessionId";
+  const asRequest = (method, url, operation) => runWithProjectRequestContext({ slug: "shop" }, operation,
+    { requestMeta: { request: { method, routeOptions: { url } } } });
+  const f = await planned(t);
+  await asRequest("POST", SEND, () => f.service.send("session-1", request, f.context));
+  await buildAlongTheWay(f);
+  await onThePlan(f);
+  // A running engine's turn events run in whichever request last read the session: the page's poll, here.
+  await asRequest("GET", READ, () => f.service.afterTurn("session-1", end(f.state()), f.context));
+  assert.deepEqual(f.sends.map(({ trigger }) => trigger), [`POST ${SEND}`, "follow-up:plan-check"]);
+});
+
 test("a plan check the AI ignores ends the turn as it would have, and the plan view shows the plan behind: when it was updated, files changed since", async (t) => {
   const f = await planned(t);
   await f.service.send("session-1", request, f.context);
   await buildAlongTheWay(f);
+  await onThePlan(f);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.equal(f.sends.length, 2);
   // The check's turn changes nothing in the plan, nor anything else.
@@ -111,6 +143,7 @@ test("plan checked is the AI's explicit answer that nothing needs a new mark: th
   const f = await planned(t);
   await f.service.send("session-1", request, f.context);
   await buildAlongTheWay(f);
+  await onThePlan(f);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   const { revision } = await readWorkPlan(f.context);
   const { plan, revisions } = await planCommands(f);
@@ -126,6 +159,7 @@ test("plan checked is the AI's explicit answer that nothing needs a new mark: th
   // The next turn that changes files without ticking is checked again: checked counts for the turn it answered.
   await f.service.send("session-1", { ...request, messageId: "request-2", message: "Now the migration" }, f.context);
   await writeFile(path.join(f.source.source, "src/migrate.js"), "export const migrate = () => {};\n");
+  await onThePlan(f);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.equal(f.sends.length, 4);
   assert.match(f.sends[3].input.message, /Vibe64 plan check: 1 file of the session's source changed in this turn \(src\/migrate\.js\)/u);
@@ -139,6 +173,7 @@ test("no plan check for a turn that ticked, wrote Progress or checked the plan i
   let commands = await planCommands(f);
   await commands.plan({ operation: "write", text: (await readWorkPlan(f.context)).text.replace("- [ ] Store", "- [~] Store"),
     ...await commands.revisions() });
+  await onThePlan(f);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.deepEqual([f.sends.length, f.state().status], [1, "complete"], "ticked in the turn");
   // Progress only is an update too.
@@ -147,6 +182,7 @@ test("no plan check for a turn that ticked, wrote Progress or checked the plan i
   await buildAlongTheWay(f);
   commands = await planCommands(f);
   await commands.plan({ operation: "progress-write", progressText: "# Progress\n\nThe store is half built.\n", ...await commands.revisions() });
+  await onThePlan(f);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.deepEqual([f.sends.length, f.state().status], [1, "complete"], "Progress written in the turn");
   // Ticks or Progress changed where no update record was kept (a plan write from outside the plan command, say)
@@ -159,6 +195,7 @@ test("no plan check for a turn that ticked, wrote Progress or checked the plan i
     const current = await readWorkPlan(f.context);
     await manageWorkPlan(f.context, { operation, [operation === "write" ? "text" : "progressText"]: text(current), expectedRevision: current.revision,
       expectedProgressRevision: current.progressRevision || "" }, "junior");
+    await onThePlan(f);
     await f.service.afterTurn("session-1", end(f.state()), f.context);
     assert.deepEqual([f.sends.length, f.state().status], [1, "complete"], `${operation} without an update record`);
   }
@@ -168,23 +205,27 @@ test("no plan check for a turn that ticked, wrote Progress or checked the plan i
   await buildAlongTheWay(f);
   commands = await planCommands(f);
   await commands.plan({ operation: "checked", ...await commands.revisions() });
+  await onThePlan(f);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.deepEqual([f.sends.length, f.state().status], [1, "complete"], "checked in the turn");
   // An answer that changed no files.
   f = await planned(t);
   await f.service.send("session-1", request, f.context);
+  await onThePlan(f);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.deepEqual([f.sends.length, f.state().status], [1, "complete"], "no files changed");
   // A turn that failed or was interrupted.
   f = await planned(t);
   await f.service.send("session-1", request, f.context);
   await buildAlongTheWay(f);
+  await onThePlan(f);
   await f.service.afterTurn("session-1", end(f.state(), "failed"), f.context);
   assert.equal(f.sends.length, 1, "a failed turn");
   // A turn the person stopped.
   f = await planned(t);
   await f.service.send("session-1", request, f.context);
   await buildAlongTheWay(f);
+  await onThePlan(f);
   await f.service.cancel("session-1", f.context);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.deepEqual([f.sends.length, f.state().status], [1, "waiting"], "a stopped turn");
@@ -196,6 +237,7 @@ test("no plan check for a turn that ticked, wrote Progress or checked the plan i
   const question = "The store is built.\n\n[1] Should a contact's threads list newest first?\nPossible answers:\n- Newest first\n- Oldest first";
   f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: "request-1", text: request.message },
     messages: [{ role: "assistant", text: question }] }];
+  await onThePlan(f, "wait");
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.equal(f.sends.length, 2, "a turn asking the person gets the check");
   assert.match(f.sends[1].input.message, /If this turn asked the person anything else, ask it again at the end of your reply/u);
@@ -207,6 +249,37 @@ test("no plan check for a turn that ticked, wrote Progress or checked the plan i
   await buildAlongTheWay(f);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.deepEqual([f.sends.length, f.state().status], [1, "complete"], "no plan");
+});
+
+test("a request that is not implementing the plan (a fix the person asked for while a plan is active) gets no plan check, and so no Senior's review it never asked for", async (t) => {
+  const f = await planned(t, "senior");
+  await f.service.send("session-1", { ...request, message: "Fix the typo in the footer" }, f.context);
+  await buildAlongTheWay(f);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.deepEqual([f.sends.length, f.state().status], [1, "complete"]);
+});
+
+test("a Save during the turn is not the turn's change: its commit gets no plan check and no Senior's review; what the turn changes after it still gets the check", async (t) => {
+  for (const after of ["changes nothing", "changes a file"]) {
+    const f = await planned(t, "senior");
+    // An earlier turn's work, not saved yet: the person's Save commits it while this turn runs.
+    await writeFile(path.join(f.source.source, "form.js"), "export const form = { earlier: true };\n");
+    await f.service.send("session-1", request, f.context);
+    await saveDuringTurn(f);
+    if (after === "changes a file") {
+      await mkdir(path.join(f.source.source, "src"), { recursive: true });
+      await writeFile(path.join(f.source.source, "src/list.js"), "export const list = () => [];\n");
+    }
+    await onThePlan(f, "wait");
+    await f.service.afterTurn("session-1", end(f.state()), f.context);
+    if (after === "changes nothing") {
+      assert.deepEqual([f.sends.length, f.state().status], [1, "waiting"], "the turn after a Save that changed nothing itself");
+      continue;
+    }
+    assert.equal(f.sends.length, 2, "the turn's own change after the Save");
+    assert.equal(f.sends[1].input.turnMetadata.actorLabel, "Plan check");
+    assert.match(f.sends[1].input.message, /Vibe64 plan check: 1 file of the session's source changed in this turn \(src\/list\.js\)/u);
+  }
 });
 
 test("which turns may tick the plan: Senior's, Junior's and Senior's review, never a pass, a task, an answer or a Custom chat", () => {
