@@ -6,12 +6,23 @@ import { runSourceDevelopment, sourceDevelopmentSelected } from "./development/r
 
 const TEST_FILE_PATTERN = /\.test\.(?:c|m)?js$/u;
 const HOST_PATH_GUARD = new URL("./test-host-path-guard.mjs", import.meta.url).href;
+const SKIP_DISK_FLUSH = new URL("./test-skip-disk-flush.mjs", import.meta.url).href;
+
+// Adds the module to NODE_OPTIONS once, so the process and each Node child it starts load it.
+export function withPreload(env, moduleUrl) {
+  const option = `--import=${moduleUrl}`;
+  const current = String(env.NODE_OPTIONS || "");
+  return { ...env, NODE_OPTIONS: current.includes(option) ? current : `${current} ${option}`.trim() };
+}
 
 // Every test process, and each Node child it starts, loads the host path guard.
 export function withHostPathGuard(env = process.env) {
-  const option = `--import=${HOST_PATH_GUARD}`;
-  const current = String(env.NODE_OPTIONS || "");
-  return { ...env, NODE_OPTIONS: current.includes(option) ? current : `${current} ${option}`.trim() };
+  return withPreload(env, HOST_PATH_GUARD);
+}
+
+// Every server test process returns from a file flush without waiting for the disk (test-skip-disk-flush.mjs).
+export function withSkippedDiskFlush(env = process.env) {
+  return withPreload(env, SKIP_DISK_FLUSH);
 }
 
 // Tests run as APP_ENV=test, as `jskit test` runs them, whatever the shell says (a Vibe64 session's commands carry
@@ -59,7 +70,7 @@ async function run() {
     throw new Error(`Targeted test path is not a file: ${target}`);
   }
 
-  const env = withTestAppEnvironment(withHostPathGuard());
+  const env = withTestAppEnvironment(withSkippedDiskFlush(withHostPathGuard()));
   if (sourceDevelopmentSelected()) {
     process.exitCode = await runSourceDevelopment({
       publicRoot: path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."),

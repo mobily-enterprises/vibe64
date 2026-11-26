@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { fdatasync, fdatasyncSync, fsync, fsyncSync } from "node:fs";
+import { mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -68,15 +69,39 @@ test("test files run as many at once as the machine's test budget allows", () =>
   }
 });
 
-test("the full server suite loads the host path guard a single-file run loads, and blocking report writes", () => {
+test("the full server suite loads the host path guard and the skipped disk flush a single-file run loads, and blocking report writes", () => {
   const guard = `--import=${new URL("../../tooling/test-host-path-guard.mjs", import.meta.url).href}`;
+  const flush = `--import=${new URL("../../tooling/test-skip-disk-flush.mjs", import.meta.url).href}`;
   const blocking = `--import=${new URL("../../tooling/test-report-blocking-stdout.mjs", import.meta.url).href}`;
   const { args, env } = serverTestRun({ [BUDGET_VARIABLE]: "3", NODE_OPTIONS: "--no-warnings" });
-  assert.equal(env.NODE_OPTIONS, `--no-warnings ${guard} ${blocking}`);
+  assert.equal(env.NODE_OPTIONS, `--no-warnings ${guard} ${flush} ${blocking}`);
   assert.ok(args.includes("--test-concurrency=3"));
   assert.equal(args.at(-1), "tests/server/*.test.js");
   // Preloads already in NODE_OPTIONS are not added twice.
-  assert.equal(serverTestRun({ NODE_OPTIONS: `${guard} ${blocking}` }).env.NODE_OPTIONS, `${guard} ${blocking}`);
+  assert.equal(serverTestRun({ NODE_OPTIONS: `${guard} ${flush} ${blocking}` }).env.NODE_OPTIONS, `${guard} ${flush} ${blocking}`);
+});
+
+test("a server test process's file flushes return without waiting for the disk, and still refuse a closed file", async (t) => {
+  // This file's own process runs under the preload, as every server test process does.
+  const directory = await mkdtemp(path.join(os.tmpdir(), "v64-flush-"));
+  t.after(() => rm(directory, { force: true, recursive: true }));
+  const handle = await open(path.join(directory, "record.json"), "w");
+  const { sync, datasync } = Object.getPrototypeOf(handle);
+  assert.deepEqual([sync.name, datasync.name, fsyncSync.name, fdatasyncSync.name],
+    ["syncWithoutDiskFlush", "datasyncWithoutDiskFlush", "fsyncSyncWithoutDiskFlush", "fdatasyncSyncWithoutDiskFlush"]);
+  await handle.writeFile("{}");
+  await handle.sync();
+  await handle.datasync();
+  const descriptor = handle.fd;
+  fsyncSync(descriptor);
+  await new Promise((resolve, reject) => fsync(descriptor, (error) => (error ? reject(error) : resolve())));
+  await handle.close();
+  await assert.rejects(handle.sync(), { code: "EBADF" });
+  const neverOpened = 2 ** 30;
+  assert.throws(() => fsyncSync(neverOpened), { code: "EBADF" });
+  await assert.rejects(new Promise((resolve, reject) => fdatasync(neverOpened, (error) => (error ? reject(error) : resolve()))),
+    { code: "EBADF" });
+  assert.equal(await readFile(path.join(directory, "record.json"), "utf8"), "{}");
 });
 
 test("every test run is APP_ENV=test, as jskit test runs it, and none runs where APP_ENV is staging or production", () => {

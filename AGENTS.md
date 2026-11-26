@@ -317,6 +317,13 @@ overlap a test run already active for this checkout.
   `tooling/test-host-path-guard.mjs` and runs with `APP_ENV=test`, as
   `jskit test` gives it, whatever the shell says; a shell whose `APP_ENV` is
   `staging` or `production` runs no tests.
+- Every server test process, and each Node child it starts, also loads
+  `tooling/test-skip-disk-flush.mjs`: a durable write's flush (fsync,
+  fdatasync) still checks its descriptor but no longer waits for the disk.
+  Nothing a test writes has to survive a power cut, and on a shared test host
+  those waits were most of a session test's time. A test that proves a write
+  durable still sees every flush call, in order
+  (`tests/server/durableWriteTrace.js`).
 - A test removes every temporary folder it creates by the time it ends, so a
   passing run leaves nothing in the temp directory. It keeps an evidence folder
   (screenshots, traces, logs) only when it fails, and prints where it is.
