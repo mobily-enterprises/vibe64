@@ -507,14 +507,15 @@ from the session details or ask the chat to do so. Their chosen name takes
 precedence over an automatic suggestion. Names never change session IDs,
 directory names, branches, or URLs. Naming failures do not interrupt chat.
 Hovering or keyboard-focusing a session tab for one second shows its basic
-details. Touch users can tap its info button to read the same details without
+details. Every tab, on every device, shows its saved-work icon, and that icon is
+the button that opens the same details by click, tap or keyboard without
 switching sessions. The details always say where the session's Save goes, its
 repository in short form and its branch, and mark a branch other than the
 project's main branch, so a session saving elsewhere is obvious; the Save
 review and the Save button's hint say it the same way.
 Selecting a session keeps those details closed until the pointer leaves and
-enters its tab again. Deliberate keyboard focus and its info button still make
-the details available on demand.
+enters its tab again. Deliberate keyboard focus and its saved-work icon still
+make the details available on demand.
 Files separates the repository, a per-session Session Dropzone, and the session's
 read-only runtime tree with distinct area icons. The workspace owner can browse
 Session files, including archived history; other project members see Repo and Session Dropzone. People and the AI can exchange files outside the repository through

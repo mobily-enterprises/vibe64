@@ -1149,7 +1149,7 @@ test.describe("direct chat", () => {
           ]) {
             const tab = page.locator(`[data-vibe64-session-id="${sessionId}"]:visible`).first();
             await expect(tab).toBeVisible();
-            const infoButton = tab.getByRole("button", { name: `Session info: ${label}`, exact: true });
+            const infoButton = tab.getByRole("button", { name: `Session info: ${label}. All work is saved`, exact: true });
             if (viewport.phone) await infoButton.click();
             else await tab.hover();
             const info = page.locator(".studio-ai-sessions__info:visible").filter({ hasText: label });

@@ -89,8 +89,11 @@ Select a session tab above the chat to open that session's conversation and work
 The selected tab includes the Archive session control. Hover or keyboard focus
 alone does not select a session.
 
-Hover or keyboard-focus a session tab for one second to read its details; on
-phones and other touch screens, tap the tab's info button instead. The details
+Hover or keyboard-focus a session tab for one second to read its details, or
+click or tap the work icon after the tab's name, such as the green tick of
+**All work is saved**: every device shows it, and it opens the same details
+without selecting the session; another click or tap closes them. With the
+keyboard, Tab to the icon and press Enter or Space. The details
 list **Status**, **Assistant**, **Model**, **Work**, **Saves to**, **Session**,
 **Session branch** and **Created**, with **Rename session**. **Saves to**
 always names where that session's **Save** puts its work: the repository in
