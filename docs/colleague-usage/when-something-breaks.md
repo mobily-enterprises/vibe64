@@ -12,8 +12,8 @@ which reads the same answers.
   its buttons are the ways out: **Fix it with AI**, **Review resolved
   conflicts**, **Create draft PR** or **Retry**, whichever can help.
 - **The session's tab.** A circled **!** reads **Repository needs help**: hover
-  it, or open the tab's info (the info button on phones), and **Why** and
-  **Next** say what failed and what to do. A working icon reads **Saving work**,
+  it, or click or tap it to open the tab's info, and **Why** and **Next** say
+  what failed and what to do. A working icon reads **Saving work**,
   **Updating session** or **Being fixed with AI**: something is already working
   on it, so wait.
 - **A dimmed Save.** Save or Update cannot act right now. Tap or click it and

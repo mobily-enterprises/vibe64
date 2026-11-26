@@ -724,8 +724,16 @@ parsers' own tables, and a focused test parses every printed example.
 
 Each tab shows a basic-info tooltip after one second of hover or keyboard focus,
 including its full name, status, assistant and model when available, save state,
-where Save goes, identifier, session branch, and creation time. A touch-visible
-info button opens the same tooltip without selecting or archiving the session.
+where Save goes, identifier, session branch, and creation time. The tab's
+repository work-state icon (`repositoryWorkStateIcon()`) shows on every device,
+with no hover or pointer media query, and is the button that opens the same
+tooltip by click, tap, Enter or Space without selecting or archiving the
+session. Its accessible name is `Session info: <name>. <work state>`; it keeps
+the icon's own box, so the tab is no wider, and stops Enter and Space at
+itself, since the chip's own keys would select the session. The selected tab's
+Archive, which follows it in the next slot, stops its touch target at its own
+start edge, as JSKIT stops a button that follows another, so a tap on the icon
+never reaches Archive; Archive also takes its own Enter and Space.
 Its Saves to row is always present. Its value is the destination the server
 resolves for the session's work (`sessionRepositoryDestination`, the work
 inspection's `destination`, which Save rechecks), carried by

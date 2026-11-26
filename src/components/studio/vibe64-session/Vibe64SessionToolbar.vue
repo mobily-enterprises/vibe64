@@ -30,26 +30,26 @@
             :class="`studio-ai-sessions__status-dot--${sessionItem.status}`"
           />
           <span class="studio-ai-sessions__tab-label">{{ sessionItem.archiving ? `${sessionTabLabel(sessionItem)} · Archiving…` : sessionTabLabel(sessionItem) }}</span>
-          <v-icon
-            class="studio-ai-sessions__repository-state studio-ai-sessions__repository-state--desktop"
+          <!-- The work-state icon is the tab's info button on every device: a click, tap, Enter or Space opens
+               the session info without selecting the tab, whose own Enter and Space would select it instead. -->
+          <v-btn
+            class="studio-ai-sessions__repository-state"
             :class="[
               `studio-ai-sessions__repository-state--${repositoryWorkState(sessionItem)}`,
               { 'studio-ai-sessions__repository-state--provisional': repositoryWorkStateProvisional(sessionItem) }
             ]"
-            :icon="repositoryWorkStateIcon(sessionItem)"
-            size="14"
-            :title="repositoryWorkStateDescription(sessionItem)"
-          />
-          <v-btn
-            class="studio-ai-sessions__tab-info"
-            :aria-label="`Session info: ${sessionTabLabel(sessionItem)}`"
+            :aria-label="`Session info: ${sessionTabLabel(sessionItem)}. ${repositoryWorkStateDescription(sessionItem)}`"
             :aria-expanded="infoSessionId === sessionItem.sessionId"
             :aria-describedby="`${infoId}-${sessionItem.sessionId}`"
-            icon="$info"
+            icon
             size="x-small"
+            :title="repositoryWorkStateDescription(sessionItem)"
             variant="text"
             @click.stop="toggleSessionInfo(sessionItem.sessionId)"
-          />
+            @keydown.enter.space.stop
+          >
+            <v-icon :icon="repositoryWorkStateIcon(sessionItem)" size="14" />
+          </v-btn>
         </span>
         <span
           v-if="sessionItem.sessionId === selectedSessionId"
@@ -65,6 +65,7 @@
             variant="text"
             aria-label="Archive session"
             @click.stop="archive.request"
+            @keydown.enter.space.stop
           />
         </span>
         <v-tooltip
@@ -497,16 +498,17 @@ const visibleSessions = computed(() => {
   white-space: nowrap;
 }
 
+/* The work-state icon button is the chip's trailing icon, as large as the icon itself, as Material 3 draws a chip's
+   trailing icon (not a 32dp icon button), so a tab is as wide as when the icon was not a button; JSKIT draws its 48dp
+   touch target around it. */
 .studio-ai-sessions__repository-state {
   color: rgba(var(--v-theme-on-surface), 0.4);
   flex: 0 0 auto;
+  height: auto;
   margin-inline-start: 0.42rem;
-}
-
-.studio-ai-sessions__tab-info {
-  color: inherit;
-  display: none;
-  flex-shrink: 0;
+  min-height: 0;
+  min-width: 0;
+  width: auto;
 }
 
 .studio-ai-sessions__info {
@@ -579,6 +581,14 @@ const visibleSessions = computed(() => {
 
 .studio-ai-sessions__tab-archive :deep(.v-icon) {
   font-size: 0.98rem;
+}
+
+/* The selected chip's Archive follows the work-state icon, and JSKIT's 48dp touch target of the later button covers
+   its neighbour: Archive sits in the next slot, out of reach of JSKIT's rule for a button that follows another, so its
+   target stops at its own start edge here as that rule's does, and a tap anywhere on the icon opens the session info,
+   never Archive. Archive's own box still answers its own press, as it paints over the icon's target. */
+.studio-ai-sessions__tab-archive::before {
+  inset-inline-start: 0;
 }
 
 .studio-ai-sessions__status-dot {
@@ -658,18 +668,9 @@ const visibleSessions = computed(() => {
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__repository-state {
-  font-size: 12px;
-  height: 12px;
   margin-inline-start: 0.22rem;
-  width: 12px;
 }
 
-.studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-info {
-  height: 1.25rem;
-  width: 1.25rem;
-}
-
-.studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-info :deep(.v-icon),
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-archive :deep(.v-icon) {
   font-size: 0.82rem;
 }
@@ -691,20 +692,6 @@ const visibleSessions = computed(() => {
 }
 
 @media (hover: none), (pointer: coarse) {
-  .studio-ai-sessions__tab-info {
-    display: inline-flex;
-  }
-
-  /* The selected chip's Archive follows Info, and JSKIT's 48dp touch target of the later button covers its
-     neighbour, so a small gap keeps Info's centre outside Archive's target and a tap on Info opens the session info. */
-  .studio-ai-sessions__tab--active .studio-ai-sessions__tab-info {
-    margin-inline-end: 0.3rem;
-  }
-
-  .studio-ai-sessions__repository-state--desktop {
-    display: none;
-  }
-
   .studio-ai-sessions__tab .studio-ai-sessions__tab-archive {
     box-shadow: none;
     opacity: 1;

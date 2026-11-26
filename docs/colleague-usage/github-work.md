@@ -15,8 +15,9 @@ session's tab. A green tick on the tab means **All work is saved**. While that
 session's assistant is working (its dot pulses), the tick is grey and reads
 **All work was saved at the last check; the assistant is still working**,
 because the turn can still change files; when the turn ends the tab shows the
-session's current state again. Phones and other touch screens hide this icon;
-select the tab's info button to read the same status under **Work**.
+session's current state again. Every device shows this icon, phones and touch
+screens included; click or tap it to open the tab's details, which give the
+same status under **Work**.
 Managed Vibe64 Git saves a version;
 GitHub workflows use your repository permissions and the project's direct-push or
 pull-request policy. **Update this session (rebase)** reconciles newer saved project
@@ -145,8 +146,8 @@ also says what the AI's Git does with your GitHub sign-in.
 
 A circled **!** on a session's tab reads **Repository needs help**: that
 session's last Save or Update failed and Vibe64 still records the failure. To
-read why, hover the icon or open the tab's info (hover or keyboard focus on
-desktop; the info button on phones and other touch screens). Under **Work**,
+read why, hover the icon, or click or tap it to open the tab's info (hovering
+or keyboard-focusing the tab for a second also opens it). Under **Work**,
 **Why** shows the failed operation's own message, for example *2 files need
 review before this session can update: package-lock.json, package.json…*, and
 **Next** names the controls that lead out of it:

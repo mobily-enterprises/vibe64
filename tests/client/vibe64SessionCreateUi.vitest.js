@@ -281,7 +281,7 @@ describe("session creation controls", () => {
 
       tabs[0].props.onClick();
       await VueRuntime.nextTick();
-      const info = nodes.find((node) => node.props["aria-label"] === "Session info: Session session-1");
+      const info = nodes.find((node) => node.props["aria-label"] === "Session info: Session session-1. Checking whether work is saved");
       info.props.onClick({ stopPropagation() {} });
       await VueRuntime.nextTick();
       expect(visible(0)).toBe(true);
@@ -297,7 +297,7 @@ describe("session creation controls", () => {
   it("keeps details closed with their button closed while the pointer stays on that tab", async () => {
     const { app, nodes, requestOpen, visible, movePointer } = mountSessionToolbars();
     try {
-      const info = nodes.find((node) => node.props["aria-label"] === "Session info: Session session-1");
+      const info = nodes.find((node) => node.props["aria-label"] === "Session info: Session session-1. Checking whether work is saved");
       info.props.onClick({ stopPropagation() {} });
       await VueRuntime.nextTick();
       expect(visible(0)).toBe(true);
@@ -316,6 +316,40 @@ describe("session creation controls", () => {
       requestOpen(0);
       await VueRuntime.nextTick();
       expect(visible(0)).toBe(true);
+    } finally {
+      app.unmount();
+    }
+  });
+
+  it("makes each tab's work-state icon the button that opens its info, with no separate info button", async () => {
+    const { app, nodes, tooltips, visible, selectSession } = mountSessionToolbars();
+    try {
+      const name = "Session info: Session session-1. Checking whether work is saved";
+      const stateButton = nodes.find((node) => node.props["aria-label"] === name);
+      expect(stateButton?.type).toBe("button");
+      expect(stateButton.props.class).toContain("studio-ai-sessions__repository-state--checking");
+      expect(stateButton.props.title).toBe("Checking whether work is saved");
+      expect(stateButton.props["aria-describedby"]).toBe(tooltips[0].props.id);
+      expect(stateButton.props["aria-expanded"]).toBe(false);
+      // Its icon is the work state's own, and no tab carries an info icon of its own.
+      expect(nodes[nodes.indexOf(stateButton) + 1].props.icon).toBe("$pending");
+      expect(nodes.some((node) => node.props.icon === "$info")).toBe(false);
+
+      stateButton.props.onClick({ stopPropagation() {} });
+      await VueRuntime.nextTick();
+      expect(visible(0)).toBe(true);
+      expect(stateButton.props["aria-expanded"]).toBe(true);
+      expect(selectSession).not.toHaveBeenCalled();
+
+      // Enter and Space stop at the icon, whose own click they make, so the tab's keys never select the session.
+      for (const key of ["Enter", " "]) {
+        const stopPropagation = vi.fn();
+        stateButton.props.onKeydown({ key, stopPropagation });
+        expect(stopPropagation).toHaveBeenCalledTimes(1);
+      }
+      const tabKey = vi.fn();
+      stateButton.props.onKeydown({ key: "Tab", stopPropagation: tabKey });
+      expect(tabKey).not.toHaveBeenCalled();
     } finally {
       app.unmount();
     }
@@ -471,12 +505,12 @@ describe("session toolbar archive and repository controls", () => {
     expect(html).toContain('aria-label="Archive session"');
     expect(html).toContain("studio-ai-sessions__repository-state");
     expect(html).toContain("Checking whether work is saved");
-    expect(html).toContain("Session info: Session work");
+    expect(html).toContain("Session info: Session work. Checking whether work is saved");
   });
 
   it("greys the saved tick while the session's assistant is working, then shows it as saved", async () => {
     const savedSession = (agentThinking) => ({ sessionId: "work", agentThinking, repositoryWorkState: { state: "saved" } });
-    const icon = (html) => html.match(/<span[^>]*studio-ai-sessions__repository-state[^>]*>/u)?.[0] || "";
+    const icon = (html) => html.match(/<button[^>]*studio-ai-sessions__repository-state[^>]*>/u)?.[0] || "";
     const provisional = "All work was saved at the last check; the assistant is still working";
 
     const working = await renderToolbar({ createVisible: false, sessions: [savedSession(true)] });
@@ -515,7 +549,7 @@ describe("session toolbar archive and repository controls", () => {
       createVisible: false, selectedSessionId: "work", showRepositoryProblem: vi.fn(),
       sessions: [{ sessionId: "work", repositoryWorkState }]
     });
-    const icon = html.match(/<span[^>]*studio-ai-sessions__repository-state[^>]*>/u)?.[0] || "";
+    const icon = html.match(/<button[^>]*studio-ai-sessions__repository-state[^>]*>/u)?.[0] || "";
     expect(icon).toContain("studio-ai-sessions__repository-state--needs_help");
     expect(icon).toContain(`title="Repository needs help: ${message} ${next}"`);
     expect(html).toContain(`aria-label="Session work. Repository needs help: ${message} ${next}"`);
@@ -523,7 +557,7 @@ describe("session toolbar archive and repository controls", () => {
     expect(html).toMatch(fact("Work", "Repository needs help"));
     expect(html).toMatch(fact("Why", message));
     expect(html).toMatch(fact("Next", next));
-    // Phones read the same facts through the tab's info button; the notice can be shown again from there.
+    // Every device reads the same facts through the tab's work-state icon; the notice can be shown again from there.
     expect(html).toContain("Show Update notice");
 
     const unselected = await renderToolbar({
