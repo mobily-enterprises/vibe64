@@ -45,7 +45,7 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * @param {AssistantRouting["handPlanToSenior"]} dependencies.handPlanToSenior
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks
- * @param {import("./types.js").HelperCommandGroup[]} [dependencies.helperCommandGroups] a host's own vibe64-helper groups
+ * @param {import("./types.js").HelperCommandGroup[]} dependencies.helperCommandGroups a host's own vibe64-helper groups, or none
  * @param {ServiceAssistant["sendAgentMessage"]} dependencies.sendAgentMessage
  * @param {ServiceSessionAccess} dependencies.sessionAccess
  * @param {ServiceState} dependencies.state
@@ -66,7 +66,7 @@ function createServiceCommandServices({
   handPlanToSenior,
   runCodexGitGatewayCommand,
   savedEnvValueLinks,
-  helperCommandGroups = [],
+  helperCommandGroups,
   sendAgentMessage,
   sessionAccess,
   state,

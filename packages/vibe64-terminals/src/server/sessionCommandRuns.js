@@ -33,7 +33,10 @@ function createSessionCommandRuns() {
     sessionRuns.delete(sessionId);
   }
 
-  return Object.freeze({ cancelSession, track });
+  return Object.freeze({
+    cancelSession,
+    track
+  });
 }
 
 export { createSessionCommandRuns };

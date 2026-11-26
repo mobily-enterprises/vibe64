@@ -47,8 +47,13 @@ import {
 } from "@local/vibe64-genesis/server";
 import { createAgentCommandProjectBinding } from "./agentCommandProjectBinding.js";
 import { createSessionCommandRuns } from "./sessionCommandRuns.js";
-import { HELPER_GROUP_CLIENT_NAME } from "./agentHelperCommand.js";
-import { HELPER_GROUP_ROUTE, createHelperGroupRunner, helperGroupClientSource, streamHelperGroup } from "./helperCommandGroups.js";
+import {
+  HELPER_GROUP_ROUTE,
+  NO_HELPER_COMMAND_GROUPS,
+  createHelperGroupRunner,
+  streamHelperGroup,
+  writeHelperGroupClient
+} from "./helperCommandGroups.js";
 import {
   createSessionCommandServers,
   shortCommandHash,
@@ -214,7 +219,7 @@ function createAgentSessionCommandService({
   runCommand = runVibe64Command,
   stopExecution = stopVibe64Execution,
   stopOwnedExecutions = stopVibe64OwnedExecutions,
-  helperCommandGroups = []
+  helperCommandGroups = NO_HELPER_COMMAND_GROUPS
 }) {
   const projectBinding = createAgentCommandProjectBinding(project, {
     sessionRequired: ["Vibe64 session command binding is incomplete.", "vibe64_agent_session_command_binding_required"],
@@ -305,7 +310,10 @@ function createAgentSessionCommandService({
    */
   async function requestTurn(store, sessionId, binding) {
     const routing = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
-    return { actor: routing?.submittedBy || binding.actor, turnId: routing?.status === "working" ? toText(routing.turnId) : "" };
+    return {
+      actor: routing?.submittedBy || binding.actor,
+      turnId: routing?.status === "working" ? toText(routing.turnId) : ""
+    };
   }
   const requestActor = async (store, sessionId, binding) => (await requestTurn(store, sessionId, binding)).actor;
   const helperGroups = createHelperGroupRunner({ groups: helperCommandGroups, runInSessionProject, requestTurn, trackRun: sessionRuns.track });
@@ -698,14 +706,12 @@ async function prepareAgentSessionCommand({
   });
   // The session control's file holds its control token, never the shell-execution token managed child commands lack.
   const controlFilePath = agentControlFilePath(normalizedWrapperHostDir, "session");
-  const hostGroups = commandService.helperGroups || [];
   await Promise.all([
     writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-plan"), planCommandSource(SESSION_RENAME_CONTROL_ENV, controlFilePath)),
     writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-session"), sessionRenameCommandSource(controlFilePath)),
     writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource()),
     writeExecutableFileIfChanged(runnerHostPath(normalizedWrapperHostDir), commandRunnerSource()),
-    ...hostGroups.length ? [writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, HELPER_GROUP_CLIENT_NAME),
-      helperGroupClientSource(controlFilePath, hostGroups))] : []
+    writeHelperGroupClient(normalizedWrapperHostDir, controlFilePath, commandService.helperGroups)
   ]);
   const socketPath = commandSocketHostPath(normalizedWrapperHostDir);
   const server = await commandServers.ensure({ commandService, sessionId: normalizedSessionId, socketPath });

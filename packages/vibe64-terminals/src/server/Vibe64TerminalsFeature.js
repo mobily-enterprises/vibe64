@@ -21,7 +21,7 @@ import {
   assertStagingEnvironmentProvider
 } from "./stagingEnvironment.js";
 import { NO_SAVED_ENV_VALUE_LINKS, TERMINALS_SAVED_ENV_VALUE_LINKS_TOKEN, assertSavedEnvValueLinks } from "./savedEnvValueLinks.js";
-import { TERMINALS_HELPER_COMMAND_GROUPS_TOKEN, assertHelperCommandGroups } from "./helperCommandGroups.js";
+import { NO_HELPER_COMMAND_GROUPS, TERMINALS_HELPER_COMMAND_GROUPS_TOKEN, assertHelperCommandGroups } from "./helperCommandGroups.js";
 import {
   NO_PRODUCTION_ENVIRONMENT,
   TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
@@ -121,7 +121,7 @@ const Vibe64TerminalsFeature = defineFeature({
       conversationTurns: createConversationTurnPublishers(events),
       runtimeProfile: projectContext.runtimeProfile,
       savedEnvValueLinks: savedEnvValueLinks ?? NO_SAVED_ENV_VALUE_LINKS,
-      helperCommandGroups: helperCommandGroups ?? []
+      helperCommandGroups: helperCommandGroups ?? NO_HELPER_COMMAND_GROUPS
     });
     registerRoutes(http, {
       fastify,

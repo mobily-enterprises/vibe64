@@ -3,19 +3,24 @@
 // its answer streams back to the caller, who exits with the host's exit status. Without a host the slot is empty and
 // vibe64-helper is exactly its own groups.
 
+import path from "node:path";
+
 import { agentControlIdentitySource } from "@local/vibe64-execution/server";
 import { refuseUnreadFields } from "@local/vibe64-core/server/commandInput";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
-import { VIBE64_HELPER_GROUP_NAMES } from "./agentHelperCommand.js";
+import { HELPER_GROUP_CLIENT_NAME, VIBE64_HELPER_GROUP_NAMES } from "./agentHelperCommand.js";
 import { SESSION_RENAME_CONTROL_ENV, sessionCommandCwd } from "./agentSessionCommandRun.js";
+import { writeExecutableFileIfChanged } from "./writeExecutableFileIfChanged.js";
 
 /** @typedef {import("./types.js").HelperCommandGroup} HelperCommandGroup */
 
 // A composed host registers its own vibe64-helper command groups through this token: a list of { name, summary,
 // help, run }. Without one vibe64-helper has only its own groups.
 const TERMINALS_HELPER_COMMAND_GROUPS_TOKEN = "vibe64.terminals.helper-command-groups";
+// No host's groups: vibe64-helper has only its own.
+const NO_HELPER_COMMAND_GROUPS = Object.freeze([]);
 const HELPER_GROUP_ROUTE = "/agent-session-command/helper-group";
 const GROUP_NAME = /^[a-z][a-z0-9-]{0,23}$/u;
 const SUMMARY_MAX_CHARACTERS = 100;
@@ -66,16 +71,43 @@ function finalFrame(name, args, answer) {
   if (keys.length === 1 && answer.exec === true) {
     const at = args.indexOf("--");
     if (at < 0 || at === args.length - 1) {
-      throw vibe64Error(`${name} answered "run it yourself", but the command gave nothing to run after --: nothing ran.`,
-        "vibe64_helper_group_exec_without_command");
+      throw vibe64Error(
+        `${name} answered "run it yourself", but the command gave nothing to run after --: nothing ran.`,
+        "vibe64_helper_group_exec_without_command"
+      );
     }
     return { type: "exec" };
   }
   if (keys.length === 1 && Number.isInteger(answer.exit) && answer.exit >= 0 && answer.exit <= 255) {
     return { type: "exit", exitCode: answer.exit };
   }
-  throw vibe64Error(`The host's ${name} command answered neither { exit } with a status from 0 to 255 nor { exec: true }.`,
-    "vibe64_helper_group_answer_invalid");
+  throw vibe64Error(
+    `The host's ${name} command answered neither { exit } with a status from 0 to 255 nor { exec: true }.`,
+    "vibe64_helper_group_answer_invalid"
+  );
+}
+
+/**
+ * The host's answer, or a refusal the moment its run is cancelled: a host that ignores its signal never holds the
+ * caller's request, or the session's close, open. Output it writes after that reaches no one.
+ * @param {() => unknown} start calls the host's run
+ * @param {AbortSignal} signal
+ */
+function untilCancelled(start, signal) {
+  return new Promise((resolve, reject) => {
+    const cancel = () => reject(vibe64Error(
+      "The command was cancelled: its caller went away or its session closed.",
+      "vibe64_helper_group_cancelled"
+    ));
+    if (signal.aborted) {
+      cancel();
+      return;
+    }
+    signal.addEventListener("abort", cancel, { once: true });
+    new Promise((answer) => answer(start()))
+      .then(resolve, reject)
+      .finally(() => signal.removeEventListener("abort", cancel));
+  });
 }
 
 /**
@@ -109,10 +141,17 @@ function createHelperGroupRunner({ groups, runInSessionProject, requestTurn, tra
         const cwd = await sessionCommandCwd(fields.cwd, sourceRoot);
         if (cwd.ok === false) throw vibe64Error(cwd.error, cwd.code);
         const { actor, turnId } = await requestTurn(store, sessionId, binding);
-        const answer = await group.run({
-          sessionId, projectSlug: binding.projectSlug, actor, turnId, args: [...fields.args], cwd: cwd.cwd, sourceRoot,
+        const request = {
+          sessionId,
+          projectSlug: binding.projectSlug,
+          actor,
+          turnId,
+          args: [...fields.args],
+          cwd: cwd.cwd,
+          sourceRoot,
           signal: tracked.signal
-        }, Object.freeze({ stdout, stderr }));
+        };
+        const answer = await untilCancelled(() => group.run(request, Object.freeze({ stdout, stderr })), tracked.signal);
         return finalFrame(group.name, fields.args, answer);
       });
     } finally {
@@ -276,11 +315,22 @@ request.end(body);
 `;
 }
 
+/**
+ * Writes the caller of a host's groups beside vibe64-helper in the session's wrapper directory, when it has any.
+ * @param {string} wrapperHostDir @param {string} controlFilePath @param {{ name: string, help: string }[]} groups
+ */
+async function writeHelperGroupClient(wrapperHostDir, controlFilePath, groups) {
+  if (groups.length) {
+    await writeExecutableFileIfChanged(path.join(wrapperHostDir, HELPER_GROUP_CLIENT_NAME), helperGroupClientSource(controlFilePath, groups));
+  }
+}
+
 export {
   HELPER_GROUP_ROUTE,
+  NO_HELPER_COMMAND_GROUPS,
   TERMINALS_HELPER_COMMAND_GROUPS_TOKEN,
   assertHelperCommandGroups,
   createHelperGroupRunner,
-  helperGroupClientSource,
-  streamHelperGroup
+  streamHelperGroup,
+  writeHelperGroupClient
 };

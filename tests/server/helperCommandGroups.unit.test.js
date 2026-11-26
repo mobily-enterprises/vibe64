@@ -78,14 +78,19 @@ function run(command, args, { env, cwd }) {
  * @param {object[] | undefined} groups
  */
 async function fixture(t, groups) {
+  // Released last made first, whether the test passed or not: its callers, the session, TMPDIR, then its folders.
+  const cleanups = [];
+  t.after(async () => {
+    for (const cleanup of cleanups.reverse()) await cleanup();
+  });
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), "vibe64-helper-groups-")));
-  t.after(() => rm(root, { force: true, recursive: true }));
+  cleanups.push(() => rm(root, { force: true, recursive: true }));
   // The editor's TMPDIR, a short folder of its own under /tmp, which holds the session's sockets.
   const editorTemp = await realpath(await mkdtemp("/tmp/v64-hg-"));
-  t.after(() => rm(editorTemp, { force: true, recursive: true }));
+  cleanups.push(() => rm(editorTemp, { force: true, recursive: true }));
   const previousTmpdir = process.env.TMPDIR;
   process.env.TMPDIR = editorTemp;
-  t.after(() => {
+  cleanups.push(() => {
     if (previousTmpdir === undefined) delete process.env.TMPDIR;
     else process.env.TMPDIR = previousTmpdir;
   });
@@ -114,13 +119,17 @@ async function fixture(t, groups) {
     },
     ...(groups ? { helperCommandGroups: groups } : {})
   });
-  t.after(() => service.closeAllForSession(sessionId));
+  cleanups.push(() => service.closeAllForSession(sessionId));
   await service.bindSession(sessionId, { wrapperHostDir });
   const prepared = await prepareAgentSessionCommand({ commandService: service, sessionId, wrapperHostDir });
   assert.equal(prepared.ok, true);
   assert.deepEqual(await prepareAgentHelperCommand({ env: process.env, wrapperHostDir, hostGroups: service.helperGroups }), { ok: true });
   const env = { ...process.env, ...prepared.env, PATH: [wrapperHostDir, process.env.PATH].join(path.delimiter) };
-  const helper = (args, options = {}) => run(path.join(wrapperHostDir, "vibe64-helper"), args, { cwd: sourceRoot, env, ...options });
+  const helper = (args, options = {}) => {
+    const caller = run(path.join(wrapperHostDir, "vibe64-helper"), args, { cwd: sourceRoot, env, ...options });
+    cleanups.push(() => caller.child.kill("SIGKILL"));
+    return caller;
+  };
   return { control: JSON.parse(prepared.env.VIBE64_SESSION_RENAME_CONTROL), env, helper, service, sessionId, sourceRoot, state, wrapperHostDir };
 }
 
@@ -153,6 +162,11 @@ function inventoryGroup() {
       }
       if (action === "wait") {
         await new Promise((resolve) => request.signal.addEventListener("abort", resolve, { once: true }));
+        return { exit: 0 };
+      }
+      // A host that never listens to its signal, and answers only long after.
+      if (action === "deaf") {
+        await new Promise((resolve) => setTimeout(resolve, 15_000).unref());
         return { exit: 0 };
       }
       if (action === "run") return { exec: true };
@@ -294,7 +308,6 @@ test("SIGINT, SIGTERM or a hangup of the caller, or the session closing, cancels
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
     const before = calls.length;
     const waiting = f.helper(["inventory", "wait"]);
-    t.after(() => waiting.child.kill("SIGKILL"));
     await eventually(() => calls.length > before, `${signal}: the host never started`);
     const { signal: hostSignal } = calls.at(-1);
     assert.equal(hostSignal.aborted, false, "the host runs while its caller waits");
@@ -303,13 +316,18 @@ test("SIGINT, SIGTERM or a hangup of the caller, or the session closing, cancels
     assert.deepEqual([ended.code, ended.signal], [null, signal]);
     await eventually(() => hostSignal.aborted, `${signal}: the host was not told its caller went away`);
   }
+  // Closing the session cancels the host's run, and never waits on a host that ignores that: its caller is told.
   const before = calls.length;
-  const waiting = f.helper(["inventory", "wait"]);
-  t.after(() => waiting.child.kill("SIGKILL"));
+  const deaf = f.helper(["inventory", "deaf"]);
   await eventually(() => calls.length > before, "the host never started");
-  await f.service.closeAllForSession(f.sessionId);
-  await eventually(() => calls.at(-1).signal.aborted, "closing the session did not cancel the host's run");
-  await waiting.closed;
+  let closed = false;
+  const closing = f.service.closeAllForSession(f.sessionId).then(() => { closed = true; });
+  await eventually(() => closed, "closing the session waited on a host that ignores its signal");
+  await closing;
+  assert.equal(calls.at(-1).signal.aborted, true, "closing the session did not cancel the host's run");
+  const ended = await deaf.closed;
+  assert.equal(ended.code, 1);
+  assert.match(ended.stderr, /The command was cancelled: its caller went away or its session closed\./u);
 });
 
 test("\"run it yourself\" runs only the caller's words after --, in its folder with its environment, and its status and signals pass through", async (t) => {
@@ -325,7 +343,6 @@ test("\"run it yourself\" runs only the caller's words after --, in its folder w
   // A signal to the caller reaches the command it runs, whose own status the caller then has.
   const trapping = "process.on('SIGTERM', () => { process.stdout.write('stopping\\n'); process.exit(5); }); process.stdout.write('ready\\n'); setTimeout(() => process.exit(9), 20000);";
   const running = f.helper(["inventory", "run", "--", process.execPath, "-e", trapping]);
-  t.after(() => running.child.kill("SIGKILL"));
   await eventually(() => running.stdoutText() === "ready\n", "the command never started");
   running.child.kill("SIGTERM");
   const stopped = await running.closed;

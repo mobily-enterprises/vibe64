@@ -3,6 +3,7 @@ import { requestUnixJsonCommand } from "./unixJsonCommand.js";
 import { codexTerminalNamespace, openCodeError } from "./terminalShared.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { prepareAgentHelperCommand } from "./agentHelperCommand.js";
+import { NO_HELPER_COMMAND_GROUPS } from "./helperCommandGroups.js";
 import { learningSessionExecutionRoot } from "./mainConversationContext.js";
 import {
   prepareAgentDatabaseCommand
@@ -237,7 +238,8 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
   }
   const hostWrapperDir = toText(git.hostWrapperDir);
   // A host's own vibe64-helper groups run through the session command, so they are listed only beside it.
-  const helper = await prepareHelperCommand({ wrapperHostDir: hostWrapperDir, env, hostGroups: agentSessionCommand?.helperGroups || [] });
+  const hostGroups = agentSessionCommand ? agentSessionCommand.helperGroups : NO_HELPER_COMMAND_GROUPS;
+  const helper = await prepareHelperCommand({ wrapperHostDir: hostWrapperDir, env, hostGroups });
   if (helper?.ok !== true) {
     throw commandBoundaryError("helper");
   }
