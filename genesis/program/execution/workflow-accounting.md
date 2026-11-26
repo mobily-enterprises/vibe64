@@ -12,6 +12,9 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/request.js`
 - `packages/vibe64-execution/src/server/engines/capture.js`
 - `packages/vibe64-execution/src/server/engines/captureProcess.js`
+- `packages/vibe64-execution/src/server/engines/commandSpawner.js`
+- `packages/vibe64-execution/src/server/engines/commandExecutor.js`
+- `packages/vibe64-execution/src/server/engines/commandSpawnerProcess.js`
 - `packages/vibe64-execution/src/server/engines/detached.js`
 - `packages/vibe64-execution/src/server/engines/detachedReaper.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessions.js`
@@ -53,6 +56,23 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue`
 
 ## Public contract
+
+Every finite command, the ones Vibe64 waits for, starts in one executor, which
+runs Node's spawn with exactly the options it is given. The editor server sends
+every finite command to its spawner, started at boot; small short-lived
+processes (the session work child, CLIs, tests) run the same executor in
+themselves, because a spawner there costs more than their own fork. So the
+editor never forks its own heap for a command, which held its main thread for
+10 ms at 158 MB and 33 ms at 1.5 GB per start. Neither decides anything: the
+gateway, cwd and permission policy and managed execution approve a command
+before it gets there. It talks only through its private IPC channel, runs as the editor
+with an empty environment of its own, and ends with the editor. When it dies or
+stops answering, its commands fail naming it, their process groups are ended,
+and the next command starts a new one; nothing falls back to a direct start.
+Only long-lived starters, once per owner, start processes directly: runtime
+terminals, detached services and their reaper, AI stdio bridges, the
+synchronous Git identity read and SQLite workers. The execution gateway rundown
+(`docs/execution-gateway-rundown.md`) covers the security model and failures.
 
 The existing runtime catalogue also maps Python, Ruby, Go, Java, Kotlin, C# and
 Rust to explicit host packs. Kotlin receives Java tools, and Rust receives the
