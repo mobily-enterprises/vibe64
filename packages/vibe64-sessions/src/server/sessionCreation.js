@@ -14,6 +14,7 @@ import { sessionsOccupyingPolicySlots } from "./sessionPolicySlots.js";
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { refuseDuringPlannedRestart } from "@local/vibe64-core/server/plannedRestart";
 
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -84,6 +85,8 @@ function createSessionCreation({
     } = options;
     return sessionResult(async () => {
       assertProjectEffectAdmission();
+      // Refused while a planned restart is near, before anything is written.
+      refuseDuringPlannedRestart("session-create");
       if (sessionId !== undefined) assertValidVibe64SessionId(sessionId);
       if (expectedCommit !== undefined) {
         if (sessionId === undefined || typeof expectedCommit !== "string" ||

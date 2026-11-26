@@ -1,5 +1,6 @@
 import { assistantGoalIsActive } from "@local/vibe64-runtime/shared/assistantRouting";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
 import { read, activeMessage } from "./assistantRoutingRequests.js";
 import {
   INTERRUPTION_CAUSE,
@@ -174,7 +175,10 @@ function createAssistantRoutingInterruptions({
       return false;
     }
     if (nextTurnInterruptions(state.interruptions, interruption, Date.now()).repeated) return true;
-    await records.prepareFollowup(context, state, state.stage ?? null, { resumeNote: resumeNoteForAi(interruption) });
+    // After a planned restart its own note leads the resume: what the restart stopped, and to continue from the notes.
+    const restarted = await plannedRestart().resumeNote({ sessionId });
+    const resumeNote = restarted ? `[${restarted}]` : resumeNoteForAi(interruption);
+    await records.prepareFollowup(context, state, state.stage ?? null, { resumeNote });
     await decideResume(sessionId, context, state, interruption, routingOptions);
     return true;
   }

@@ -14,6 +14,7 @@ import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { aiHelperPurpose } from "@local/vibe64-execution/shared/aiPurpose";
 
 /** @typedef {import("./types.js").ClaudeConversationOwner} ClaudeConversationOwner */
 /** @typedef {import("@local/vibe64-core/server/types").CodexProviderConnectionStore} CodexProviderConnectionStore */
@@ -109,6 +110,7 @@ function createClaudeConversationAccounts({
       env,
       signal,
       accountQuery: purpose,
+      execution: { aiPurpose: aiHelperPurpose("account") },
       workdir: credentialHome.home,
       toolFree: true,
       onEvent: doNothing

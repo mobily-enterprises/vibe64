@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
 // One lifecycle for short tool-less assistant helpers (session naming, Save
@@ -81,6 +81,8 @@ async function runAssistantHelperTurn({
   outputSchema,
   prefix,
   profile,
+  // How long the whole turn may take: its workload's time limit.
+  deadlineMs = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[profile.workloadId].timeoutMs,
   prompt,
   promptLabel,
   record,
@@ -117,11 +119,14 @@ async function runAssistantHelperTurn({
     executionId: ""
   };
   const retain = () => record.write(helper);
+  // The whole turn keeps to its workload's time limit, its process's start included: the limit is not one more wait
+  // after a start and before a stop that take their own time.
+  const turnSignal = AbortSignal.any([signal, AbortSignal.timeout(deadlineMs)]);
   const options = {
     assistantSelection: selection,
     vibe64User,
     expectedConnectionIdentity: connectionIdentity,
-    signal,
+    signal: turnSignal,
     async onEvent(event = {}) {
       if (event.type === "thread" || event.type === "turn") {
         if (normalizeText(event.threadId)) helper.conversationId = normalizeText(event.threadId);
@@ -141,12 +146,12 @@ async function runAssistantHelperTurn({
     await retain();
     await mkdir(helper.scope.workdir, { recursive: true });
     await mkdir(helper.scope.runtimeRoot, { recursive: true });
-    signal.throwIfAborted();
+    turnSignal.throwIfAborted();
     const executionProfile = await agent.resolveEphemeralExecutionProfile(helper.scope, profile, options);
     resolvedProfile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
     helper.executionProfile = resolvedProfile;
     await retain();
-    signal.throwIfAborted();
+    turnSignal.throwIfAborted();
     result = await agent.runEphemeralChatTurn(helper.scope, {
       executionProfile,
       outputSchema,

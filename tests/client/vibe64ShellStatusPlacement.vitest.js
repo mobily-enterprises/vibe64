@@ -86,6 +86,12 @@ vi.mock("../../src/components/studio/Vibe64ProblemReportHost.vue", async () => {
   return { default: defineVueComponent({ name: "Vibe64ProblemReportHostTestDouble", setup: () => () => createElement("span", { "data-test": "problem-report-host" }) }) };
 });
 
+// The planned restart banner, as a marker: it reads the server's planned restart, which its own tests cover.
+vi.mock("../../src/components/studio/Vibe64PlannedRestartBanner.vue", async () => {
+  const { defineComponent: defineVueComponent, h: createElement } = await import("vue");
+  return { default: defineVueComponent({ name: "Vibe64PlannedRestartBannerTestDouble", setup: () => () => createElement("span", { "data-test": "planned-restart-banner" }) }) };
+});
+
 import ShellLayout from "../../src/components/ShellLayout.vue";
 import StudioAppShellLayout from "../../src/components/StudioAppShellLayout.vue";
 

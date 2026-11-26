@@ -85,7 +85,9 @@ function vibe64StatusCode(response, options = {}) {
     code === "vibe64_project_session_policy_lock_timeout" ||
     code === "vibe64_session_creation_limit" ||
     code === "vibe64_workspace_setup_retry_not_available" ||
-    code === "vibe64_workspace_setup_running"
+    code === "vibe64_workspace_setup_running" ||
+    // A crucial operation refused while a planned restart notice is in force (plannedRestart.js).
+    code === "vibe64_planned_restart"
   ) {
     return 409;
   }

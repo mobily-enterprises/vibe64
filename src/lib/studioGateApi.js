@@ -25,6 +25,7 @@ const STUDIO_HEALTH_ENDPOINT = studioApiPath("studio/health");
 const STUDIO_TOOLS_ENDPOINT = studioApiPath("studio/health/tools");
 const STUDIO_CRASHES_ENDPOINT = studioApiPath("studio/health/crashes");
 const STUDIO_CRASH_SUMMARY_ENDPOINT = studioApiPath("studio/health/crashes/summary");
+const STUDIO_PLANNED_RESTART_ENDPOINT = studioApiPath("studio/health/planned-restart");
 const STUDIO_CRASHES_ACKNOWLEDGE_ENDPOINT = studioApiPath("studio/health/crashes/acknowledge");
 const VIBE64_ENDPOINT = studioApiPath("vibe64");
 const PROJECT_SELECTION_ENDPOINT = `${VIBE64_ENDPOINT}/projects`;
@@ -116,6 +117,7 @@ export {
   STUDIO_CRASHES_ACKNOWLEDGE_ENDPOINT,
   STUDIO_CRASHES_ENDPOINT,
   STUDIO_CRASH_SUMMARY_ENDPOINT,
+  STUDIO_PLANNED_RESTART_ENDPOINT,
   STUDIO_HEALTH_ENDPOINT,
   STUDIO_TOOLS_ENDPOINT,
   projectSelectionQueryKey,

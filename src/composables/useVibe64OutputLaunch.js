@@ -18,6 +18,7 @@ import { launchStatusAgentWriteBusy } from "@/lib/vibe64LaunchStatus.js";
 import { writeLaunchAutoStartAttempt } from "@/lib/vibe64LaunchAutoStart.js";
 import { followLaunchStart, launchStartAnswerHeld, newLaunchStartId } from "@/lib/vibe64LaunchStart.js";
 import { workAnswerLost } from "@/lib/vibe64SessionWorkOutcome.js";
+import { usePlannedRestart } from "@/composables/usePlannedRestart.js";
 
 const TERMINAL_STOP_POLL_INTERVAL_MS = 100;
 const TERMINAL_STOP_POLL_ATTEMPTS = 50;
@@ -40,6 +41,11 @@ function delay(milliseconds = 0) {
  *   projectSlug: import("vue").Ref<string>
  * }} options
  */
+/** Whether a start was refused because the host's planned restart is near. */
+function launchRefusedForRestart(error) {
+  return [error?.code, error?.response?.code, error?.response?.errors?.[0]?.code].includes("vibe64_planned_restart");
+}
+
 function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal, projectSlug }) {
   const {
     canLoadOutputs,
@@ -68,6 +74,9 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
   const { terminalMetadata, terminalSessionId } = terminal;
   const operationBusy = ref(false);
   const launchError = ref("");
+  const plannedRestart = usePlannedRestart();
+  // A start the host's planned restart paused says until when, and the words go when the window ends.
+  const pausedByRestart = ref(false);
   const refusedAdmissionId = ref("");
   const launchStarting = ref(false);
   const launchWaiting = ref(false);
@@ -318,7 +327,8 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
         // Only a confirmed admission conflict is safe to retry automatically.
         autoStartKey.value = normalizedAutoStartAttemptKey;
       }
-      launchError.value = String(
+      pausedByRestart.value = plannedRestart.active.value && launchRefusedForRestart(error);
+      launchError.value = pausedByRestart.value ? plannedRestart.pausedLabel.value : String(
         error?.message || startTerminalCommand.message || "Output target could not be started."
       ).trim();
       refusedAdmissionId.value = String(error?.details?.admission?.id || "");
@@ -423,6 +433,12 @@ function useVibe64OutputLaunch({ busy, embeddedPreview, outputs, outputTerminal,
     refusedAdmissionId.value = "";
     launchWaiting.value = false;
   }
+
+  watch(() => plannedRestart.active.value, (active) => {
+    if (active || !pausedByRestart.value) return;
+    pausedByRestart.value = false;
+    launchError.value = "";
+  });
 
   watch([previewState, terminalIndicatorState, launchError], ([state, indicator]) => {
     if (state === "ready" && indicator === "running") {

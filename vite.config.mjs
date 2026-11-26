@@ -154,7 +154,16 @@ export default defineConfig({
       // nestedChildren deprecated: JSKIT now relies on native index/... nesting instead of route rewrites.
       // beforeWriteFiles: reparentNestedChildrenToIndexOwners
     }),
-    vue(),
+    vue({
+      features: {
+        // A component's id names its scoped styles (data-v-…). In a build it hashes the component's source alone. The
+        // default also hashes the path from the build's root, which for a component outside the root (a composition
+        // links its packages from elsewhere) changes with the directory the build runs in, so the same source became
+        // another client build and every open editor said "Vibe64 was updated". Development keeps the path-only id,
+        // which stays put across edits for hot reload.
+        componentIdGenerator: (filepath, source, isProduction, getHash) => getHash(isProduction ? source : filepath)
+      }
+    }),
     vuetify({
       autoImport: true
     }),

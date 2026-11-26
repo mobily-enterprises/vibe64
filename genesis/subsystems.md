@@ -1053,11 +1053,13 @@ Owns the project's saved versions record (`savedVersions.js`, `@local/vibe64-cor
 
 Owns the session timeline (`sessionTimeline.js`) and its reader, `vibe64 timeline` (`sessionTimelineCli.js`): one bounded, private JSON-lines file per session under `<projectRuntimeRoot>/timeline/`, holding event metadata only. Each package records its own events through it (Sessions the browser connections, Terminals the turns, conversations, engine processes and server stop, AI tasks their windows, and the route wrapper here the failed session requests); none reads it back.
 
+Owns the planned restart reader (`plannedRestart.js`, `plannedRestartNotice.js`): the host's notice file and its validity rules, the one list of crucial operations and their refusal, and each notice's durable record under `<systemRoot>/planned-restarts/`. Each owner refuses its own crucial operation through it; Terminals steers the running AI turns and resumes them, Studio Health serves the banner's status, and a host gates its own operations through the `vibe64.planned-restart` token.
+
 ### Source
 - Directory `packages/vibe64-core`
 
 ### Program
-- Nothing.
+- `genesis/program/operations/planned-restarts.md`
 
 ### Data owned
 - Nothing.

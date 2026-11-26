@@ -78,6 +78,7 @@ import {
 } from "./outputTargetLaunchRequests.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
+import { refuseDuringPlannedRestart } from "@local/vibe64-core/server/plannedRestart";
 
 /** @typedef {import("./types.js").OutputTargetTerminalState} OutputTargetTerminalState */
 /** @typedef {import("./types.js").OutputTargetLaunchCoordination} OutputTargetLaunchCoordination */
@@ -409,6 +410,11 @@ function createOutputTargetLaunchStart({
               namespace,
               spec
             });
+          // A start that runs the target's Prepare steps (migrations, say) waits out a planned restart's window; one
+          // that reuses the running process, or runs no Prepare step, goes on.
+          if (!existingReusableTerminal && outputTarget.steps?.some(step => step.role === "prepare")) {
+            refuseDuringPlannedRestart("output-prepare");
+          }
           await replaceRunningRuns({
             launchPreviewProxies: state.launchPreviewProxies,
             logger,

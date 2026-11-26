@@ -1,6 +1,8 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { NOT_A_TOOL, WORKSPACE_OPERATION } from "@local/vibe64-core/server/actionContext";
 import { VIBE64_COMMAND, VIBE64_QUERY } from "@local/vibe64-core/shared/actionFields";
+import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
+import { readServedClientBuildId } from "@jskit-ai/kernel/server/support";
 
 import {
   crashesAcknowledgeInputValidator,
@@ -16,6 +18,7 @@ const ACTION_CHECK_STUDIO_TOOLS = "vibe64.studio-health.tools";
 const ACTION_READ_CRASH_SUMMARY = "vibe64.studio-health.crashes.summary";
 const ACTION_LIST_CRASHES = "vibe64.studio-health.crashes.list";
 const ACTION_ACKNOWLEDGE_CRASHES = "vibe64.studio-health.crashes.acknowledge";
+const ACTION_READ_PLANNED_RESTART = "vibe64.studio-health.planned-restart.read";
 
 // The bounded Health summary the assistant receives.
 const HEALTH_SUMMARY_OUTPUT = {
@@ -67,11 +70,22 @@ function healthSummaryForAssistant(result) {
 }
 
 /**
+ * The planned restart's state for the banner, with the client build this server serves now: after a restart the page
+ * offers Reload only when that build is not the one it runs.
+ * @param {string} appRoot
+ */
+async function plannedRestartStatus(appRoot) {
+  const clientBuildId = await readServedClientBuildId({ appRoot }).catch(() => "");
+  return { ok: true, ...plannedRestart().status(), clientBuildId };
+}
+
+/**
  * @param {object} dependencies
  * @param {StudioHealthService} dependencies.studioHealth
  * @param {CrashService} dependencies.crashes
+ * @param {string} dependencies.appRoot the app whose built client this server serves
  */
-function createStudioHealthActions({ studioHealth, crashes }) {
+function createStudioHealthActions({ studioHealth, crashes, appRoot }) {
   return Object.freeze([
     Object.freeze({
       ...VIBE64_QUERY,
@@ -106,6 +120,15 @@ function createStudioHealthActions({ studioHealth, crashes }) {
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
       execute: (input) => crashes.summary(input)
     }),
+    // The host's planned restart, for every editor's banner: the notice in force, and for a while after the restart
+    // what it stopped.
+    Object.freeze({
+      ...VIBE64_QUERY,
+      id: ACTION_READ_PLANNED_RESTART,
+      input: studioHealthQueryInputValidator,
+      extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
+      execute: () => plannedRestartStatus(appRoot)
+    }),
     // Crash records stay off the assistant's tools: an error's message and stack may hold what no AI should read.
     Object.freeze({
       ...VIBE64_QUERY,
@@ -129,6 +152,7 @@ export {
   ACTION_CHECK_STUDIO_TOOLS,
   ACTION_LIST_CRASHES,
   ACTION_READ_CRASH_SUMMARY,
+  ACTION_READ_PLANNED_RESTART,
   ACTION_READ_STUDIO_HEALTH,
   createStudioHealthActions
 };

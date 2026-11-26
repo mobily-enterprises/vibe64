@@ -12,6 +12,7 @@ import {
 import { prepareCodexAttachmentRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
 import { fetchReachesGithubAsGit, listGithubRemoteHeads } from "./githubRemoteHeads.js";
 import { currentProjectSlug } from "./terminalShared.js";
 import { createSessionCommandServers } from "./unixJsonCommand.js";
@@ -34,6 +35,7 @@ import {
   gatewayGitIdentityUserKey,
   githubAuthenticationRejected,
   gitCommandIsLocal,
+  gitOperation,
   logGitCommandResult,
   readGithubToken
 } from "./codexGitCommandOperations.js";
@@ -41,6 +43,9 @@ import { commandFailure } from "./commandFailure.js";
 import { createSessionGitPlaces, forwardedGitEnv, placeGitCommand, placeGithubCommand } from "./codexGitCommandPlaces.js";
 import { commandRequiresGithubToken, githubTokenCommandRefusal, ignoredProgramEnvNote, temporaryFolderEnvRefusal } from "./codexGitCommandToken.js";
 import { GITHUB_TOKEN_COMMAND_ENV, githubTokenConfigRefusal } from "./githubTokenGit.js";
+
+// The Git writes a planned restart pauses: what it would cut halfway.
+const PLANNED_RESTART_GIT_WRITES = new Set(["commit", "push", "rebase"]);
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
@@ -429,6 +434,10 @@ function createCodexGitCommandService({
     if (!sessionId) {
       return finish(commandFailure("Codex git command session id is required.", "vibe64_codex_git_command_session_required"));
     }
+    // A Git write the AI starts waits out a planned restart's window; reads and other Git commands go on.
+    const restartRefusal = command === "git" && PLANNED_RESTART_GIT_WRITES.has(gitOperation(args)) &&
+      plannedRestart().refusal({ operation: "git-write", label: `git ${gitOperation(args)}` });
+    if (restartRefusal) return finish(commandFailure(restartRefusal.message, restartRefusal.code, { exitCode: 1 }));
     // Codex probes Git frequently while its TUI is active. Git authorization
     // owns only source and actor metadata; a complete session runtime here would
     // reread complete conversation history for every `git status` subcommand

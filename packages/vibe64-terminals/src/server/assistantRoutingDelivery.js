@@ -34,6 +34,8 @@ import {
   savesAutomatically
 } from "./assistantRoutingRequests.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
+import { PLANNED_RESTART_REFUSAL_CODE } from "@local/vibe64-core/server/plannedRestartNotice";
 import { PLAN_CHECK_LABEL, planCheckStart, rememberPlanCheckStart } from "./assistantPlanCheck.js";
 import { MAIN_CHAT_NOTE_TURN_METADATA_KEY } from "./mainChatNote.js";
 
@@ -180,6 +182,15 @@ function createAssistantRoutingDelivery({
       throw failure("Automatic follow-ups run in Main chat only. Cancel this follow-up and send a new request.", "vibe64_assistant_routing_followup_main_chat_only");
     }
     if (state.stopped) throw failure("This request was stopped. Send a new request to continue.", "vibe64_assistant_routing_delivery_stopped");
+    // Vibe64's own next step (a plan handoff, Senior's review, a plan's pass, the whole-project checks) does not start
+    // while a planned restart is near: it is owed, and starts by itself once the window ends. A resume, and the plan
+    // check that only writes the plan, go ahead.
+    const restartRefusal = followup && state.followup?.resume !== true && !planCheck && plannedRestart().refusal({
+      operation: state.stage === "planning" ? "plan-handoff" : "automatic-review",
+      label: state.stage === "planning" ? "" : followupLabel,
+      after: "It starts by itself after the restart."
+    });
+    if (restartRefusal) throw failure(restartRefusal.message, PLANNED_RESTART_REFUSAL_CODE);
     await decisions.validateDecision(context, state, followup);
     records.mark(state.messageId, "deliver-validated");
     const currentSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
@@ -257,6 +268,12 @@ function createAssistantRoutingDelivery({
           : includePlanInstructions
             ? workPlanInstructions(role, { autoOutcome, auto: state.mode === "auto", passTitles: await passTitlesFor(context, role) }) : ""
     });
+    // A turn that starts while a planned restart is near hears about it first, as the turns running when it came did.
+    const restartWarning = plannedRestart().warning();
+    if (restartWarning) {
+      message = `[${restartWarning}]\n\n${message}`;
+      plannedRestart().noteTold({ sessionId, conversationId: context.routingConversationId || "", sessionName: context.session.sessionName });
+    }
     // A pass renders its own Genesis task, and a review Genesis's review task. Senior's
     // check of a plan Junior implemented is not a pass: it renders no task of its own.
     let genesisTask = taskPurpose ? pass?.id || state.task : "";

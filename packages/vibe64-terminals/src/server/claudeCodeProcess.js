@@ -8,6 +8,7 @@ import {
   claudeFlagSettings as nativeClaudeFlagSettings,
   createClaudeCodeProcess as nativeCreateClaudeCodeProcess
 } from "@jskit-ai/assistant-core/server/claude-process";
+import { AI_PURPOSE_AGENT_TURN } from "@local/vibe64-execution/shared/aiPurpose";
 import { engineProcessTimeline } from "./sessionTurnTimeline.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -84,7 +85,7 @@ async function createClaudeCodeProcess({
     projectEnv,
     purpose: options.toolFree ? "account" : "assistant",
     operationId: "claude-code",
-    label: "Claude Code assistant"
+    label: `Claude Code assistant (${execution?.aiPurpose || AI_PURPOSE_AGENT_TURN})`
   });
   // A session's own Claude Code process is in its timeline; a tool-free helper's or account query's is not.
   const timeline = engineProcessTimeline({ engine: "claude", sessionId: options.toolFree ? "" : execution?.sessionId });

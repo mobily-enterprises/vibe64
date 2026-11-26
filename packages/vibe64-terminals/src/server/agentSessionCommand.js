@@ -75,8 +75,8 @@ import {
   VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV,
   VIBE64_AGENT_SESSION_RUN_RESULT_ENV,
   VIBE64_WRAPPER_ENV,
-  waitForCommandResult,
-  SESSION_COMMAND_FIELDS
+  SESSION_COMMAND_FIELDS,
+  waitForSessionCommand
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { assistantPlanRole } from "./assistantRoutingRequests.js";
@@ -549,10 +549,7 @@ function createAgentSessionCommandService({
     executions.add(executionId);
     sessionExecutions.set(toText(input.sessionId), executions);
     try {
-      const exitCodeText = await waitForCommandResult(resultPath, {
-        signal: input.signal,
-        timeoutMs: AGENT_SESSION_COMMAND_TIMEOUT_MS
-      });
+      const exitCodeText = await waitForSessionCommand(resultPath, { ...input, command });
       const exitCode = Number.parseInt(exitCodeText, 10);
       const output = await readBoundedFile(outputPath).catch((error) => (
         error?.code === "ENOENT" ? "" : Promise.reject(error)

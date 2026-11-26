@@ -250,7 +250,7 @@ function createPromptHintRequests({
     });
     const requests = [...(requestsBySession.get(sessionKey) || [])];
     for (const request of requests) {
-      hintJobs.cancelRequest(request);
+      hintJobs.cancelRequest(request, { stopJob: true });
     }
     await Promise.all(requests.map((request) => request.promise.catch(() => null)));
     const runtime = options.runtime || await project.createRuntimeWithoutSource();

@@ -25,6 +25,8 @@ appears at the top of the page:
   update. Until you reload, the tab keeps running the old version.
 - Reconnecting to the same version does not show the banner again. If Vibe64
   goes back to the version the tab is running, the banner disappears.
+- An update or restart that leaves the page's code unchanged (a server-only
+  fix, a planned restart) does not show it, wherever the update was built.
 - Each tab checks for itself: reload every open Vibe64 tab that shows the
   banner.
 - The banner and its button are the same on desktop and phone.

@@ -43,6 +43,7 @@ import { sessionAssistantWorking } from "./serviceSessionRecords.js";
 import { createProjectPasses } from "./projectPasses.js";
 import { createHeldAgentSessionPreparation } from "./heldAgentSessionPreparation.js";
 import { createHeldProjectRuntimeOpen } from "./heldProjectRuntimeOpen.js";
+import { createServicePlannedRestart } from "./servicePlannedRestart.js";
 
 /** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {import("./types.js").ServiceAssistant} ServiceAssistant */
@@ -76,6 +77,24 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
     throw new Error(context.error || "Codex runtime context could not be resolved.");
   }
   return context.providerOptions;
+}
+
+/**
+ * Logs one step of a message's routing time.
+ * @param {RuntimeLogger} logger
+ * @param {{ elapsedMs: number }} event
+ */
+function logRoutingTiming(logger, event) {
+  // Timing is diagnostic only; a failing log sink must not fail the send.
+  try {
+    logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
+      event: "vibe64.agent_message.routing_timing",
+      component: "vibe64.agent_message",
+      ...event
+    }, "Assistant routing timing.");
+  } catch {
+    // Ignore: timing diagnostics are best-effort.
+  }
 }
 
 /**
@@ -314,18 +333,7 @@ function createService({
      */
     // readable-check: allow optional-call - cycle: vibe64.sessions requires vibe64.terminals
     onPlanCompleted: (sessionId, input) => state.slots.planCompleted?.(sessionId, input) || "",
-    onTiming(event) {
-      // Timing is diagnostic only; a failing log sink must not fail the send.
-      try {
-        logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
-          event: "vibe64.agent_message.routing_timing",
-          component: "vibe64.agent_message",
-          ...event
-        }, "Assistant routing timing.");
-      } catch {
-        // Ignore: timing diagnostics are best-effort.
-      }
-    },
+    onTiming: event => logRoutingTiming(logger, event),
     async dispatch(sessionId, input, context) {
       requireCompletedConversationRewind(context.session);
       await assistantPreparation.prepareAgentSkillsInsideAgentWrite(sessionId, context);
@@ -476,6 +484,11 @@ function createService({
     publishProjectRuntimeChanged,
     sessionAgent
   });
+  // The host's planned restart notice: every running AI turn is told, and the restart's record keeps what it stopped.
+  const plannedRestart = createServicePlannedRestart(
+    { env, logger, state, project, sessionAccess, systemRoot: codexProviderOptions.systemRoot },
+    { assistantContext, sessionAgent, assistant, assistantRouting }
+  );
   const shutdown = createServiceShutdown({
     state,
     serverRun,
@@ -485,7 +498,8 @@ function createService({
     projectServices,
     sessionAgent,
     sessionConversations,
-    sessionNaming
+    sessionNaming,
+    plannedRestart
   });
   const hostSlots = createServiceHostSlots({ state });
 
@@ -630,7 +644,7 @@ function createService({
     invalidateAgentRuntimes: shutdown.invalidateAgentRuntimes,
     continueGoalAfterAccountChange: goals.continueGoalAfterAccountChange,
     recoverActiveGoals: goals.recoverActiveGoals,
-    recoverInterruptedTurns: createServiceTurnRecovery({
+    recoverInterruptedTurns: plannedRestart.afterRecoveryStarts(createServiceTurnRecovery({
       state,
       logger,
       project,
@@ -641,7 +655,7 @@ function createService({
       reconcileTemporaryConversation: (sessionId, options) => sessionConversations.reconcileTemporaryConversation(sessionId, options),
       stopUnrecoveredTurn: (sessionId, conversationId, input) => (conversationId ? sessionConversations.stopUnrecoveredTemporaryTurn
         : assistantRouting.stopUnrecovered)(sessionId, conversationId ? { conversationId } : {}, input)
-    }),
+    })),
     openBrowserConversation: assistant.openBrowserConversation,
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,

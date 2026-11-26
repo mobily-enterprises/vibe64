@@ -1207,7 +1207,8 @@ test("codex provider replaces a runtime whose socket exists but does not answer"
     assert.equal(runtime.reused, false);
     assert.equal(commandCalls.length, 1);
     assert.equal(commandCalls[0].command, "/bin/sh");
-    assert.equal(commandCalls[0].execution.label, "Codex assistant");
+    assert.equal(commandCalls[0].execution.label, "Codex assistant (agent-turn)");
+    assert.equal(commandCalls[0].execution.aiPurpose, "agent-turn");
     assertInteractiveCodexAppServerArgs(
       managedCodexAppServerArgs(commandCalls[0]),
       ["app-server", "--listen", unixEndpointForRuntime(runtimeDir)]
@@ -2661,7 +2662,8 @@ test("codex helper provider starts from a private empty home and strips project 
     assert.deepEqual(runCall.session, {});
     assert.equal(runCall.userKey, "");
     assert.deepEqual(runCall.shimDirs, []);
-    assert.equal(runCall.execution.label, "Codex assistant");
+    assert.equal(runCall.execution.label, "Codex assistant (helper:shared)");
+    assert.equal(runCall.execution.aiPurpose, "helper:shared");
     assert.equal(runCall.baseEnv.CODEX_HOME, helperHome);
     assert.equal(runCall.baseEnv.DB_PASSWORD, "");
     assert.equal(runCall.baseEnv.OPENAI_API_KEY, "");

@@ -49,6 +49,7 @@ import {
   registerBrowserLifecycleWebSocketRoute
 } from "./server/lib/browserLifecycle.js";
 import { handleUpgradeSocketErrors } from "./server/lib/upgradeSocketErrors.js";
+import { destroyUpgradedSockets, trackUpgradedSockets } from "./server/lib/upgradedSockets.js";
 import { STOP_DRAIN_MS, endRunningCommands, registerStopGate, stopAcceptingConnections } from "./server/lib/stopGate.js";
 import {
   VIBE64_APP_ROOT_ENV,
@@ -126,6 +127,8 @@ function forceCloseServerConnections(server) {
   } catch {
     // The process exits immediately after this in the signal path.
   }
+  // The connections closeAllConnections cannot reach: those upgraded to WebSockets.
+  destroyUpgradedSockets(server);
 }
 
 /**
@@ -408,6 +411,8 @@ async function createServer(options = {}) {
   // Before any upgrade handler (WebSocket routes, realtime, a host's own), so no upgrade's connection is ever left
   // without an error listener.
   handleUpgradeSocketErrors(app.server, { logger: app.log });
+  // Likewise, so the stop's drain ends every upgraded connection (upgradedSockets.js).
+  trackUpgradedSockets(app.server);
   // Before any plugin or route, so every answer, the release bundle's included, refuses other sites' frames.
   registerEditorFraming(app, { env: runtimeEnv });
   // Before any route, so a late answer or a request its client gave up on is logged from its arrival.

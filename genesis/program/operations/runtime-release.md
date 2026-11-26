@@ -38,6 +38,7 @@ so the same command works without a source checkout in the relocated runtime.
 - `tooling/release/verify-runtime.mjs`
 - `tooling/release/verify-client-startup.mjs`
 - `tests/server/clientStartup.unit.test.js`
+- `tests/server/clientBuildId.integration.test.js`
 - `tooling/release/precompress-assets.mjs`
 - `server/lib/spaFallback.js`
 - `tests/server/webBuildFiles.unit.test.js`
@@ -127,6 +128,14 @@ was updated. Reload to get the latest version.** with **Reload**, naming the app
 from `index.html`'s `<title>`. Vibe64 adds no code of its own for this. Nothing
 polls, the page never reloads by itself, and a development (`npm run dev`) page
 has no build to compare. See `docs/colleague-usage/vibe64-updates.md`.
+The build id follows the source alone, never the directory a build runs in:
+`vite.config.mjs` gives each component's scoped-style id (`data-v-…`) the hash
+of its source. The default hashes the path from the build's root as well, and a
+composition links its packages from outside its root, so the same source built
+in another directory was another build and announced an update.
+`tests/server/clientBuildId.integration.test.js` builds the source in two
+directories, its packages linked from outside each, and in a third with a
+one-line change.
 
 While the editor restarts, the page carries on. Its one HTTP client
 (`src/lib/vibe64HttpClient.js`, configured in `src/main.js`) sends a read that

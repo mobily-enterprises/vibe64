@@ -10,6 +10,7 @@ import {
   vibe64HostContextRegistry,
   withGenesisCommandShim
 } from "@local/vibe64-genesis/server";
+import { AI_PURPOSE_AGENT_TURN, AI_PURPOSE_HELPER_SHARED, aiHelperPurpose } from "@local/vibe64-execution/shared/aiPurpose";
 import { claudeFlagSettings } from "./claudeCodeProcess.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { reportGenesisGuidanceUnavailable, reportHostGuidanceCut, sessionGuidanceInput } from "./sessionGuidanceInput.js";
@@ -36,6 +37,19 @@ import {
 /** @typedef {typeof import("@local/vibe64-execution/server").stopVibe64RestoredService} StopVibe64RestoredService */
 
 const ENGINE = "claude";
+
+/**
+ * What a Claude process is for: a helper's workload ("helper:prompt_hint"), a helper scope's feature by its name
+ * ("hints_<id>"), or a chat's agent turn.
+ * @param {{ workloadId?: string } | null} profile
+ * @param {{ assistantScope?: { id?: string } | null }} context
+ */
+function claudeAiPurpose(profile, context) {
+  if (profile?.workloadId) return aiHelperPurpose(profile.workloadId);
+  const feature = /^([a-z][a-z0-9-]{0,40})_/u.exec(String(context.assistantScope?.id || ""))?.[1];
+  if (context.assistantScope) return feature ? aiHelperPurpose(feature) : AI_PURPOSE_HELPER_SHARED;
+  return AI_PURPOSE_AGENT_TURN;
+}
 
 /**
  * Interactive Claude asks first-run setup (including a login choice) and
@@ -242,7 +256,12 @@ function createClaudeConversationEnvironment({
       outputSchema,
       ...(applicationTools ? { applicationTools: true } : {}),
       instructionArguments,
-      execution: { ownerId: entry.id, sessionId: ctx.sessionId, projectSlug: prepared.projectSlug }
+      execution: {
+        ownerId: entry.id,
+        sessionId: ctx.sessionId,
+        projectSlug: prepared.projectSlug,
+        aiPurpose: claudeAiPurpose(profile, ctx)
+      }
     };
   }
 
@@ -313,6 +332,7 @@ function createClaudeConversationEnvironment({
         project: { runtimeConfigEnv: prepared.projectEnv || {} },
         purpose: "assistant",
         mode: "pty",
+        execution: { aiPurpose: AI_PURPOSE_AGENT_TURN, label: `Claude Code terminal (${AI_PURPOSE_AGENT_TURN})` },
         shimDirs: withGenesisCommandShim(prepared.shimDirs),
         runtimes: ["operator-clis", "node26"],
         session: ctx.session,
@@ -385,4 +405,4 @@ function createClaudeConversationEnvironment({
   });
 }
 
-export { createClaudeConversationEnvironment };
+export { claudeAiPurpose, createClaudeConversationEnvironment };

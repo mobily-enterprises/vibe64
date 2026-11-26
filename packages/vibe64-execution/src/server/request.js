@@ -7,6 +7,7 @@ import {
   recordValue,
   uniqueStrings
 } from "./normalize.js";
+import { isAiPurpose } from "../shared/aiPurpose.js";
 import { rejectCallerEnvPolicy } from "./env/callerEnv.js";
 import {
   RUNTIME_PACKS,
@@ -281,8 +282,10 @@ function normalizeExecutionDescriptor(value = {}, options = {}) {
       !["development", "test", "staging"].includes(resourceProfile.environment))) {
     throw commandRequestError("Invalid activity resource profile identity.", "vibe64_resource_profile_invalid");
   }
+  const aiPurpose = normalizeAiPurpose(execution.aiPurpose);
   return Object.freeze({
     ...(resourceProfile ? { resourceProfile: Object.freeze({ ...resourceProfile }) } : {}),
+    ...(aiPurpose ? { aiPurpose } : {}),
     controlGenerationId: normalizeExecutionIdentifier(execution.controlGenerationId),
     ...(execution.workflowId === undefined || execution.workflowId === null || execution.workflowId === ""
       ? {} : { workflowId: normalizeWorkflowId(execution.workflowId) }),
@@ -300,6 +303,15 @@ function normalizeExecutionDescriptor(value = {}, options = {}) {
       execution.sessionId || session.sessionId
     )
   });
+}
+
+// An AI run's purpose (../shared/aiPurpose.js); a run that names none is not an AI run.
+function normalizeAiPurpose(value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (!isAiPurpose(value)) {
+    throw commandRequestError(`Invalid AI run purpose: ${String(value).slice(0, 80)}.`, "vibe64_execution_ai_purpose_invalid");
+  }
+  return value;
 }
 
 function normalizeWorkflowId(value) {

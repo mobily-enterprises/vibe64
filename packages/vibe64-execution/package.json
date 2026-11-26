@@ -15,7 +15,8 @@
     "./server/serverStop": "./src/server/serverStop.js",
     "./server/terminalSessions": "./src/server/engines/terminalSessions.js",
     "./server/types": "./src/server/types.js",
-    "./shared/embeddedFunctions": "./src/shared/embeddedFunctions.js"
+    "./shared/embeddedFunctions": "./src/shared/embeddedFunctions.js",
+    "./shared/aiPurpose": "./src/shared/aiPurpose.js"
   },
   "jskit": {
     "kind": "runtime",

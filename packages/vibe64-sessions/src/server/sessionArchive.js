@@ -7,6 +7,7 @@ import { createHeldRequests } from "@local/vibe64-core/server/heldRequests";
 import { publicSession, sessionResult } from "./sessionResults.js";
 import { trustedAssistantUser } from "./trustedAssistantUser.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
+import { refuseDuringPlannedRestart } from "@local/vibe64-core/server/plannedRestart";
 
 /** @typedef {import("./types.js").WorkspaceSetupRunner} WorkspaceSetupRunner */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -134,6 +135,7 @@ function createSessionArchive({
    */
   async function archiveSession(sessionId, input, { stage = doNothing } = {}) {
     return sessionResult(async () => {
+      refuseDuringPlannedRestart("session-delete");
       if (setupRunner.isRunning(sessionId)) {
         throw vibe64Error("Wait for workspace preparation to finish before archiving this session.", "vibe64_workspace_setup_running");
       }

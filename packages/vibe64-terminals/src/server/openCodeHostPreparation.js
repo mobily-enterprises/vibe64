@@ -14,6 +14,7 @@ import { sessionGuidanceInput } from "./sessionGuidanceInput.js";
 import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
 import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { AI_PURPOSE_AGENT_TURN } from "@local/vibe64-execution/shared/aiPurpose";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -211,7 +212,9 @@ function createOpenCodeHostPreparation({
         dbPath: roots.dbPath,
         env,
         execution: {
-          label: "OpenCode assistant",
+          // One server runs every session's agent turns (and the helper turns beside them).
+          aiPurpose: AI_PURPOSE_AGENT_TURN,
+          label: `OpenCode assistant (${AI_PURPOSE_AGENT_TURN})`,
           operationId: "opencode-server",
           ownerId: "opencode"
         },
