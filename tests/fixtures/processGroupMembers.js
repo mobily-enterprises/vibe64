@@ -46,6 +46,27 @@ export function liveProcessGroupMembers(groupId) {
 }
 
 /**
+ * Whether a process still runs: false once it is gone or has exited (processEnded). An exited process stays a zombie
+ * until its parent reaps it, and an orphan's parent is init or the nearest subreaper, which a busy host can take
+ * seconds to get to, so a drain counts a zombie as ended and so does this. Elsewhere than Linux the kernel's answer
+ * for the pid, which counts a zombie too, decides.
+ * @param {number} pid
+ */
+export function processRuns(pid) {
+  if (process.platform === "linux") {
+    const text = readStat(String(pid));
+    return Boolean(text) && !processEnded(linuxProcessStat(text));
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === "ESRCH") return false;
+    throw error;
+  }
+}
+
+/**
  * What of a stopped process group still runs: [] once every member has exited. A member with PF_EXITING runs none of
  * its own code again: the kernel sets the flag as the member starts to exit, and releases its memory only after that,
  * so all that is left is the kernel's own exit work before it is a zombie (0.6 to 4.9 ms in 42 exits watched on a

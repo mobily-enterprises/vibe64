@@ -32,7 +32,8 @@ import { drainProcessGroup } from "../../packages/vibe64-execution/src/server/en
 import {
   describeProcessGroupMembers,
   liveProcessGroupMembers,
-  processGroupMembersLeftRunning
+  processGroupMembersLeftRunning,
+  processRuns
 } from "../fixtures/processGroupMembers.js";
 
 const { normalizeExecutionDescriptor } = requestTestables;
@@ -740,10 +741,8 @@ test("standalone finite execution drains descendants before reporting completion
   assert.equal(result.ok, true, result.output);
   const childPid = Number(await readFile(childPidPath, "utf8"));
   assert.equal(result.execution.state, "finished");
-  assert.throws(
-    () => process.kill(childPid, 0),
-    (error) => error?.code === "ESRCH"
-  );
+  // The descendant is an orphan once its command has exited, so init reaps it when it gets to it: a zombie has ended.
+  assert.equal(processRuns(childPid), false, `descendant ${childPid} still runs`);
 });
 
 test("standalone PTY execution closes and drains by execution id", async () => {
@@ -978,11 +977,9 @@ for (const [grandchildCase, onTerm] of [
     const receipt = JSON.parse(await readFile(path.join(root, "result.json"), "utf8"));
     assert.equal(receipt.result, "signal");
     assert.equal(receipt.signal, "SIGTERM");
+    // The grandchild is an orphan once the child has exited, so init reaps it when it gets to it: a zombie has ended.
     for (const pid of managedPids) {
-      assert.throws(
-        () => process.kill(pid, 0),
-        (error) => error?.code === "ESRCH"
-      );
+      assert.equal(processRuns(pid), false, `managed process ${pid} still runs`);
     }
     assert.equal(receipt.controllerLeaseClosed, true,
       "the receipt says the runner stopped its child because its controller went away");
