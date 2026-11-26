@@ -41,9 +41,9 @@ function bundleFor(request: Collected) {
 }
 
 const DELIVERY = {
-  label: "Send to vibe64.dev",
+  label: "Send to the host",
   description: "Sends this report to the people who run this workspace's editor.",
-  consents: [{ id: "access", label: "Let Vibe64 look at this to fix it", description: "Read-only, for 14 days.", default: true }]
+  consents: [{ id: "access", label: "Let the host's team look at this to fix it", description: "Read-only, for 14 days.", default: true }]
 };
 
 /** The shell with its session, and the page's collect and send answered by this test. */
@@ -143,12 +143,12 @@ test("with a host's delivery, Send carries the note and the consents as ticked a
   const { sent } = await reportWorld(page, { delivery: DELIVERY });
   await openFromAccountMenu(page);
   const dialog = reportDialog(page);
-  const access = dialog.getByRole("checkbox", { name: "Let Vibe64 look at this to fix it" });
+  const access = dialog.getByRole("checkbox", { name: "Let the host's team look at this to fix it" });
   // The host's consent, on as it declared.
   await expect(access).toBeChecked();
   await dialog.getByLabel("What went wrong (optional)").fill("The preview never started.");
   await access.uncheck();
-  await dialog.getByRole("button", { name: "Send to vibe64.dev" }).click();
+  await dialog.getByRole("button", { name: "Send to the host" }).click();
   await expect(dialog.getByText("Sent. Your reference is PR-7K2M9Q.", { exact: true })).toBeVisible();
   expect(sent).toHaveLength(1);
   expect(sent[0]).toMatchObject({ draftId: "draft-1", note: "The preview never started." });
@@ -157,7 +157,7 @@ test("with a host's delivery, Send carries the note and the consents as ticked a
   await expect(dialog).toBeHidden();
   // Opened again, it starts over: a new report, nothing ticked from before.
   await openFromAccountMenu(page);
-  await expect(dialog.getByRole("checkbox", { name: "Let Vibe64 look at this to fix it" })).toBeChecked();
+  await expect(dialog.getByRole("checkbox", { name: "Let the host's team look at this to fix it" })).toBeChecked();
   await expect(dialog.getByLabel("What went wrong (optional)")).toHaveValue("");
 });
 
