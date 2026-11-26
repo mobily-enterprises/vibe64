@@ -41,6 +41,7 @@ import {
 import {
   vibe64DriverInputFromRegistry
 } from "../../packages/vibe64-genesis/src/server/promptContext.js";
+import { AGENT_SESSION_COMMAND_TIMEOUT_MS } from "../../packages/vibe64-terminals/src/server/agentSessionCommandRun.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
@@ -302,6 +303,12 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
     session: { managedDatabaseRefresh: false, managedEnvironment: false, managedGit: false, managedPreview: false }
   }), /Never start Playwright directly/u);
   assert.match(session, /vibe64-helper env status/u);
+  // An agent command's 30-minute limit ends everything it started, so a database server, dev server or watcher never
+  // runs through one: database tests use the declared test databases on the session's own server.
+  assert.match(session, new RegExp(`A managed shell command ends after ${AGENT_SESSION_COMMAND_TIMEOUT_MS / 60_000} minutes, and every process it started ends with it`, "u"));
+  assert.match(session, /never start `mariadbd`, `mysqld` or `postgres` yourself/u);
+  assert.match(session, /`TEST_DB_NAME` for `jskit test --databases` \(`npm test`\) and `BROWSER_TEST_DB_NAME` for browser workers: each test file or worker gets its own copy, made from one schema snapshot and dropped when the run ends/u);
+  assert.match(session, /a worker or queue as an App Service declared for Preview/u);
   assert.match(session, /refers to a saved key, account or accounts hub, run `vibe64-helper env saved`/u);
   assert.match(session, /vibe64-helper database refresh/u);
   assert.match(session, /vibe64-helper github refresh/u);

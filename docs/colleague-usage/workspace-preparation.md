@@ -298,6 +298,13 @@ folds the settings into one line, "Looking for it at host:port · database ·
 user", with **Change** to edit them. When the panel says connected, choose
 **Finish preparing** on it (or **Retry** on the failed step).
 
+An assistant runs the project's database tests on this server, on its test
+databases, never on a database server it starts itself: a server started inside
+an assistant's command stops with that command, at the latest after 30 minutes
+([A command that ran for 30 minutes, or a database server inside one](coding-agent-failures.md#a-command-that-ran-for-30-minutes-or-a-database-server-inside-one)).
+Where your host provides the session's database instead, the tests run on the
+test databases of the server your host runs for it.
+
 Colleague can explain the panel and each message. When asked, it can check the
 server again with the current values and save the non-secret ones the person
 gives (host, port, database name, user name) in Env. It must not ask for,

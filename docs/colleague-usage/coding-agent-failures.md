@@ -98,3 +98,39 @@ Codex usage & billing** to inspect the allowance, wait for availability, or choo
 another available AI through **Chat mode**. Restarting the conversation does not
 reset the allowance. Colleague can explain these options; it cannot increase
 your provider allowance.
+
+## A command that ran for 30 minutes, or a database server inside one
+
+Each shell command an assistant runs in a session stops after 30 minutes, with
+every process it started. The limit catches a command that hangs, and it stays.
+When a command reaches it, the assistant gets what the command wrote, followed
+by **This command reached the 30-minute limit of an agent command and was
+stopped, with every process it started**, and where long-lived work runs
+instead. Nothing else in the session stops: its files, its Preview and the
+session's database server keep running.
+
+So nothing long-lived belongs in a command: no database server, dev server,
+watcher or queue kept alive through one. The session's database server runs
+outside commands, and its database tests run on the test databases the Stack
+declares (`TEST_DB_NAME` for `npm test` and `jskit test --databases`,
+`BROWSER_TEST_DB_NAME` for browser tests). Each test file or browser worker
+gets its own copy, made from one schema snapshot and dropped when the run ends,
+and a run that was stopped leaves none past the next run's start. The app, its
+dev server and watchers run in Preview, browser-test servers as the project's
+declared test targets, and a worker or queue as an App Service declared for
+Preview (see [Add a service](add-a-service.md)).
+
+When a command starts a database server itself (`mariadbd`, `mysqld` or
+`postgres`), the assistant is told within a few seconds, once: in that
+command's output and in the main chat, as a note from Vibe64 that reaches a
+running turn at once and otherwise comes ahead of your next message. The note
+names the server and its process, says it ends with the command, at the latest
+at the 30-minute limit, taking every test that uses it along, and points to the
+session's test databases instead. Vibe64 recognizes a server by the program
+running, never by the command's words or its settings.
+
+If an assistant keeps restarting a database server, or its database tests fail
+together about every 30 minutes, ask it to stop that server and run the tests
+on the session's test databases. Colleague can explain the limit, the note and
+the test databases on desktop and mobile; it can't run the assistant's commands
+or stop a process.

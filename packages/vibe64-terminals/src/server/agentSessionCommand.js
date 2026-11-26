@@ -4,7 +4,7 @@ import {
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planPassItemsCheck, planPassListing, withAfterPlanPasses } from "./planPasses.js";
@@ -68,21 +68,20 @@ import {
   commandRunsHostPath,
   commandSocketHostPath,
   commandWrapperSource,
+  createCommandRun,
   decodedCommand,
   readBoundedFile,
   runnerHostPath,
   sanitizedCommandEnvironment,
   SESSION_RENAME_CONTROL_ENV,
   sessionCommandCwd,
+  sessionCommandTimeoutFailure,
   sessionRenameCommandSource,
   VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV,
   VIBE64_AGENT_SESSION_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_SESSION_COMMAND_TOKEN_ENV,
-  VIBE64_AGENT_SESSION_RUN_COMMAND_ENV,
-  VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV,
-  VIBE64_AGENT_SESSION_RUN_RESULT_ENV,
   VIBE64_WRAPPER_ENV,
   SESSION_COMMAND_FIELDS,
   waitForSessionCommand,
@@ -95,6 +94,7 @@ import { handPlanOver, refusedPlanChange } from "./assistantPlanHandoff.js";
 import { commandLineFailure } from "./commandFailure.js";
 import { rememberAfterPlanBase } from "./afterPlanBase.js";
 import { createAgentCommandRepeats, createTurnCommandRepeats } from "./agentCommandRepeats.js";
+import { commandDatabaseServerWatch } from "./agentCommandDatabaseServers.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -187,6 +187,8 @@ const commandServers = createSessionCommandServers({
  * @param {import("./agentCommandRepeats.js").NoteAgent} dependencies.noteAgent Vibe64's note to the running Main turn
  * @param {ReturnType<typeof createAgentCommandRepeats>} [dependencies.commandRepeats] each Main turn's repeated commands
  * @param {() => number} [dependencies.now] the clock a command's duration for its repeats is read from
+ * @param {object} [dependencies.databaseServerScan] tests' own /proc, cgroup root and interval for the database server watch
+ * @param {number} [dependencies.commandTimeoutMs] an agent command's limit; tests give a shorter one
  */
 function createAgentSessionCommandService({
   listProjectSessions,
@@ -208,7 +210,9 @@ function createAgentSessionCommandService({
   helperCommandGroups = NO_HELPER_COMMAND_GROUPS,
   noteAgent,
   commandRepeats = createAgentCommandRepeats(),
-  now = Date.now
+  now = Date.now,
+  databaseServerScan = {},
+  commandTimeoutMs = AGENT_SESSION_COMMAND_TIMEOUT_MS
 }) {
   const projectBinding = createAgentCommandProjectBinding(project, {
     sessionRequired: ["Vibe64 session command binding is incomplete.", "vibe64_agent_session_command_binding_required"],
@@ -305,6 +309,7 @@ function createAgentSessionCommandService({
     };
   }
   const requestActor = async (store, sessionId, binding) => (await requestTurn(store, sessionId, binding)).actor;
+  const watchDatabaseServers = commandDatabaseServerWatch({ ...databaseServerScan, logger, noteAgent, requestTurn });
   const helperGroups = createHelperGroupRunner({ groups: helperCommandGroups, runInSessionProject, requestTurn, sessionRuns });
 
   async function listProject(sessionId, input) {
@@ -491,20 +496,9 @@ function createAgentSessionCommandService({
       session: { ...context.descriptor, sessionId: toText(input.sessionId) }
     });
     const commandId = randomUUID();
-    const runRoot = path.join(
-      commandRunsHostPath(context.binding.wrapperHostDir),
-      commandId
-    );
-    const outputPath = path.join(runRoot, "output.log");
-    const resultPath = path.join(runRoot, "result.txt");
-    await mkdir(runRoot, { mode: 0o700, recursive: true });
-    const childEnv = {
-      ...sanitizedCommandEnvironment(input.env),
-      ...genesisParserEnvironment(),
-      [VIBE64_AGENT_SESSION_RUN_COMMAND_ENV]: Buffer.from(command, "utf8").toString("base64"),
-      [VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV]: outputPath,
-      [VIBE64_AGENT_SESSION_RUN_RESULT_ENV]: resultPath
-    };
+    const commandRun = await createCommandRun(context.binding.wrapperHostDir, commandId, command);
+    const { outputPath, pidPath, resultPath } = commandRun;
+    const childEnv = { ...sanitizedCommandEnvironment(input.env), ...genesisParserEnvironment(), ...commandRun.env };
     const projectSlug = context.binding.projectSlug;
     input.signal?.throwIfAborted();
     const started = await runCommand({
@@ -540,11 +534,11 @@ function createAgentSessionCommandService({
       },
       shimDirs: withGenesisCommandShim([context.binding.wrapperHostDir]),
       tempDirectory: cwd.tempDirectory,
-      timeout: AGENT_SESSION_COMMAND_TIMEOUT_MS
+      timeout: commandTimeoutMs
     });
     const executionId = toText(started?.execution?.id);
     if (started?.ok !== true || !executionId) {
-      await rm(runRoot, { force: true, recursive: true }).catch(() => null);
+      await rm(commandRun.root, { force: true, recursive: true }).catch(() => null);
       return commandLineFailure(
         toText(started?.error || started?.stderr || started?.output) || "Vibe64 could not start this session command.",
         toText(started?.code) || "vibe64_agent_session_command_start_failed"
@@ -553,8 +547,9 @@ function createAgentSessionCommandService({
     const executions = sessionExecutions.get(toText(input.sessionId)) || new Set();
     executions.add(executionId);
     sessionExecutions.set(toText(input.sessionId), executions);
+    const stopWatching = watchDatabaseServers({ context, executionId, outputPath, pidPath, sessionId: input.sessionId });
     try {
-      const exitCodeText = await waitForSessionCommand(resultPath, { ...input, command });
+      const exitCodeText = await waitForSessionCommand(resultPath, { ...input, command, timeoutMs: commandTimeoutMs });
       const exitCode = Number.parseInt(exitCodeText, 10);
       const output = await readBoundedFile(outputPath).catch((error) => (
         error?.code === "ENOENT" ? "" : Promise.reject(error)
@@ -572,7 +567,14 @@ function createAgentSessionCommandService({
       await stopExecution(executionId, {
         reason: error?.code || "agent-session-command-failed"
       }).catch(() => null);
-      throw error;
+      if (error?.code !== "vibe64_agent_session_command_timeout") throw error;
+      // What the command wrote stays its answer, with why it ended.
+      return {
+        execution: started.execution,
+        ...sessionCommandTimeoutFailure(await readBoundedFile(outputPath).catch(() => ""))
+      };
+    } finally {
+      stopWatching();
     }
   }
 

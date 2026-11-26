@@ -201,11 +201,11 @@ function createServiceCommandServices({
       }, "Accepted project message failed during asynchronous delivery.")
     }),
     reportWorkflowOutcome: recordWorkflowOutcome,
-    // A turn's repeated commands are told to its AI as Vibe64's note, for the person whose request it runs while they
-    // may still use the project, as a planned restart's note is.
-    noteAgent: async (sessionId, message, { actor, projectSlug }) => {
+    // A turn's repeated commands, and a database server a command started, are told to its AI as Vibe64's note, for
+    // the person whose request it runs while they may still use the project, as a planned restart's note is.
+    noteAgent: async (sessionId, message, { actor, projectSlug, nextTurn = false }) => {
       const vibe64User = actor ? await authorizeProjectMessage(actor, projectSlug).catch(() => null) : null;
-      return noteMainChat(sessionId, { message }, vibe64User ? { vibe64User } : {});
+      return noteMainChat(sessionId, { message, nextTurn }, vibe64User ? { vibe64User } : {});
     },
     handPlanToSenior,
     helperCommandGroups,

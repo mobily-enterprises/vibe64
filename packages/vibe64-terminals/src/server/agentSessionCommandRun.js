@@ -1,7 +1,7 @@
 // The shell side of an agent session command: its environment contract, the wrapper, runner and
 // rename scripts it installs, and reading a run's bounded output and result.
 
-import { open, readFile } from "node:fs/promises";
+import { mkdir, open, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { prepareSessionTempFolder } from "@local/vibe64-runtime/server/sessionTempFolder";
@@ -47,6 +47,18 @@ const VIBE64_WRAPPER_ENV = "VIBE64_WRAPPER";
 const VIBE64_AGENT_SESSION_RUN_COMMAND_ENV = "VIBE64_AGENT_SESSION_RUN_COMMAND_BASE64";
 const VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV = "VIBE64_AGENT_SESSION_RUN_OUTPUT_PATH";
 const VIBE64_AGENT_SESSION_RUN_RESULT_ENV = "VIBE64_AGENT_SESSION_RUN_RESULT_PATH";
+// Where the runner writes its process ID, which names the command's processes (agentCommandDatabaseServers.js).
+const VIBE64_AGENT_SESSION_RUN_PID_ENV = "VIBE64_AGENT_SESSION_RUN_PID_PATH";
+const AGENT_SESSION_COMMAND_TIMEOUT_MINUTES = AGENT_SESSION_COMMAND_TIMEOUT_MS / 60_000;
+// Where each long-lived thing an AI might keep alive through a command runs instead, for the timeout's answer and the
+// notice of a database server inside a command.
+const LONG_LIVED_PROCESS_HOMES = "Never keep a database server, dev server, watcher, queue or other long-lived process " +
+  "alive through a command. Database tests use the session's own database server, which runs outside commands: the " +
+  "test databases the Stack declares (TEST_DB_NAME for `jskit test --databases`, BROWSER_TEST_DB_NAME for browser " +
+  "workers), where each test file or worker gets its own copy, made from one schema snapshot and dropped when the run " +
+  "ends; `vibe64-helper database --help` says more. The app, its dev server and watchers run in Preview " +
+  "(`vibe64-helper preview ensure --wait`), browser-test servers as declared test targets " +
+  "(`vibe64-helper playwright --target <id>`), and a worker or queue as an App Service declared for Preview.";
 // This capability permits session status, rename, project messages and role-checked plan commands. It
 // does not expose the shell-execution token stripped from managed child commands.
 const SESSION_RENAME_CONTROL_ENV = "VIBE64_SESSION_RENAME_CONTROL";
@@ -82,6 +94,34 @@ function commandSocketHostPath(wrapperHostDir = "") {
 
 function commandRunsHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_SESSION_COMMAND_RUNS_DIR_NAME);
+}
+
+/**
+ * Makes a command's own run folder under the session's runs, private to this server, where the runner writes what the
+ * command prints (output.log), its exit code (result.txt) and its own process ID (pid, which names the command's
+ * processes to agentCommandDatabaseServers.js); `env` names them to the runner, with the command itself.
+ * @param {string} wrapperHostDir
+ * @param {string} commandId
+ * @param {string} command
+ */
+async function createCommandRun(wrapperHostDir, commandId, command) {
+  const root = path.join(commandRunsHostPath(wrapperHostDir), commandId);
+  const outputPath = path.join(root, "output.log");
+  const pidPath = path.join(root, "pid");
+  const resultPath = path.join(root, "result.txt");
+  await mkdir(root, { mode: 0o700, recursive: true });
+  return {
+    root,
+    outputPath,
+    pidPath,
+    resultPath,
+    env: {
+      [VIBE64_AGENT_SESSION_RUN_COMMAND_ENV]: Buffer.from(command, "utf8").toString("base64"),
+      [VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV]: outputPath,
+      [VIBE64_AGENT_SESSION_RUN_PID_ENV]: pidPath,
+      [VIBE64_AGENT_SESSION_RUN_RESULT_ENV]: resultPath
+    }
+  };
 }
 
 function commandWrapperSource() {
@@ -274,6 +314,7 @@ set +e
 command_base64="\${${VIBE64_AGENT_SESSION_RUN_COMMAND_ENV}:-}"
 output_path="\${${VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV}:-}"
 result_path="\${${VIBE64_AGENT_SESSION_RUN_RESULT_ENV}:-}"
+pid_path="\${${VIBE64_AGENT_SESSION_RUN_PID_ENV}:-}"
 
 if [ -z "$command_base64" ] || [ -z "$output_path" ] || [ -z "$result_path" ]; then
   exit 125
@@ -282,6 +323,8 @@ fi
 unset ${VIBE64_AGENT_SESSION_RUN_COMMAND_ENV}
 unset ${VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV}
 unset ${VIBE64_AGENT_SESSION_RUN_RESULT_ENV}
+unset ${VIBE64_AGENT_SESSION_RUN_PID_ENV}
+[ -z "$pid_path" ] || printf '%s\\n' "$$" >"$pid_path"
 
 exec >>"$output_path" 2>&1
 
@@ -409,15 +452,41 @@ async function waitForCommandResult(resultPath = "", options = {}) {
 }
 
 /**
+ * The answer to a command its time limit ended: what it wrote, then why it ended and where long-lived work runs.
+ * @param {string} output
+ */
+function sessionCommandTimeoutFailure(output = "") {
+  const message = `This command reached the ${AGENT_SESSION_COMMAND_TIMEOUT_MINUTES}-minute limit of an agent command ` +
+    "and was stopped, with every process it started. Split long work into shorter commands. " + LONG_LIVED_PROCESS_HOMES;
+  const written = String(output || "");
+  return commandLineFailure(message, "vibe64_agent_session_command_timeout", {
+    exitCode: 124,
+    stderr: `${written}${written && !written.endsWith("\n") ? "\n" : ""}${message}\n`
+  });
+}
+
+/**
+ * The notice for a database server among a running command's processes.
+ * @param {{ executable: string, pid: number }} server
+ */
+function databaseServerInCommandNotice({ executable, pid }) {
+  return `Vibe64: an agent command of this session started a database server (${executable}, process ${pid}). It runs ` +
+    "inside that command, so it ends when the command ends, at the latest at the command's " +
+    `${AGENT_SESSION_COMMAND_TIMEOUT_MINUTES}-minute limit, and every test using it fails then. Stop it and move ` +
+    "its tests to the session's own database server. " + LONG_LIVED_PROCESS_HOMES;
+}
+
+/**
  * Waits for a started session command's result, at most the command's time limit; meanwhile a planned restart's
  * record names it among what is running.
  * @param {string} resultPath
- * @param {{ sessionId: string, command: string, signal?: AbortSignal }} input
+ * @param {{ sessionId: string, command: string, signal?: AbortSignal, timeoutMs?: number }} input timeoutMs is the
+ *   command's limit, AGENT_SESSION_COMMAND_TIMEOUT_MS unless a test gives a shorter one
  */
-async function waitForSessionCommand(resultPath, { sessionId, command, signal }) {
+async function waitForSessionCommand(resultPath, { sessionId, command, signal, timeoutMs = AGENT_SESSION_COMMAND_TIMEOUT_MS }) {
   const tracked = plannedRestart().trackCommand(toText(sessionId), command);
   try {
-    return await waitForCommandResult(resultPath, { signal, timeoutMs: AGENT_SESSION_COMMAND_TIMEOUT_MS });
+    return await waitForCommandResult(resultPath, { signal, timeoutMs });
   } finally {
     tracked.end();
   }
@@ -430,6 +499,8 @@ export {
   commandRunnerSource,
   commandRunsHostPath,
   commandSocketHostPath,
+  createCommandRun,
+  databaseServerInCommandNotice,
   commandWrapperSource,
   decodedCommand,
   readBoundedFile,
@@ -438,6 +509,7 @@ export {
   SESSION_RENAME_CONTROL_ENV,
   sessionCommandCwd,
   sessionRenameCommandSource,
+  sessionCommandTimeoutFailure,
   SESSION_COMMAND_FIELDS,
   VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV,
@@ -446,6 +518,7 @@ export {
   VIBE64_AGENT_SESSION_COMMAND_TOKEN_ENV,
   VIBE64_AGENT_SESSION_RUN_COMMAND_ENV,
   VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV,
+  VIBE64_AGENT_SESSION_RUN_PID_ENV,
   VIBE64_AGENT_SESSION_RUN_RESULT_ENV,
   VIBE64_WRAPPER_ENV,
   waitForCommandResult,

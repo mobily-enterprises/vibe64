@@ -12,7 +12,8 @@ import { decodedCommand } from "./agentSessionCommandRun.js";
 
 /**
  * Steers the session's running Main turn with Vibe64's note, for the person whose request it runs.
- * @typedef {(sessionId: string, message: string, options: { actor: object | null, projectSlug: string }) => Promise<unknown>} NoteAgent
+ * @typedef {(sessionId: string, message: string, options: { actor: object | null, projectSlug: string, nextTurn?: boolean })
+ *   => Promise<unknown>} NoteAgent nextTurn: when no turn is running, the note leads the next message (mainChatNote.js)
  */
 
 const MINUTE_MS = 60_000;

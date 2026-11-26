@@ -106,6 +106,16 @@ test("agent database command refreshes only its bound session schema", async () 
   assert.equal(otherSession.code, "vibe64_agent_database_command_session_unbound");
 });
 
+test("the database command's help names the session's test databases and why a command never runs a database server", async () => {
+  const command = createAgentDatabaseCommandService({ logger: silentLogger, project: project(), readDatabaseTools: () => null });
+  await command.bindSession("database-session");
+  const help = await command.run({ args: ["--help"], sessionId: "database-session" });
+  assert.equal(help.ok, true);
+  assert.match(help.stdout, /Never start mariadbd, mysqld or postgres in a command: a command ends after 30 minutes, with every process it started\./u);
+  assert.match(help.stdout, /TEST_DB_NAME for `jskit test --databases` \(npm test\), BROWSER_TEST_DB_NAME for browser workers\. Each test file or worker gets its own copy/u);
+  assert.match(help.stdout, /made from one schema snapshot and dropped when the run ends/u);
+});
+
 test("agent database overview exposes schema and authoring guidance only for its bound session", async () => {
   const projectRecord = project();
   let databaseTools = null;
