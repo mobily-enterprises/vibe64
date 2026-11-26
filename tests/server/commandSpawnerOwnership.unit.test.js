@@ -6,8 +6,8 @@ import test from "node:test";
 import { parse } from "@typescript-eslint/parser";
 
 // Every file of the editor and its packages that starts processes itself, with the number of times it uses what it
-// takes from child_process, node-pty or execa (each reference to an imported name, and each dynamic import or require
-// of one of them), and why. The editor's finite commands start in commandExecutor.js, through commandSpawner.js; the
+// takes from child_process, node-pty or execa (each reference to an imported name, and each dynamic import of one, or
+// call naming one, as require and createRequire's functions take it), and why. The editor's finite commands start in commandExecutor.js, through commandSpawner.js; the
 // rest of the editor starts only long-lived processes, once per owner, and one finite command that cannot wait: the
 // synchronous Git identity read. Programs that are not the editor are listed too. Any other use, a new one in a listed
 // file included, fails here, so a second way to start a command cannot grow unseen. Prose elsewhere points here instead
@@ -89,7 +89,8 @@ function moduleName(node) {
 }
 
 // The uses of what a file takes from a process module: every reference to a name it imports from one (calls,
-// aliases and namespace members alike), and every dynamic import or require of one.
+// aliases and namespace members alike), every dynamic import of one, and every call naming one (require, or a function
+// createRequire made).
 function processUses(source) {
   const program = parse(source, { ecmaVersion: "latest", range: false, sourceType: "module" });
   const names = new Set();
@@ -103,8 +104,7 @@ function processUses(source) {
     if (!node || typeof node.type !== "string") return;
     if (node.type === "ImportDeclaration") return;
     if (node.type === "ImportExpression" && moduleName(node.source)) uses += 1;
-    if (node.type === "CallExpression" && node.callee.type === "Identifier" && node.callee.name === "require" &&
-      moduleName(node.arguments[0])) uses += 1;
+    if (node.type === "CallExpression" && moduleName(node.arguments[0])) uses += 1;
     const isName = (parent?.type === "MemberExpression" && key === "property" && !parent.computed) ||
       (["Property", "MethodDefinition", "PropertyDefinition"].includes(parent?.type) && key === "key" && !parent.computed);
     if (node.type === "Identifier" && names.has(node.name) && !isName) uses += 1;
@@ -142,10 +142,11 @@ test("every file that starts processes itself is listed with its number of uses 
   }
 });
 
-test("the count follows the code: a dynamic import, a require, an alias and a namespace member each count, a mention in text does not", () => {
+test("the count follows the code: a dynamic import, a require, a createRequire function, an alias and a namespace member each count, a mention in text does not", () => {
   assert.equal(processUses(`import { spawn } from "node:child_process"; spawn("a"); const start = spawn;`), 2);
   assert.equal(processUses(`import * as cp from "child_process"; cp.execFile("a"); cp.spawn("b");`), 2);
   assert.equal(processUses(`const cp = await import("node:child_process");`), 1);
   assert.equal(processUses(`const cp = require("child_process");`), 1);
+  assert.equal(processUses(`const load = createRequire(import.meta.url); load("node-pty").spawn("sh");`), 1);
   assert.equal(processUses(`// child_process spawn\nconst text = "spawn(child_process)"; const o = { spawn: 1 }; o.spawn;`), 0);
 });

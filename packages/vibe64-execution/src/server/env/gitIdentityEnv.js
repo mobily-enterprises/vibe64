@@ -149,9 +149,9 @@ function gitConfigReadOptions(cwd, env) {
 /**
  * Exit 1 means no user.name or user.email is set. Any other failure yields
  * null values; `transient` marks a read that never finished, as below. This
- * read starts git itself, as one of the few long-lived or synchronous starters
- * commandSpawner.js lists: a terminal's environment is built synchronously and
- * cannot wait for the spawner's reply.
+ * read starts git itself, the one finite command that does
+ * (tests/server/commandSpawnerOwnership.unit.test.js lists it): a terminal's
+ * environment is built synchronously and cannot wait for the spawner's reply.
  */
 function readGitConfigIdentitySync(cwd, env) {
   const result = spawnSync("git", GIT_CONFIG_IDENTITY_ARGS, { ...gitConfigReadOptions(cwd, env), encoding: "utf8" });
