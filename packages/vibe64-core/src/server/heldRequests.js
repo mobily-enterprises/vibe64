@@ -15,9 +15,15 @@ import { currentProjectScopeKey } from "./projectRequestContext.js";
  * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} options.logger
  * @param {{ code: string, error: string }} options.notFollowed
  * @param {string[]} options.scopeNames the log lines' names for the leading scope parts, such as `sessionId`; a
- *   part without a name is not logged
+ *   part without a name is not logged. Required: `[]` when the scope has none.
  */
 function createHeldRequests({ component, heldAs, logger, notFollowed, scopeNames }) {
+  if (!Array.isArray(scopeNames)) {
+    throw new TypeError(
+      `${component}'s held requests need scopeNames: pass scopeNames: [] or the scope's id names, `
+      + "such as [\"sessionId\"]."
+    );
+  }
   const held = createHeldWork({ component, logger });
 
   /**
