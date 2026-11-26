@@ -316,6 +316,7 @@ function inspectDetachedExecution(executionId) {
 export {
   inspectDetachedExecution,
   drainProcessGroup,
+  signalProcessGroup,
   processGroupMembers,
   runDetachedCommand,
   stopDetachedExecution

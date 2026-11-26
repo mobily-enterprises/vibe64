@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { pathInsideOrEqual } from "../normalize.js";
+import { signalProcessGroup } from "./detached.js";
 import {
   beginTerminalStop,
   markTerminalExited,
@@ -42,16 +43,13 @@ function scheduleDetachedCleanup(session = {}, namespace = "default") {
 /**
  * Closes a terminal session: stops its process, waits for its hooks and forgets it.
  * @param {string} id
- * @param {{ namespace?: string, reason?: string, termTimeoutMs?: number }} [options] reason: why it closes, which its
- *   stop and close hooks receive (`close` by default; a Preview run another start replaces closes
- *   `superseded:<that start's id>`); termTimeoutMs: how long its process group has after SIGTERM before SIGKILL (3 s
- *   by default; the server's stop gives its drain)
+ * @param {{ namespace?: string, reason?: string }} [options] reason: why it closes, which its stop and close hooks
+ *   receive (`close` by default; a Preview run another start replaces closes `superseded:<that start's id>`)
  */
 async function closeTerminalSession(id, options = {}) {
   const {
     namespace = "default",
-    reason = "close",
-    termTimeoutMs
+    reason = "close"
   } = options;
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
@@ -69,7 +67,7 @@ async function closeTerminalSession(id, options = {}) {
     const fatalFailures = [];
     clearDetachedCleanupTimer(session);
     if (!session.processExited) {
-      const stopped = await beginTerminalStop(session, reason, { termTimeoutMs });
+      const stopped = await beginTerminalStop(session, reason);
       if (stopped.failures.length) {
         throw terminalCloseAggregateFailure(session, stopped.failures);
       }
@@ -121,7 +119,7 @@ async function closeTerminalSession(id, options = {}) {
   }
 }
 
-async function closeTerminalSessionTargets(targets = [], { termTimeoutMs } = {}) {
+async function closeTerminalSessionTargets(targets = []) {
   const uniqueTargets = [...new Map(targets.map((target) => {
     const normalizedTarget = {
       id: String(target?.id || ""),
@@ -131,8 +129,7 @@ async function closeTerminalSessionTargets(targets = [], { termTimeoutMs } = {})
   })).values()].filter((target) => target.id);
   const results = await Promise.allSettled(uniqueTargets.map((target) => (
     closeTerminalSession(target.id, {
-      namespace: target.namespace,
-      termTimeoutMs
+      namespace: target.namespace
     })
   )));
   let closed = 0;
@@ -217,22 +214,34 @@ async function closeTerminalSessionsForCwdRoot(cwdRoot = "") {
   };
 }
 
-/**
- * Closes every terminal session whose namespace starts with the prefix ("" closes them all).
- * @param {string} [namespacePrefix]
- * @param {{ termTimeoutMs?: number }} [options] how long each process group has after SIGTERM before SIGKILL
- */
-async function closeTerminalSessionsForNamespacePrefix(namespacePrefix = "", options = {}) {
+async function closeTerminalSessionsForNamespacePrefix(namespacePrefix = "") {
   const closed = await closeTerminalSessionTargets(listStoredSessions({
     namespacePrefix
   }).map((entry) => ({
     id: entry.session.id,
     namespace: entry.namespace
-  })), options);
+  })));
   return {
     ok: true,
     closed
   };
+}
+
+/**
+ * Sends SIGKILL now, without waiting, to the process group of every terminal under the prefix whose process still
+ * runs, and returns how many it signalled. A close already begun sees its group end. Never throws.
+ */
+function killTerminalSessionsForNamespacePrefix(namespacePrefix = "") {
+  let killed = 0;
+  for (const { session } of listStoredSessions({ namespacePrefix })) {
+    if (session.processExited || !session.terminal?.pid || process.platform === "win32") continue;
+    try {
+      if (signalProcessGroup(session.terminal.pid, "SIGKILL")) killed += 1;
+    } catch {
+      // Not this process's to signal: its close reports what is left.
+    }
+  }
+  return killed;
 }
 
 export {
@@ -240,5 +249,6 @@ export {
   closeTerminalSessionsForCwdRoot,
   closeTerminalSessionsForNamespace,
   closeTerminalSessionsForNamespacePrefix,
+  killTerminalSessionsForNamespacePrefix,
   scheduleDetachedCleanup
 };

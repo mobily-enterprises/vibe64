@@ -11,6 +11,7 @@ import {
   closeTerminalSessionsForNamespace,
   closeTerminalSessionsForNamespacePrefix,
   freezeTerminalNamespaceAdmission,
+  killTerminalSessionsForNamespacePrefix,
   listTerminalSessions,
   readTerminalSession,
   resizeTerminalSession,
@@ -583,6 +584,26 @@ test("terminal close escalates signals when the child ignores graceful terminati
     assert.equal(readTerminalSession(session.id, { namespace }).ok, false);
   } finally {
     await closeTerminalSessionsForNamespacePrefix(namespace);
+  }
+});
+
+test("a stop's drain SIGKILLs at once the terminals still running, and leaves an exited terminal's process group alone", async () => {
+  const prefix = `terminal-drain-kill-${crypto.randomUUID()}`;
+  const stubborn = startTerminalSession({
+    args: ["-e", "process.on('SIGHUP', () => {}); process.on('SIGTERM', () => {}); console.log(`PID:${process.pid}`); setInterval(() => {}, 1000);"],
+    command: process.execPath,
+    namespace: `${prefix}-stubborn`
+  });
+  // An exited terminal's group id may belong to another process group by now: it must never be signalled.
+  const exited = startTerminalSession({ args: ["-e", "console.log('done')"], command: process.execPath, namespace: `${prefix}-exited` });
+  try {
+    await waitFor(() => /PID:\d+/u.test(readTerminalSession(stubborn.id, { namespace: `${prefix}-stubborn` }).output));
+    await waitFor(() => readTerminalSession(exited.id, { namespace: `${prefix}-exited` }).status === "exited");
+    const pid = Number(/PID:(\d+)/u.exec(readTerminalSession(stubborn.id, { namespace: `${prefix}-stubborn` }).output)[1]);
+    assert.equal(killTerminalSessionsForNamespacePrefix(prefix), 1, "only the running terminal is signalled");
+    await waitFor(() => !processIsAlive(pid));
+  } finally {
+    await closeTerminalSessionsForNamespacePrefix(prefix);
   }
 });
 

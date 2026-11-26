@@ -42,6 +42,7 @@ import {
   closeTerminalSessionsForCwdRoot,
   closeTerminalSessionsForNamespace,
   closeTerminalSessionsForNamespacePrefix,
+  killTerminalSessionsForNamespacePrefix,
   scheduleDetachedCleanup
 } from "./terminalSessionClosing.js";
 import {
@@ -430,6 +431,7 @@ export {
   closeTerminalSessionsForCwdRoot,
   closeTerminalSessionsForNamespace,
   closeTerminalSessionsForNamespacePrefix,
+  killTerminalSessionsForNamespacePrefix,
   listTerminalSessions,
   readTerminalSession,
   freezeTerminalNamespaceAdmission,

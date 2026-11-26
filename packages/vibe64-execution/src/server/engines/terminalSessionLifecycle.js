@@ -208,16 +208,10 @@ function markTerminalExited(session) {
   });
 }
 
-/**
- * Drains the terminal's process group once: SIGTERM, then SIGKILL after `termTimeoutMs` (detached.js's default when
- * not given). The first caller's timing holds for every later one.
- * @param {object} session
- * @param {{ termTimeoutMs?: number }} [drain]
- */
-function beginTerminalScopeDrain(session, drain = {}) {
+function beginTerminalScopeDrain(session) {
   if (!session.scopeDrainCompletion) {
     session.scopeDrainCompletion = (async () => {
-      if (process.platform !== "win32" && !await drainProcessGroup(session.terminal.pid, drain)) {
+      if (process.platform !== "win32" && !await drainProcessGroup(session.terminal.pid)) {
         const error = new Error(`Terminal execution scope did not become empty: ${session.id}`);
         error.code = "terminal_execution_drain_failed";
         throw error;
@@ -245,12 +239,7 @@ async function settleTerminalExitStatus(session) {
   markTerminalExited(session);
 }
 
-/**
- * @param {object} session
- * @param {string} [reason]
- * @param {{ termTimeoutMs?: number }} [drain] how long its process group has after SIGTERM before SIGKILL
- */
-async function beginTerminalStop(session, reason = "stop", drain = {}) {
+async function beginTerminalStop(session, reason = "stop") {
   if (!session || session.processExited) {
     return {
       failures: []
@@ -283,7 +272,7 @@ async function beginTerminalStop(session, reason = "stop", drain = {}) {
     }
   }
   try {
-    await beginTerminalScopeDrain(session, drain);
+    await beginTerminalScopeDrain(session);
   } catch (error) {
     failures.push(reportTerminalLifecycleFailure(session, error));
   }

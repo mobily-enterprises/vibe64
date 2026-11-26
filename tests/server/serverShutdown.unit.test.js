@@ -230,8 +230,9 @@ test("signal shutdown settles capability runtime before Fastify while terminal c
   ]);
 });
 
-test("the drain ends the commands that ran before the stop began, and the stop ends every command left before it exits", async () => {
+test("the drain SIGKILLs the runtime terminals and ends the commands that ran before the stop began, and the stop ends every command left before it exits", async () => {
   const ended = [];
+  const drained = [];
   const timers = [];
   const logged = [];
   const exits = [];
@@ -253,10 +254,14 @@ test("the drain ends the commands that ran before the stop began, and the stop e
     drainMs: 600,
     async endCommands(startedBefore) {
       ended.push(startedBefore);
+      drained.push(`commands before ${startedBefore}`);
       return { ended: 1 };
     },
     exitProcess(code) {
       exits.push(code);
+    },
+    killTerminals() {
+      drained.push("terminals");
     },
     now: () => 5000,
     setTimeoutFn(callback, ms) {
@@ -269,7 +274,10 @@ test("the drain ends the commands that ran before the stop began, and the stop e
   const closing = handler("SIGTERM");
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(timers.map(({ ms }) => ms), [600, 850], "the drain, then the deadline");
+  assert.deepEqual(drained, [], "nothing is killed before the drain ends");
   timers[0].callback();
+  // Both in the drain timer's own callback, so a deadline that fires right after it finds them done.
+  assert.deepEqual(drained, ["terminals", "commands before 5000"], "the drain SIGKILLs the terminals and ends the commands at once");
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(ended, [5000], "the drain ends what was running when the stop began");
   assert.deepEqual(exits, [], "the stop's own work goes on");
