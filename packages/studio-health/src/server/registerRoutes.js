@@ -10,6 +10,7 @@ import {
   ACTION_CHECK_STUDIO_TOOLS,
   ACTION_LIST_CRASHES,
   ACTION_READ_CRASH_SUMMARY,
+  ACTION_READ_PLANNED_RESTART,
   ACTION_READ_STUDIO_HEALTH
 } from "./studioHealthActions.js";
 
@@ -55,6 +56,13 @@ function registerRoutes(http, { localhostCheckBypassed }) {
     buildInput: requestQuery,
     query: studioHealthQueryInputValidator,
     summary: "Read the crashes nobody has acknowledged yet, for the editor's banner."
+  });
+
+  routes.actionRoute("GET", "/planned-restart", {
+    actionId: ACTION_READ_PLANNED_RESTART,
+    buildInput: requestQuery,
+    query: studioHealthQueryInputValidator,
+    summary: "Read the host's planned restart notice in force, and what the last planned restart stopped."
   });
 
   routes.actionRoute("GET", "/crashes", {

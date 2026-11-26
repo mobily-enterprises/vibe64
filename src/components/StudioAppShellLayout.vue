@@ -1,4 +1,5 @@
 <template>
+  <Vibe64PlannedRestartBanner />
   <Vibe64CrashBanner />
   <v-app-bar
     border
@@ -49,6 +50,7 @@ import { useShellAppBar } from "@jskit-ai/shell-web/client/composables/useShellA
 import Vibe64AiTaskTrayTarget from "./Vibe64AiTaskTrayTarget.vue";
 import Vibe64ColleagueLauncherTarget from "./Vibe64ColleagueLauncherTarget.vue";
 import Vibe64CrashBanner from "./studio/Vibe64CrashBanner.vue";
+import Vibe64PlannedRestartBanner from "./studio/Vibe64PlannedRestartBanner.vue";
 import Vibe64LearningButton from "./learning/Vibe64LearningButton.vue";
 
 const SWIPE_MIN_DISTANCE_PX = 64;

@@ -2,6 +2,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { saveWorkReadyTitle } from "@/lib/vibe64SessionRepositoryWorkState.js";
 import { newerSavedAnswer, newerSavedText } from "@/lib/vibe64NewerSavedText.js";
+import { usePlannedRestart } from "@/composables/usePlannedRestart.js";
 
 const SAVE_WORK_STAGE_LABELS = Object.freeze({ published: "pushed", publishing: "pushing" });
 
@@ -42,6 +43,7 @@ function useVibe64SessionSaveWork(props, {
   sessionId,
   sessionInteractionDisabled
 }) {
+  const plannedRestart = usePlannedRestart();
   const saveWorkConfirmOpen = ref(false);
   const saveWorkReview = ref(null);
   const saveWorkConnectedResults = ref([]);
@@ -108,6 +110,7 @@ function useVibe64SessionSaveWork(props, {
   ));
   // Update and Save run while the AI works: Save asks first, since it includes the AI's unfinished changes.
   const updateWorkDisabled = computed(() => Boolean(
+    plannedRestart.active.value ||
     sessionInteractionDisabled.value ||
     !repositoryAssistantStateSettled.value ||
     composerSending.value ||
@@ -132,6 +135,8 @@ function useVibe64SessionSaveWork(props, {
     props.active && sessionId.value
   ));
   const saveWorkTitle = computed(() => {
+    // The host's planned restart pauses Save and Update until it.
+    if (plannedRestart.active.value) return plannedRestart.pausedLabel.value;
     if (!repositoryAssistantStateSettled.value) {
       if (props.agentConnectionStatus === "initializing") {
         return "Checking assistant activity before saving or updating";
