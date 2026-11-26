@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import childProcess, { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -1335,6 +1335,54 @@ test("Studio project context reads project records and ignores source config as 
         fullName: "example/wrong-source-config"
       }
     }, null, 2)}\n`);
+  });
+});
+
+test("concurrent reads of a catalogue project share one read made after they all called, as a realtime publish's sockets do", async (t) => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const context = createStudioProjectContext({ explicitProjectsRoot: projectsRoot, env: {}, home: root });
+    const recordPath = context.projectRecordPathForSlug("shop");
+    const writeRecord = async (fullName) => {
+      await writeTestFile(`${recordPath}.next`, `${JSON.stringify({
+        repository: { defaultBranch: "main", github: { fullName }, mode: PROJECT_REPOSITORY_MODE_GITHUB }
+      })}\n`);
+      await rename(`${recordPath}.next`, recordPath);
+    };
+    await mkdir(path.join(projectsRoot, "shop"), { recursive: true });
+    await writeRecord("example/first");
+    let recordReads = 0;
+    const original = fs.promises.readFile;
+    t.mock.method(fs.promises, "readFile", (file, ...rest) => {
+      if (path.resolve(String(file)) === recordPath) recordReads += 1;
+      return original(file, ...rest);
+    });
+    syncBuiltinESMExports();
+    try {
+      const deliver = async (sockets) => {
+        const before = recordReads;
+        const reads = await Promise.all(Array.from({ length: sockets }, () => context.readWorkspaceProject({ slug: "shop" })));
+        return { names: [...new Set(reads.map(({ project }) => project.githubRepository.fullName))], reads: recordReads - before };
+      };
+      const few = await deliver(2);
+      const many = await deliver(20);
+      assert.ok(few.reads > 0);
+      assert.equal(many.reads, few.reads, "20 sockets read the project as often as 2");
+      assert.deepEqual(many.names, ["example/first"]);
+
+      // A change made before a call is what that call sees, even while an earlier call's read is under way.
+      await writeRecord("example/second");
+      assert.deepEqual((await deliver(5)).names, ["example/second"]);
+      const earlier = context.readWorkspaceProject({ slug: "shop" });
+      await writeRecord("example/third");
+      assert.equal((await context.readWorkspaceProject({ slug: "shop" })).project.githubRepository.fullName, "example/third");
+      await earlier;
+      const shared = await Promise.all([1, 2].map(() => context.readWorkspaceProject({ slug: "shop" })));
+      assert.notEqual(shared[0].project, shared[1].project, "each caller gets its own copy");
+    } finally {
+      t.mock.restoreAll();
+      syncBuiltinESMExports();
+    }
   });
 });
 
