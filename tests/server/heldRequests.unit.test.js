@@ -7,7 +7,13 @@ import { createHeldRequests } from "@local/vibe64-core/server/heldRequests";
 // sends; a script, the helper, Colleague's tools or a page cached before the release send none.
 test("a held request with no request id waits for its work, is never joined or replayed, and a repeat of one starts nothing", async () => {
   const notFollowed = { code: "test_not_followed", error: "Not followed." };
-  const held = createHeldRequests({ component: "test.held_requests", heldAs: "creating", logger: silentLogger, notFollowed });
+  const held = createHeldRequests({
+    component: "test.held_requests",
+    heldAs: "creating",
+    logger: silentLogger,
+    notFollowed,
+    scopeNames: ["sessionId"]
+  });
   const runs = [];
   const work = async (request, { stage, signal }) => {
     stage("making");
