@@ -10,6 +10,9 @@ import { NO_SERVER_RUN } from "./turnInterruptions.js";
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
 /** @typedef {import("./types.js").ConversationRuntime} ConversationRuntime */
 
+// A service without a planned restart reader (as in tests) records no planned restart's stop.
+const NO_PLANNED_RESTART = Object.freeze({ recordStop() {}, close() {} });
+
 function normalizeAgentProviderId(value = "") {
   return String(value || "").trim().toLowerCase();
 }
@@ -29,6 +32,8 @@ function normalizeAgentProviderId(value = "") {
  * @param {SessionAgentManager} dependencies.sessionAgent
  * @param {SessionConversations} dependencies.sessionConversations
  * @param {SessionNaming} dependencies.sessionNaming
+ * @param {{ recordStop: () => void, close: () => void }} [dependencies.plannedRestart] the host's planned restart,
+ *   whose record names what this stop cuts
  */
 function createServiceShutdown({
   state,
@@ -39,7 +44,8 @@ function createServiceShutdown({
   projectServices,
   sessionAgent,
   sessionConversations,
-  sessionNaming
+  sessionNaming,
+  plannedRestart = NO_PLANNED_RESTART
 }) {
   let shutdownStop = null;
   let shutdownBegun = null;
@@ -53,6 +59,8 @@ function createServiceShutdown({
    * nothing, and an engine that cannot begin is reported by the stop.
    */
   function beginShutdown() {
+    // First, while nothing has stopped yet: a planned restart's record names what this stop cuts.
+    plannedRestart.recordStop();
     if (!shutdownBegun) {
       // Every session this server wrote a timeline line for says why its turns stop here.
       recordSessionTimelineEventForActiveSessions({ kind: "server", event: "stopping", reason: "server-shutdown" });
@@ -70,6 +78,7 @@ function createServiceShutdown({
    */
   async function close() {
     beginShutdown();
+    plannedRestart.close();
     state.lifecycle.closing = true;
     if (state.lifecycle.goalLimitReset) state.lifecycle.goalLimitReset.close();
     await Promise.allSettled(state.shutdownWork);

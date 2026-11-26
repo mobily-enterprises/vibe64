@@ -364,10 +364,7 @@ function createAssistantRoutingOutcomes({
     return { context, state, save: savesAutomatically(context.session.metadata), ask: true };
   }
 
-  /**
-   * Main chat's owed step decided again outside a turn's end: when the planned restart that paused it did not happen.
-   * @param {string} sessionId
-   */
+  /** Main chat's owed step, decided again when the planned restart that paused it did not happen. */
   async function decideOwed(sessionId) {
     await exclusiveAtTurnEnd(sessionId, {}, async context => {
       if (admission.isClosing() || routingState.running.has(records.keyFor(sessionId, context))) return;

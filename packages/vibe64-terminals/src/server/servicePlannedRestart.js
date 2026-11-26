@@ -8,7 +8,7 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { configurePlannedRestart } from "@local/vibe64-core/server/plannedRestart";
 import { PLANNED_RESTART_NOTICE_FILE_SETTING } from "@local/vibe64-core/server/plannedRestartNotice";
 import { assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
-import { MAIN_CHAT_NOTE_TURN_METADATA_KEY } from "./mainChatNote.js";
+import { MAIN_CHAT_NOTE_TURN_METADATA_KEY, createMainChatNote } from "./mainChatNote.js";
 import { createPlannedRestartSteering } from "./plannedRestartSteering.js";
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 import { requestWasWorking, sessionWasWorking } from "./serviceTurnRecovery.js";
@@ -24,33 +24,25 @@ function steerOutcome(promise) {
 }
 
 /**
- * @param {object} dependencies
- * @param {import("@jskit-ai/kernel/server/types").RuntimeEnv} dependencies.env
- * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} dependencies.logger
- * @param {string} dependencies.systemRoot the editor's own state, where each notice's record is kept
- * @param {object} dependencies.state
- * @param {object} dependencies.project
- * @param {object} dependencies.sessionAccess
- * @param {object} dependencies.assistantContext
- * @param {object} dependencies.sessionAgent
- * @param {Function} dependencies.noteMainChat
- * @param {Function} dependencies.startTemporaryConversationTurn
- * @param {(sessionId: string) => Promise<void>} dependencies.decideOwed Main chat's step a planned restart paused,
- *   decided again
+ * @param {object} workspace
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeEnv} workspace.env
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} workspace.logger
+ * @param {import("./types.js").ServiceState} workspace.state
+ * @param {import("./types.js").ProjectService} workspace.project
+ * @param {object} workspace.sessionAccess the service's session access (serviceSessionAccess.js)
+ * @param {string} workspace.systemRoot the editor's own state, where each notice's record is kept
+ * @param {object} chats
+ * @param {object} chats.assistantContext the service's assistant context (serviceAssistantContext.js)
+ * @param {import("./types.js").SessionAgentManager} chats.sessionAgent
+ * @param {{ sendAgentMessage: Function, startTemporaryConversationTurn: Function }} chats.assistant
+ * @param {{ decideOwed: (sessionId: string) => Promise<void> }} chats.assistantRouting Main chat's step a planned
+ *   restart paused, decided again
  */
-function createServicePlannedRestart({
-  env,
-  logger,
-  systemRoot,
-  state,
-  project,
-  sessionAccess,
-  assistantContext,
-  sessionAgent,
-  noteMainChat,
-  startTemporaryConversationTurn,
-  decideOwed
-}) {
+function createServicePlannedRestart(
+  { env, logger, state, project, sessionAccess, systemRoot },
+  { assistantContext, sessionAgent, assistant, assistantRouting }
+) {
+  const noteMainChat = createMainChatNote({ assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent });
   const reader = configurePlannedRestart({
     noticeFile: String(env?.[PLANNED_RESTART_NOTICE_FILE_SETTING] || "").trim(),
     recordsRoot: systemRoot ? path.join(systemRoot, PLANNED_RESTART_RECORDS_DIR) : "",
@@ -89,12 +81,12 @@ function createServicePlannedRestart({
       steer: message => steerOutcome(noteMainChat(sessionId, { message }, mainOptions)),
       // The restart did not happen: Main chat hears so, and a step it paused starts now.
       tell: message => noteMainChat(sessionId, { message, nextTurn: true }, mainOptions),
-      reopen: () => decideOwed(sessionId)
+      reopen: () => assistantRouting.decideOwed(sessionId)
     });
     for (const record of await context.runtime.store.listSessionConversations(sessionId)) {
       if (record.state === "closing") continue;
       const options = await actorOptions(record.routingMetadata);
-      const steer = message => steerOutcome(startTemporaryConversationTurn(sessionId, {
+      const steer = message => steerOutcome(assistant.startTemporaryConversationTurn(sessionId, {
         conversationId: record.conversationId,
         message,
         messageId: randomUUID(),
@@ -125,35 +117,46 @@ function createServicePlannedRestart({
     if (listed?.ok === false) throw new Error(listed.error || "The projects could not be listed.");
     for (const projectRecord of openProjectRuntimeRecords(listed)) {
       if (state.lifecycle.closing) return;
-      await project.runInProjectContext(projectRecord.slug, async () => {
+      const projectSlug = projectRecord.slug;
+      await project.runInProjectContext(projectSlug, async () => {
         for (const session of await sessionAccess.listOpenProjectRuntimeSessions()) {
-          await visitSession(session, visit).catch(error => warn(error, { projectSlug: projectRecord.slug, sessionId: session.sessionId },
-            "A session's chats could not be told about the planned restart."));
+          const fields = { projectSlug, sessionId: session.sessionId };
+          await visitSession(session, visit).catch(error => warn(error, fields, "A session's chats could not be told about the planned restart."));
         }
-      }).catch(error => warn(error, { projectSlug: projectRecord.slug }, "A project's chats could not be told about the planned restart."));
+      }).catch(error => warn(error, { projectSlug }, "A project's chats could not be told about the planned restart."));
     }
   }
 
   const steering = createPlannedRestartSteering({ reader, forEachChat, logger });
   void reader.start();
 
-  return Object.freeze({
-    reader,
-    /**
-     * The server's recovery of the turns it found, which starts before any chat is told about a notice.
-     * @param {() => Promise<unknown>} recover
-     */
-    afterRecoveryStarts: recover => () => {
+  /**
+   * The server's recovery of the turns it found, which starts before any chat is told about a notice.
+   * @param {() => Promise<unknown>} recover
+   */
+  function afterRecoveryStarts(recover) {
+    return () => {
       const recovering = recover();
       serverReady.resolve();
       return recovering;
-    },
-    /** As the editor stops: what it stops, in the notice's record. */
-    recordStop: () => reader.recordStop(),
-    close() {
-      steering.close();
-      reader.stop();
-    }
+    };
+  }
+
+  /** As the editor stops: what it stops, in the notice's record. */
+  function recordStop() {
+    reader.recordStop();
+  }
+
+  function close() {
+    steering.close();
+    void reader.stop();
+  }
+
+  return Object.freeze({
+    reader,
+    afterRecoveryStarts,
+    recordStop,
+    close
   });
 }
 

@@ -7,6 +7,7 @@ import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { prepareSessionTempFolder } from "@local/vibe64-runtime/server/sessionTempFolder";
 import { agentControlIdentitySource } from "@local/vibe64-execution/server";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
+import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
 import { commandLineFailure } from "./commandFailure.js";
 
 const AGENT_SESSION_COMMAND_NAME = "vibe64-session-command";
@@ -367,6 +368,21 @@ async function waitForCommandResult(resultPath = "", options = {}) {
   throw error;
 }
 
+/**
+ * Waits for a started session command's result, at most the command's time limit; meanwhile a planned restart's
+ * record names it among what is running.
+ * @param {string} resultPath
+ * @param {{ sessionId: string, command: string, signal?: AbortSignal }} input
+ */
+async function waitForSessionCommand(resultPath, { sessionId, command, signal }) {
+  const tracked = plannedRestart().trackCommand(toText(sessionId), command);
+  try {
+    return await waitForCommandResult(resultPath, { signal, timeoutMs: AGENT_SESSION_COMMAND_TIMEOUT_MS });
+  } finally {
+    tracked.end();
+  }
+}
+
 export {
   AGENT_SESSION_COMMAND_CONTRACT_VERSION,
   AGENT_SESSION_COMMAND_NAME,
@@ -388,5 +404,6 @@ export {
   VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV,
   VIBE64_AGENT_SESSION_RUN_RESULT_ENV,
   VIBE64_WRAPPER_ENV,
-  waitForCommandResult
+  waitForCommandResult,
+  waitForSessionCommand
 };

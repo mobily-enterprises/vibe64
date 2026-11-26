@@ -3,6 +3,9 @@ import { crashMessage, crashTurnsText } from "@local/vibe64-core/shared/crashTex
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const pad = (value) => String(value).padStart(2, "0");
 
+/** A time's "04:18" in the viewer's own zone. @param {Date} at */
+const localClockText = (at) => `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+
 /**
  * A crash's time in the viewer's own zone, as HH:MM, with the day before it when that is not today
  * ("23 Nov 04:18"), and the year when that is not this year.
@@ -12,7 +15,7 @@ const pad = (value) => String(value).padStart(2, "0");
 function crashTimeText(iso, now = new Date()) {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return "an unknown time";
-  const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  const time = localClockText(at);
   if (at.toDateString() === now.toDateString()) return time;
   const day = `${at.getDate()} ${MONTHS[at.getMonth()]}`;
   return at.getFullYear() === now.getFullYear() ? `${day} ${time}` : `${day} ${at.getFullYear()} ${time}`;
@@ -51,4 +54,4 @@ function crashMemberLine(record, count, now = new Date()) {
   return [lead, crashTurnsText(record), "The workspace owner can see what happened."].filter(Boolean).join(" ");
 }
 
-export { crashBannerHeadline, crashMemberLine, crashTimeText };
+export { crashBannerHeadline, crashMemberLine, crashTimeText, localClockText };

@@ -1,12 +1,12 @@
 // The words people read about the host's planned restart: the banner's countdown and reason, the "Paused until HH:MM"
 // on the controls it pauses, and after the restart what it stopped. Times are in the viewer's own zone.
 
-const pad = (value) => String(value).padStart(2, "0");
+import { localClockText } from "./vibe64CrashPresentation.js";
 
 /** "07:40" in the viewer's zone, or "" for a time that does not parse. */
 function plannedRestartClock(iso) {
   const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? "" : `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  return Number.isNaN(at.getTime()) ? "" : localClockText(at);
 }
 
 /** "in 4 minutes", "in 1 minute", "in under a minute" or "now". */

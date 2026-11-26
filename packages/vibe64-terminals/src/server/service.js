@@ -79,6 +79,24 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
 }
 
 /**
+ * Logs one step of a message's routing time.
+ * @param {RuntimeLogger} logger
+ * @param {{ elapsedMs: number }} event
+ */
+function logRoutingTiming(logger, event) {
+  // Timing is diagnostic only; a failing log sink must not fail the send.
+  try {
+    logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
+      event: "vibe64.agent_message.routing_timing",
+      component: "vibe64.agent_message",
+      ...event
+    }, "Assistant routing timing.");
+  } catch {
+    // Ignore: timing diagnostics are best-effort.
+  }
+}
+
+/**
  * @param {object} dependencies
  * @param {ActionCatalogue} dependencies.actions
  * @param {object} [dependencies.codexTerminalController] a host's Codex terminal settings
@@ -313,18 +331,7 @@ function createService({
      */
     // readable-check: allow optional-call - cycle: vibe64.sessions requires vibe64.terminals
     onPlanCompleted: (sessionId, input) => state.slots.planCompleted?.(sessionId, input) || "",
-    onTiming(event) {
-      // Timing is diagnostic only; a failing log sink must not fail the send.
-      try {
-        logOperationalEvent(logger, event.elapsedMs >= 1000 ? "warn" : "info", {
-          event: "vibe64.agent_message.routing_timing",
-          component: "vibe64.agent_message",
-          ...event
-        }, "Assistant routing timing.");
-      } catch {
-        // Ignore: timing diagnostics are best-effort.
-      }
-    },
+    onTiming: event => logRoutingTiming(logger, event),
     async dispatch(sessionId, input, context) {
       requireCompletedConversationRewind(context.session);
       await assistantPreparation.prepareAgentSkillsInsideAgentWrite(sessionId, context);
@@ -475,6 +482,11 @@ function createService({
     publishProjectRuntimeChanged,
     sessionAgent
   });
+  // The host's planned restart notice: every running AI turn is told, and the restart's record keeps what it stopped.
+  const plannedRestart = createServicePlannedRestart(
+    { env, logger, state, project, sessionAccess, systemRoot: codexProviderOptions.systemRoot },
+    { assistantContext, sessionAgent, assistant, assistantRouting }
+  );
   const shutdown = createServiceShutdown({
     state,
     serverRun,
@@ -484,24 +496,10 @@ function createService({
     projectServices,
     sessionAgent,
     sessionConversations,
-    sessionNaming
+    sessionNaming,
+    plannedRestart
   });
   const hostSlots = createServiceHostSlots({ state });
-  const noteMainChat = createMainChatNote({ assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent });
-  // The host's planned restart notice: every running AI turn is told, and the restart's record keeps what it stopped.
-  const plannedRestart = createServicePlannedRestart({
-    env,
-    logger,
-    systemRoot: codexProviderOptions.systemRoot,
-    state,
-    project,
-    sessionAccess,
-    assistantContext,
-    sessionAgent,
-    noteMainChat,
-    startTemporaryConversationTurn: assistant.startTemporaryConversationTurn,
-    decideOwed: sessionId => assistantRouting.decideOwed(sessionId)
-  });
 
   const terminalControls = createTerminalControls({
     readAgentScreen: (sessionId, terminalSessionId, options) => terminals.readAgentTerminal(sessionId, terminalSessionId, options),
@@ -551,16 +549,8 @@ function createService({
     workspaceSetupIsRunning: workspacePreparation.workspaceSetupIsRunning,
     workspaceSetupIsPrepared: workspacePreparation.workspaceSetupIsPrepared,
     waitForWorkspaceSetup: workspacePreparation.waitForWorkspaceSetup,
-    beginShutdown() {
-      // First, while nothing has stopped yet: a planned restart's record names what this stop cuts.
-      plannedRestart.recordStop();
-      return shutdown.beginShutdown();
-    },
-    async close() {
-      plannedRestart.recordStop();
-      plannedRestart.close();
-      return shutdown.close();
-    },
+    beginShutdown: shutdown.beginShutdown,
+    close: shutdown.close,
     openProjectRuntime: projectRuntime.openProjectRuntime,
     openProjectRuntimeForPage: createHeldProjectRuntimeOpen({ openProjectRuntime: projectRuntime.openProjectRuntime, logger }),
     noteProjectRuntimeActivity: projectRuntime.noteProjectRuntimeActivity,
@@ -667,7 +657,9 @@ function createService({
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,
     sessionAssistantWorking,
-    noteMainChat,
+    noteMainChat: createMainChatNote({
+      assistantContext, logger, sendAgentMessage: assistant.sendAgentMessage, sessionAgent
+    }),
     prepareAssistantChangeover: assistantPreparation.prepareAssistantChangeover,
     prepareRoutingSelection: assistantPreparation.prepareRoutingSelection,
     applyGoalSelection: goals.applyGoalSelection,

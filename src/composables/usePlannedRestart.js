@@ -44,17 +44,22 @@ function usePlannedRestartWatch() {
   const socket = useRealtimeSocket();
   const reconnected = () => void resource.reload();
   socket.on("connect", reconnected);
+  // The countdown's clock while a notice is in force, which also ends the notice here at its expiry, before the next read.
   let ticking = null;
+  const tick = () => { shared.now.value = Date.now(); };
+  function stopTicking() {
+    clearInterval(ticking);
+    ticking = null;
+  }
   watch(() => resource.data.value, (value) => {
     shared.status.value = value?.ok === true ? value : null;
-    clearInterval(ticking);
-    // The countdown's clock, which also ends the notice here at its expiry, before the next read.
-    ticking = shared.status.value?.active ? setInterval(() => { shared.now.value = Date.now(); }, 1000) : null;
-    shared.now.value = Date.now();
+    stopTicking();
+    if (shared.status.value?.active) ticking = setInterval(tick, 1000);
+    tick();
   }, { immediate: true });
   onScopeDispose(() => {
     socket.off("connect", reconnected);
-    clearInterval(ticking);
+    stopTicking();
   });
 }
 

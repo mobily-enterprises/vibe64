@@ -74,11 +74,10 @@ import {
   VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV,
   VIBE64_AGENT_SESSION_RUN_RESULT_ENV,
   VIBE64_WRAPPER_ENV,
-  waitForCommandResult
+  waitForSessionCommand
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { assistantPlanRole } from "./assistantRoutingRequests.js";
-import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
 import { sessionSourceState } from "./planSourceChanges.js";
 import { handPlanOver, refusedPlanChange } from "./assistantPlanHandoff.js";
 import { commandLineFailure } from "./commandFailure.js";
@@ -557,13 +556,8 @@ function createAgentSessionCommandService({
     const executions = sessionExecutions.get(toText(input.sessionId)) || new Set();
     executions.add(executionId);
     sessionExecutions.set(toText(input.sessionId), executions);
-    // A planned restart's record names the commands it stops.
-    const tracked = plannedRestart().trackCommand(toText(input.sessionId), command);
     try {
-      const exitCodeText = await waitForCommandResult(resultPath, {
-        signal: input.signal,
-        timeoutMs: AGENT_SESSION_COMMAND_TIMEOUT_MS
-      });
+      const exitCodeText = await waitForSessionCommand(resultPath, { ...input, command });
       const exitCode = Number.parseInt(exitCodeText, 10);
       const output = await readBoundedFile(outputPath).catch((error) => (
         error?.code === "ENOENT" ? "" : Promise.reject(error)
@@ -582,8 +576,6 @@ function createAgentSessionCommandService({
         reason: error?.code || "agent-session-command-failed"
       }).catch(() => null);
       throw error;
-    } finally {
-      tracked.end();
     }
   }
 

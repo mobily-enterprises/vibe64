@@ -32,6 +32,11 @@ function createPlannedRestartSteering({ reader, forEachChat, logger }) {
     event: `vibe64.planned_restart.${fields.event}`
   }, message);
 
+  /** A catch that logs what failed and goes on. */
+  const failed = (event, fields, message) => (error) => {
+    log("warn", { event, ...fields, error: error?.message }, message);
+  };
+
   /** Steers every running turn with the note, and records each chat told. */
   async function steerRunningTurns() {
     let steered = 0;
@@ -39,9 +44,9 @@ function createPlannedRestartSteering({ reader, forEachChat, logger }) {
       if (!chat.running) return;
       const message = reader.warning();
       if (!message) return;
-      const outcome = await chat.steer(message).catch(error => {
-        log("warn", { event: "steer_failed", sessionId: chat.sessionId, conversationId: chat.conversationId, error: error?.message },
-          "A running turn could not be told about the planned restart.");
+      const fields = { sessionId: chat.sessionId, conversationId: chat.conversationId };
+      const outcome = await chat.steer(message).catch((error) => {
+        failed("steer_failed", fields, "A running turn could not be told about the planned restart.")(error);
         return "not-sent";
       });
       // A steer that may have arrived counts as told: the restart's resume and its cancellation reach it too.
@@ -61,11 +66,10 @@ function createPlannedRestartSteering({ reader, forEachChat, logger }) {
       const fields = { sessionId: chat.sessionId, conversationId: chat.conversationId };
       if (told.has(chatKey(chat))) {
         reached += 1;
-        await chat.tell(PLANNED_RESTART_CANCELLED_NOTE).catch(error => log("warn", { event: "cancel_note_failed", ...fields,
-          error: error?.message }, "A chat could not be told that the planned restart didn't happen."));
+        await chat.tell(PLANNED_RESTART_CANCELLED_NOTE)
+          .catch(failed("cancel_note_failed", fields, "A chat could not be told that the planned restart didn't happen."));
       }
-      await chat.reopen().catch(error => log("warn", { event: "reopen_failed", ...fields, error: error?.message },
-        "A step the planned restart paused could not start; Continue starts it."));
+      await chat.reopen().catch(failed("reopen_failed", fields, "A step the planned restart paused could not start; Continue starts it."));
     });
     return reached;
   }
@@ -73,11 +77,14 @@ function createPlannedRestartSteering({ reader, forEachChat, logger }) {
   const unsubscribe = reader.onChange((event) => {
     const work = event.type === "started" ? steerRunningTurns()
       : event.type === "ended" ? tellNotHappened(event.record) : null;
-    void work?.catch(error => log("warn", { event: "notes_failed", error: error?.message },
-      "The AI turns could not be told about the planned restart."));
+    void work?.catch(failed("notes_failed", {}, "The AI turns could not be told about the planned restart."));
   });
 
-  return Object.freeze({ steerRunningTurns, tellNotHappened, close: unsubscribe });
+  return Object.freeze({
+    steerRunningTurns,
+    tellNotHappened,
+    close: unsubscribe
+  });
 }
 
 export { createPlannedRestartSteering };

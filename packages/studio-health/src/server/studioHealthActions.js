@@ -70,11 +70,6 @@ function healthSummaryForAssistant(result) {
 }
 
 /**
- * @param {object} dependencies
- * @param {StudioHealthService} dependencies.studioHealth
- * @param {CrashService} dependencies.crashes
- */
-/**
  * The planned restart's state for the banner, with the client build this server serves now: after a restart the page
  * offers Reload only when that build is not the one it runs.
  * @param {string} appRoot
@@ -84,6 +79,12 @@ async function plannedRestartStatus(appRoot) {
   return { ok: true, ...plannedRestart().status(), clientBuildId };
 }
 
+/**
+ * @param {object} dependencies
+ * @param {StudioHealthService} dependencies.studioHealth
+ * @param {CrashService} dependencies.crashes
+ * @param {string} dependencies.appRoot the app whose built client this server serves
+ */
 function createStudioHealthActions({ studioHealth, crashes, appRoot }) {
   return Object.freeze([
     Object.freeze({

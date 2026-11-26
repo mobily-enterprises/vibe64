@@ -81,12 +81,21 @@ function createPlannedRestart({
   const crucial = new Map();
   const commands = new Map();
   const writes = new Map();
+  // Each record as it was last saved: a write that was waiting writes that one, never an older copy over the stop's.
+  const latest = new Map();
+  const saving = new Set();
 
   const warn = (event, fields, message) => logOperationalEvent(logger, "warn", { component, event: `${component}.${event}`, ...fields }, message);
   const recordFile = id => path.join(recordsRoot, `${id}.json`);
   const current = () => (notice && now() < notice.expiresAtMs ? notice : null);
-  const noticeOf = saved => ({ id: saved.id, restartAt: saved.restartAt, expiresAt: saved.expiresAt, reason: saved.reason,
-    restartAtMs: Date.parse(saved.restartAt), expiresAtMs: Date.parse(saved.expiresAt) });
+  const noticeOf = saved => ({
+    id: saved.id,
+    restartAt: saved.restartAt,
+    expiresAt: saved.expiresAt,
+    reason: saved.reason,
+    restartAtMs: Date.parse(saved.restartAt),
+    expiresAtMs: Date.parse(saved.expiresAt)
+  });
 
   function emit(event) {
     for (const listener of [...listeners]) {
@@ -105,12 +114,27 @@ function createPlannedRestart({
     };
   }
 
+  /** Keeps a record write in `saving` until it ends, so settled() can wait for it. */
+  function track(promise) {
+    const tracked = promise.finally(() => saving.delete(tracked));
+    saving.add(tracked);
+    return tracked;
+  }
+
   /** Writes the record, after every earlier write of it. A failure is logged: the gate itself never depends on it. */
   function save(saved) {
     if (!recordsRoot) return Promise.resolve();
-    const text = `${JSON.stringify(saved)}\n`;
-    return serializeByKey(writes, saved.id, () => writeFileAtomic(recordFile(saved.id), text, { directoryMode: 0o770, fileMode: 0o660 }))
-      .catch(error => warn("record_failed", { noticeId: saved.id, error: error?.message }, "The planned restart's record could not be written."));
+    latest.set(saved.id, saved);
+    const write = () => writeFileAtomic(recordFile(saved.id), `${JSON.stringify(latest.get(saved.id))}\n`, { directoryMode: 0o770, fileMode: 0o660 });
+    return track(serializeByKey(writes, saved.id, write)
+      .catch(error => warn("record_failed", { noticeId: saved.id, error: error?.message }, "The planned restart's record could not be written.")));
+  }
+
+  /** Resolves once every record write started so far has finished. */
+  async function settled() {
+    if (!saving.size) return;
+    await Promise.all([...saving]);
+    await settled();
   }
 
   async function readRecords() {
@@ -141,14 +165,21 @@ function createPlannedRestart({
     expiryTimer = setTimeout(() => {
       if (notice === expiring) end("expired");
     }, Math.max(0, expiring.expiresAtMs - now()) + 5);
-    expiryTimer.unref?.();
+    expiryTimer.unref();
   }
 
   function begin(next, savedRecord) {
     notice = next;
     if (savedRecord?.state === "in-force") {
       // The window goes on after an earlier stop of this editor: the next stop is the one its record names.
-      record = { ...savedRecord, restartAt: next.restartAt, expiresAt: next.expiresAt, reason: next.reason, stoppedAt: null, atRestart: null };
+      record = {
+        ...savedRecord,
+        restartAt: next.restartAt,
+        expiresAt: next.expiresAt,
+        reason: next.reason,
+        stoppedAt: null,
+        atRestart: null
+      };
       void save(record);
       scheduleExpiry();
       return;
@@ -169,10 +200,14 @@ function createPlannedRestart({
       endedAt: null,
       restartedAt: null
     };
-    void save(record).then(pruneRecords);
+    void track(save(record).then(pruneRecords));
     scheduleExpiry();
-    logOperationalEvent(logger, "warn", { component, event: `${component}.notice_started`, noticeId: next.id,
-      restartAt: next.restartAt, expiresAt: next.expiresAt }, "A planned restart notice is in force: crucial operations are paused.");
+    logOperationalEvent(
+      logger,
+      "warn",
+      { component, event: `${component}.notice_started`, noticeId: next.id, restartAt: next.restartAt, expiresAt: next.expiresAt },
+      "A planned restart notice is in force: crucial operations are paused."
+    );
     emit({ type: "started", notice: next, record });
   }
 
@@ -185,8 +220,12 @@ function createPlannedRestart({
     if (!ended || !endedRecord) return;
     const saved = { ...endedRecord, state: cause, endedAt: new Date(now()).toISOString() };
     void save(saved);
-    logOperationalEvent(logger, "warn", { component, event: `${component}.notice_ended`, noticeId: ended.id, cause },
-      "The planned restart did not happen: crucial operations are open again.");
+    logOperationalEvent(
+      logger,
+      "warn",
+      { component, event: `${component}.notice_ended`, noticeId: ended.id, cause },
+      "The planned restart did not happen: crucial operations are open again."
+    );
     emit({ type: "ended", notice: ended, cause, record: saved });
   }
 
@@ -254,8 +293,12 @@ function createPlannedRestart({
       if (startedLate && !fileSeen) {
         restarted = { ...saved, state: "restarted", restartedAt: new Date(startedAtMs).toISOString() };
         await save(restarted);
-        logOperationalEvent(logger, "warn", { component, event: `${component}.restarted`, noticeId: saved.id },
-          "The editor restarted for the planned restart: what was working resumes.");
+        logOperationalEvent(
+          logger,
+          "warn",
+          { component, event: `${component}.restarted`, noticeId: saved.id },
+          "The editor restarted for the planned restart: what was working resumes."
+        );
         emit({ type: "restarted", record: restarted });
       } else {
         const ended = { ...saved, state: "cancelled", endedAt: new Date(now()).toISOString() };
@@ -272,16 +315,18 @@ function createPlannedRestart({
     ready = decide().catch(error => warn("start_failed", { error: error?.message }, "The planned restart records could not be read."));
     if (noticeFile && pollMs > 0) {
       pollTimer = setInterval(() => void poll(), pollMs);
-      pollTimer.unref?.();
+      pollTimer.unref();
     }
     return ready;
   }
 
+  /** Stops following the notice file; resolves once the records being written are written. */
   function stop() {
     clearInterval(pollTimer);
     clearTimeout(expiryTimer);
     pollTimer = null;
     listeners.clear();
+    return settled();
   }
 
   /**
@@ -290,7 +335,7 @@ function createPlannedRestart({
    * @param {{ operation: string, label?: string, typicalMs?: number, after?: string }} input
    * @returns {{ code: string, message: string, restartAt: string } | null}
    */
-  function refusal({ operation, label = "", typicalMs: _typicalMs = 0, after = "" } = {}) {
+  function refusal({ operation, label = "", after = "" } = {}) {
     const active = current();
     if (!active) return null;
     return {
@@ -359,6 +404,7 @@ function createPlannedRestart({
   function recordStop() {
     if (!current() || !record || !recordsRoot || record.stoppedAt) return;
     record = { ...record, stoppedAt: new Date(now()).toISOString(), atRestart: snapshot() };
+    latest.set(record.id, record);
     try {
       mkdirSync(recordsRoot, { recursive: true, mode: 0o770 });
       const temporary = path.join(recordsRoot, `.${record.id}.${process.pid}.stop`);
@@ -411,6 +457,11 @@ function createPlannedRestart({
     };
   }
 
+  /** The record of the planned restart this process started after, or null. */
+  function restartedRecord() {
+    return restarted;
+  }
+
   /** @param {(event: { type: string, notice?: object, cause?: string, record: object }) => void} listener */
   function onChange(listener) {
     listeners.add(listener);
@@ -429,8 +480,9 @@ function createPlannedRestart({
     recordStop,
     refusal,
     refuse,
-    restartedRecord: () => restarted,
+    restartedRecord,
     resumeNote,
+    settled,
     start,
     status,
     stop,
