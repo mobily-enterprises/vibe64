@@ -13,7 +13,7 @@ import path from "node:path";
 
 import { publishError } from "../errors.js";
 import { CAPACITOR_SHELL_TEMPLATE } from "../packers/capacitor/shellTemplate/index.js";
-import { spawnCommand } from "../stages.js";
+import { runPackagingTool } from "../stages.js";
 import { downloadVerified, exists, runOrFail, toolchainEnvironment, unpackInto } from "./download.js";
 
 const ANDROID_REPOSITORY_URL = "https://dl.google.com/android/repository/repository2-3.xml";
@@ -156,7 +156,7 @@ async function installAndroidSdk({
   repositoryUrl,
   signal
 }, options = {}) {
-  const { fetchImpl = fetch, runCommand = spawnCommand } = options;
+  const { fetchImpl = fetch, runCommand = runPackagingTool } = options;
   if (typeof directory !== "string" || !path.isAbsolute(directory)) {
     throw publishError("VIBE64_PUBLISH_SDK_FOLDER_INVALID", "The Android SDK needs an absolute install folder.");
   }

@@ -1,14 +1,15 @@
-import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import { stripVTControlCharacters } from "node:util";
 
+import { FORCE_KILL_DELAY_MS, spawnCommand } from "./commandSpawner.js";
+
 // The defaults capture commands had while they ran through execa 9, kept so
-// results and messages stay the same: output limit per stream, and the delay
-// before a timed-out command that ignores SIGTERM gets SIGKILL.
+// results and messages stay the same: the output limit per stream, and (from
+// commandSpawner.js) the delay before a timed-out command that ignores SIGTERM
+// gets SIGKILL.
 const DEFAULT_MAX_BUFFER = 100_000_000;
-const FORCE_KILL_DELAY_MS = 5_000;
 const SIGNAL_DESCRIPTIONS = Object.freeze({
   SIGABRT: "Aborted",
   SIGALRM: "Timeout or timer",
@@ -122,11 +123,14 @@ function capturedText(encoding, limit) {
 }
 
 /**
- * Starts a command with its output captured, its own process group (outside
- * Windows) and a timeout. stdout, stderr and both interleaved are decoded in
+ * Starts a command (through commandSpawner, which gives it its own process
+ * group outside Windows) with its output captured and a timeout. A relative
+ * cwd is this process's. stdout, stderr and both interleaved are decoded in
  * outputEncoding; a stream stops being read at maxBuffer characters, and the
- * command then fails. completion settles once the command has exited and its
- * output has closed, and never rejects.
+ * command then fails. spawned resolves with its pid (undefined when it did not
+ * start) and rejects when spawn refused its arguments. completion settles once
+ * the command has exited and its output has closed, or at once when it never
+ * started, and never rejects.
  * @param {string} command
  * @param {string[]} args
  * @param {{ cwd?: string, env?: Record<string, string>, input?: string | Uint8Array | null,
@@ -149,12 +153,11 @@ function startCaptureProcess(command, args, {
     stdout: capturedText(outputEncoding, limit)
   };
   const hasInput = input !== undefined && input !== null;
-  const child = spawn(command, args, {
-    cwd: cwd || undefined,
-    detached: process.platform !== "win32",
+  const child = spawnCommand(command, args, {
+    cwd: cwd ? path.resolve(cwd) : undefined,
     env,
-    stdio: [hasInput ? "pipe" : "ignore", "pipe", "pipe"],
-    windowsHide: true
+    input: hasInput ? input : null,
+    stdio: [hasInput ? "pipe" : "ignore", "pipe", "pipe"]
   });
   const failure = {
     commandLine: escapedCommandLine(command, args),
@@ -176,19 +179,24 @@ function startCaptureProcess(command, args, {
     // A command that never started has no output to wait for.
     if (child.pid === undefined) settle();
   });
+  // Nor one spawn refused.
+  child.spawned.catch((error) => {
+    failure.spawnError ||= error;
+    settle();
+  });
   const terminate = () => {
     if (exited || !child.kill("SIGTERM") || forceKillTimer) return;
     forceKillTimer = setTimeout(() => {
       if (!exited && child.kill("SIGKILL")) failure.forcefullyTerminated = true;
     }, FORCE_KILL_DELAY_MS);
   };
-  const capture = (name, stream) => (chunk) => {
+  const capture = (name) => (chunk) => {
     output.all.write(chunk);
     if (!output[name].write(chunk)) {
       failure.maxBuffer ||= { limit, stream: name, unit: "characters" };
       // Reading stops, so a command that keeps writing ends on SIGPIPE. One
       // that stops writing keeps running until it exits or times out.
-      stream.destroy();
+      child.stopReading(name);
     }
     if (typeof onOutput === "function") {
       try {
@@ -198,14 +206,10 @@ function startCaptureProcess(command, args, {
       }
     }
   };
-  // Streams are missing only when spawn could not even set them up.
-  if (child.stdout) child.stdout.on("data", capture("stdout", child.stdout));
-  if (child.stderr) child.stderr.on("data", capture("stderr", child.stderr));
-  if (hasInput && child.stdin) {
-    // A command that exits without reading its input is not a failure.
-    child.stdin.on("error", () => {});
-    child.stdin.end(input);
-  }
+  child.on("stdout", capture("stdout"));
+  child.on("stderr", capture("stderr"));
+  // The command executor writes the input; a command that exits without
+  // reading it is not a failure, so its input-error is not listened to.
   const timeoutTimer = timeout > 0 ? setTimeout(() => {
     failure.timedOut = true;
     terminate();
@@ -237,7 +241,7 @@ function startCaptureProcess(command, args, {
   return {
     completion,
     kill: (signal) => child.kill(signal),
-    pid: child.pid
+    spawned: child.spawned
   };
 }
 

@@ -3,6 +3,7 @@ import {
   commandResult
 } from "../result.js";
 import { startCaptureProcess } from "./captureProcess.js";
+import { COMMAND_SPAWNER_FAILED } from "./commandSpawner.js";
 import {
   drainProcessGroup,
   processGroupMembers
@@ -10,14 +11,28 @@ import {
 
 // Retain failed drains so the execution owner can retry the same stop.
 const capturedExecutions = new Map();
-// Every capture still running, with when it started: the server's stop ends them (endCaptures), so no command the
-// editor started outlives it. Each leads its own process group, which nothing else ends when the server exits.
+// Every capture still running, with when it was asked for and its process group (its pid, once the spawner has
+// answered): the server's stop ends them (endCaptures), so no command the editor started outlives it. Each leads its
+// own process group, which nothing else ends when the server exits.
 const liveCaptures = new Set();
 
+/** Ends one process group, as a stop does; a command that never started has none, which counts as ended. */
+async function drainGroup(groupId, options) {
+  const id = await groupId;
+  return id === undefined || drainProcessGroup(id, options).catch(() => false);
+}
+
+function captureResultCode(result) {
+  if (result.timedOut === true) return "vibe64_command_capture_timed_out";
+  if (result.code === COMMAND_SPAWNER_FAILED) return result.code;
+  return result.code ? "vibe64_command_capture_failed" : "";
+}
+
 /**
- * Ends the captures still running that started before `startedBefore` (epoch ms; all by default): SIGTERM to each
- * one's process group before this returns, then SIGKILL to a group still there after `termTimeoutMs`. Each one's
- * caller gets its command's end as usual, killed by that signal. Never throws.
+ * Ends the captures still running that were asked for before `startedBefore` (epoch ms; all by default), one whose
+ * spawner has not answered yet included: SIGTERM to each one's process group once its pid is known, then SIGKILL to a
+ * group still there after `termTimeoutMs`. Each one's caller gets its command's end as usual, killed by that signal.
+ * Never throws.
  * @param {{ startedBefore?: number, termTimeoutMs?: number, killTimeoutMs?: number }} [options]
  * @returns {Promise<{ ended: number, scopeEmpty: boolean }>} `ended` counts the captures no earlier call was ending
  */
@@ -26,7 +41,7 @@ async function endCaptures({ startedBefore = Infinity, termTimeoutMs = 100, kill
   const ended = ending.filter((capture) => !capture.ending).length;
   const drained = await Promise.all(ending.map((capture) => {
     capture.ending = true;
-    return drainProcessGroup(capture.processGroupId, { termTimeoutMs, killTimeoutMs }).catch(() => false);
+    return drainGroup(capture.groupId, { termTimeoutMs, killTimeoutMs });
   }));
   return { ended, scopeEmpty: drained.every(Boolean) };
 }
@@ -71,6 +86,7 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
   if (signal?.aborted) {
     return commandErrorResult("Command cancelled.", "vibe64_command_cancelled", { execution });
   }
+  const startedAt = Date.now();
   try {
     const subprocess = startCaptureProcess(command, args, {
       cwd,
@@ -81,9 +97,10 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
       outputEncoding,
       timeout
     });
-    processGroupId = Number(subprocess.pid);
-    if (process.platform !== "win32" && Number.isSafeInteger(processGroupId) && processGroupId > 0) {
-      const live = { ending: false, processGroupId, startedAt: Date.now() };
+    // Its stops are registered at once, before the spawner answers: a stop asked for meanwhile waits for the pid.
+    const groupId = subprocess.spawned.then((pid) => pid, () => undefined);
+    if (process.platform !== "win32") {
+      const live = { ending: false, groupId, startedAt };
       liveCaptures.add(live);
       void subprocess.completion.then(() => liveCaptures.delete(live));
     }
@@ -92,7 +109,7 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
       if (!stopping) {
         let drain;
         if (process.platform !== "win32") {
-          drain = drainProcessGroup(processGroupId).catch(() => false);
+          drain = drainGroup(groupId);
         } else {
           subprocess.kill("SIGKILL");
           drain = subprocess.completion.then(() => true);
@@ -105,6 +122,7 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
       return stopping;
     };
     if (execution?.id) capturedExecutions.set(execution.id, stop);
+    processGroupId = Number(await subprocess.spawned);
     signal?.addEventListener("abort", abort, { once: true });
     if (signal?.aborted) abort();
     const result = await Promise.race([
@@ -113,9 +131,7 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
     ]);
     const exitCode = typeof result.exitCode === "number" ? result.exitCode : 1;
     outcome = commandResult({
-      code: result.timedOut === true
-        ? "vibe64_command_capture_timed_out"
-        : result.code ? "vibe64_command_capture_failed" : "",
+      code: captureResultCode(result),
       error: exitCode === 0 ? "" : result.shortMessage,
       exitCode,
       output: result.all || (exitCode === 0 ? "" : result.shortMessage),

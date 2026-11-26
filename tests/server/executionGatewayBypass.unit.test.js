@@ -5,26 +5,15 @@ import test from "node:test";
 
 const PACKAGES_ROOT = "packages";
 
+// What starts a process itself (child_process, node-pty, execa) is listed once, with its counts and reasons, in
+// commandSpawnerOwnership.unit.test.js. Here: the calls that run a command around the command gateway, which applies
+// the permission policy and the server's stop gate. The command starters (spawnCommand, execFileCommand and
+// runCaptureCommand) are the gateway's own engine, reachable from the package's root only as runCaptureCommand, and
+// spawnCommand and execFileCommand only through @local/vibe64-execution/server/commandSpawner.
 const DIRECT_EXECUTION_PATTERNS = Object.freeze([
   {
-    id: "child_process import",
-    pattern: /from\s+["']node:child_process["']|require\s*\(\s*["']node:child_process["']\s*\)/gu
-  },
-  {
-    id: "execa import",
-    pattern: /from\s+["']execa["']/gu
-  },
-  {
-    id: "spawn call",
-    pattern: /\bspawn\s*\(/gu
-  },
-  {
-    id: "fork call",
-    pattern: /\bfork\s*\(/gu
-  },
-  {
-    id: "execFile call",
-    pattern: /\bexecFile\s*\(/gu
+    id: "command starter import",
+    pattern: /import\s*\{[^}]*\b(?:spawnCommand|execFileCommand|runCaptureCommand)\b[^}]*\}\s*from\s*["']@local\/vibe64-execution\/[^"']*["']|import\s*(?:\*\s*as\s+\w+\s+from\s*|\(\s*)["']@local\/vibe64-execution\/server\/(?:commandSpawner|capture)["']/gu
   },
   {
     id: "startTerminalSession call",
@@ -40,21 +29,12 @@ const PUBLISHING_TOOLS = "Publishing runs Vibe64's own fixed git/tool commands w
 const TOOL_HOME = "Packaging and publishing tools run with a private staging HOME so they never read or write the person's own configuration.";
 
 const DIRECT_EXECUTION_ALLOWLIST = new Map([
-  ["packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js", {
-    "child_process import": { count: 1, reason: "The native OpenCode plugin reads Genesis instructions inside its existing managed execution scope." },
-    "execFile call": { count: 1, reason: "A fixed Node composer inherits the managed process group, with bounded output and a timeout; it does not run user commands." }
-  }],
-  ["packages/vibe64-database-tools/src/server/sqliteClient.js", {
-    "child_process import": { count: 1, reason: "SQLite connections isolate synchronous native code from the server event loop." },
-    "fork call": { count: 1, reason: "A fixed IPC worker allows cancellation of native SQLite queries." }
-  }],
-  ...[
-    "packages/vibe64-packaging/bin/vibe64-publish.js",
-    "packages/vibe64-publishing/src/server/credentialBroker.js"
-  ].map((filePath) => [filePath, { "child_process import": { count: 1, reason: PUBLISHING_TOOLS } }]),
+  ["packages/vibe64-publishing/src/server/credentialBroker.js", { "command starter import": { count: 1, reason: PUBLISHING_TOOLS } }],
   ["packages/vibe64-packaging/src/server/stages.js", {
-    "child_process import": { count: 1, reason: PUBLISHING_TOOLS },
-    "spawn call": { count: 1, reason: "Packaging stages spawn Vibe64's pinned signing, upload and toolchain tools with an exact environment." }
+    "command starter import": { count: 1, reason: "Packaging stages run Vibe64's pinned signing, upload and toolchain tools with an exact environment; the project's own build goes through the gateway." }
+  }],
+  ["packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js", {
+    "command starter import": { count: 1, reason: "The session work child is its own process, started through the gateway in the session's execution scope; it runs its stage's fixed Git commands itself, each in its own process group." }
   }]
 ]);
 
@@ -178,7 +158,14 @@ function assertAllowedMatches(actual = [], allowlist = new Map()) {
   }
 }
 
-test("direct process creation stays limited to managed execution scopes and the SQLite worker", async () => {
+test("the package root exports no command starter but runCaptureCommand: spawnCommand and execFileCommand have their own subpath", async () => {
+  const index = await readFile("packages/vibe64-execution/src/server/index.js", "utf8");
+  const manifest = JSON.parse(await readFile("packages/vibe64-execution/package.json", "utf8"));
+  assert.doesNotMatch(index, /engines\/commandSpawner\.js/u);
+  assert.equal(manifest.exports["./server/commandSpawner"], "./src/server/engines/commandSpawner.js");
+});
+
+test("commands run around the gateway only from the files listed here, each with its reason", async () => {
   const files = await listJavaScriptFiles(PACKAGES_ROOT);
   const actual = [];
   for (const filePath of files) {

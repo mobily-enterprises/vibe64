@@ -19,7 +19,7 @@ import { promisify } from "node:util";
 
 import { androidSideloadDestination, generateSideloadKey } from "../../packages/vibe64-packaging/src/server/destinations/androidSideload/index.js";
 import { buildPackage } from "../../packages/vibe64-packaging/src/server/release/buildPackage.js";
-import { publishTarget, spawnCommand } from "../../packages/vibe64-packaging/src/server/stages.js";
+import { publishTarget, runPackagingTool } from "../../packages/vibe64-packaging/src/server/stages.js";
 import { findAndroidSdk } from "../../packages/vibe64-packaging/src/server/toolchains/androidSdk.js";
 import { installJdk } from "../../packages/vibe64-packaging/src/server/toolchains/jdk.js";
 import { inspectVibe64Packaging } from "../../packages/vibe64-genesis/src/server/index.js";
@@ -83,7 +83,7 @@ test("an APK is built without credentials, signed with the sideload key, verifie
   const stage1 = [];
   const recordingRunCommand = (options) => {
     stage1.push(options);
-    return spawnCommand(options);
+    return runPackagingTool(options);
   };
   const store = await temporaryFolder(t, "vibe64-android-results-");
   const started = Date.now();

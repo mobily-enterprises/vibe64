@@ -1071,7 +1071,10 @@ Owns the planned restart reader (`plannedRestart.js`, `plannedRestartNotice.js`)
 
 Owns the bounded workspace cache-maintenance command purpose and its daemon-only scratch-path admission.
 Owns managed command execution and its native stdio
-transport, PTY admission/I/O/subscription/cleanup and workflow accounting. Conversation
+transport, PTY admission/I/O/subscription/cleanup and workflow accounting. Its
+command spawner is the one starter of the editor's finite commands; besides
+it, only long-lived starters, once per owner, and one finite exception (the
+synchronous Git identity read) start processes directly. Conversation
 engines consume this host facility; JSKIT owns their command/protocol setup.
 The existing runtime registry owns language-toolchain paths, managed command
 guards and dependency fingerprints. Hosts install the packs; project operations

@@ -22,6 +22,9 @@ The public Vibe64 repo owns the execution gateway:
   - Builds the final command environment.
 - `packages/vibe64-execution/src/server/engines/`
   - Process engines: capture, PTY, detached, helper.
+- `packages/vibe64-execution/src/server/engines/commandSpawner.js`
+  - Starts every finite command, through the command spawner in the editor
+    server (below).
 - `packages/vibe64-execution/src/server/policy/`
   - CWD and ownership checks.
 - `packages/vibe64-execution/src/server/index.js`
@@ -72,6 +75,188 @@ Then it chooses:
   person's command with no new privileges, as it runs every managed execution,
   the daemon's own included. A
   person's own computer has no helper and never builds such an actor.
+
+## How a Finite Command Starts: the Command Spawner
+
+A finite command is one Vibe64 waits for: a capture command (Git, the host
+helper through sudo, a tool's `--version`), an OS account lookup, the Git
+identity read, a packaging tool. `spawnCommand()` and `execFileCommand()` in
+`packages/vibe64-execution/src/server/engines/commandSpawner.js` are Node's
+`spawn()` and `execFile()` for these commands, reached through the package's
+`@local/vibe64-execution/server/commandSpawner` subpath (the package root
+exports neither). Behind them, `commandExecutor.js` holds the one `spawn()`
+call that starts every one of them, with exactly the options it is given.
+
+**The rule: the editor server sends every finite command to its spawner,
+started at boot; small short-lived processes (the session work child, CLIs,
+tests) run the same executor in themselves, because a spawner there costs more
+than their own fork.** The spawner is a small, long-lived process
+(`commandSpawnerProcess.js`) that only connects the executor to its IPC
+channel and its pipe of start records.
+
+The mode is set once per process. A process runs its commands in itself until
+it calls `startCommandSpawner()`, which the editor server does at boot, before
+it accepts requests (`server.js`;
+`tests/server/editorServerCommandSpawner.unit.test.js` proves it). From then on
+every command of that process goes to a spawner. A spawner that dies is
+replaced by a new one for the next command, never by the executor in the
+editor.
+
+### Why it exists
+
+On Linux, Node starts a command by forking the process that asks. libuv clones
+it without `CLONE_VM` or `CLONE_VFORK` and waits until the child has exec'd, so
+the asking process's main thread stops while the kernel copies the page tables
+of its whole heap. Measured on a test host (Node 26.5, libuv 1.52.1, `git
+--version`):
+
+| Editor RSS | Direct start, main-thread block (median) | 12 at once | Through the spawner |
+|---|---|---|---|
+| 158 MB | 10.1 ms | 97 ms | 0.14 ms |
+| 1.5 GB | 33.2 ms | 422 ms | 0.17 ms |
+
+A large project's editor under normal page polling spent 9.8 s of 72 s of
+its main-thread time starting commands. The command also finishes sooner
+through the spawner: 13 ms instead of 17 ms (158 MB) and 37.5 ms (1.5 GB).
+`tests/server/commandSpawnerHeapCost.integration.test.js` keeps the start flat
+across heap sizes: before the spawner it measured 7.8 ms at 156 MB and 27.6 ms
+at 1.5 GB, and through the spawner 1.2 ms and 0.5 ms.
+
+A small process is the opposite case. A spawner costs it a Node startup, about
+85 ms: in a fresh process, 13 Git commands took 72.5 ms with the executor in
+the process itself and 196 ms with a spawner of its own.
+
+### One way to start a command
+
+`commandSpawner` starts every finite command. The files that start processes
+themselves are listed once, each with its number of uses of `child_process`,
+node-pty or execa and why, in
+`tests/server/commandSpawnerOwnership.unit.test.js`. That test reads every
+JavaScript file of `server.js`, `server/` and `packages/` and fails on any
+other use, a new one in a listed file included, and on a listed file that no
+longer has its uses. What the list holds:
+
+- `commandExecutor.js`, where finite commands start, and `commandSpawner.js`,
+  which starts the spawner;
+- the editor's long-lived processes, each once per owner and needing a
+  terminal, a file descriptor or a channel of its own: runtime terminals,
+  detached services and their reaper, SQLite workers;
+- one finite exception: the synchronous Git identity read (`spawnSync`) a
+  terminal's environment needs, which cannot wait for the spawner's reply (its
+  asynchronous read goes through the spawner);
+- programs that are not the editor: the execution helper (`src/host/`), the
+  stdio bridge an AI engine's conversation runs in, OpenCode's plugin, the
+  publishing command line and the PHP recorder's build script.
+
+### What it decides: nothing
+
+Policy stays where it was. For a gateway command, `runVibe64Command` resolves
+the actor and the environment, `cwdPolicy` and the permission policy check the
+working directory and identity, a host's managed execution admits the work,
+and the server's stop refuses new work, all before the command reaches
+`spawnCommand`. The few files that call `spawnCommand`, `execFileCommand` or
+`runCaptureCommand` directly, for Vibe64's own fixed tools, skip those checks;
+`tests/server/executionGatewayBypass.unit.test.js` lists them with their
+reasons. The executor checks only that a message has the shape it knows. The
+spawner refuses anything else by exiting, which fails the commands it was
+running rather than guessing.
+
+The editor refuses, before anything is sent, a call it cannot carry out: a
+command or an argument that is not a string, input that is neither text nor
+bytes, a relative working directory, an option or a stdio it does not take, a
+signal that is not one. Each throws a `TypeError` to that caller alone
+(`execFileCommand` rejects with it); the spawner and every other command carry
+on.
+
+A command's working directory and environment are the ones its caller gives.
+The working directory is absolute: the editor's own when none is given (a
+capture resolves a relative one against the editor's). The environment is
+required (`spawnCommand` throws without one) and passes as Node's `spawn`
+passes it: each value as text, a name whose value is `undefined` left out. The
+spawner's own working directory (`/`) and environment never reach a command.
+Every command leads its own process group (outside Windows).
+
+### Security model
+
+- **Only the editor can talk to it.** The channel is the IPC socketpair Node
+  creates when the editor starts the spawner; its start records go over a
+  second socketpair, which only the editor reads. No path names either, and
+  Linux refuses to reopen a socket through `/proc/<pid>/fd` (`ENXIO`). No
+  command inherits them: Node opens both close-on-exec, and every command gets
+  its own stdin, stdout and stderr. A command's environment, credentials
+  included, crosses only the private channel, never argv or a file.
+- **No new reach, no new privileges.** The spawner runs as the editor, with the
+  same user, groups, cgroup, umask, resource limits and no-new-privileges flag,
+  all inherited. It sets and raises nothing: no setuid, no uid or gid of its
+  own. Identity changes still happen only in the host's helper through sudo.
+  Its own environment holds only the editor's `NODE_OPTIONS`, as any Node
+  process the editor starts would read it (the test hosts' path guard reaches
+  it that way). A command gets only the environment it was given.
+- **Honestly, what that protects.** The spawner gives nothing beyond what a
+  process of the same user already has against the editor itself. A same-uid
+  process that could take the channel (with `pidfd_getfd` or ptrace) could
+  equally act on the editor directly. Many commands run as that same user, so
+  the protection is the private channel and the spawner being a dumb executor
+  that runs only what the editor's checks approved. Yama's ptrace scope, where
+  a host enables it, is a bonus, not the guarantee.
+
+### Failure behaviour
+
+Nothing ever falls back to starting a command in the editor.
+
+- **It dies** (a crash, an out-of-memory kill, a signal), **sends a message
+  the editor does not know** (one with an unknown type or no id), or **stops
+  answering**: the editor kills it and sends it nothing more; the next command
+  starts a new spawner, even one asked for between its exit and its channel's
+  close. Once its channel and its pipe of start records have both closed,
+  every command it was running fails with `vibe64_command_spawner_failed`,
+  and the error names the spawner and how it stopped. Each of those commands
+  that started has its process group ended as a stop ends one (`SIGTERM`, then
+  `SIGKILL` after 3 s, each sent only while the group has members) before it
+  closes: a capture, a plain `spawnCommand` and `execFileCommand` alike.
+- **Stuck** means a spawn or kill left unanswered for 5 s (`STUCK_AFTER_MS`,
+  the grace a timed-out capture gets before SIGKILL), counted from the request
+  that found nothing outstanding or from the last answer. The decision waits
+  one turn of the event loop, so answers already read on a starved loop still
+  count.
+- **It cannot start**: the command fails with the same code, naming the error.
+- **Every started command's pid is in a pipe the editor owns before the
+  spawner does anything else, so a spawner's death never leaves a command the
+  editor cannot end.** The spawner writes each start's id and pid there in the
+  same synchronous step as the `spawn()` that started it. The pipe keeps what
+  was written after the spawner dies, and the editor reads it to its end,
+  whatever output was still waiting on the channel: past about 128 KB of
+  unread output, a pid's answer on the channel waits in the spawner's memory,
+  but its record does not. At most 64 records (`START_RECORD_CAP`) wait
+  unread; at the cap the spawner starts nothing more until the editor has read
+  them, so a record's write never waits (on a test host at Linux's default
+  socket buffer, 180 records fit before a write would). The one exception is an
+  outside SIGKILL or out-of-memory kill of the spawner between `spawn()`
+  returning and that write, a few microseconds with nothing between them. A
+  command started then is unknown to the editor: on a managed host, a command
+  run through the host's managed execution is stopped with its unit, by
+  execution id, when the command fails; elsewhere it runs until it exits, or
+  until it next writes output, which SIGPIPE then ends.
+  `commandSpawner.unit.test.js` kills a spawner behind 0 to 8 MB of unread
+  output and finds every command it started known to the editor and ended.
+
+### Lifecycle
+
+- **Start:** the server starts it at boot (`startCommandSpawner()` in
+  `server.js`), while the editor is small.
+- **Held and idle:** it is held (ref'd) only while commands run, as a running
+  command is held, so it never keeps a process alive by itself.
+- **The editor's stop needs nothing from it.** The stop ends each capture's
+  process group itself with `kill(2)`: once requests in flight have had their
+  350 ms (`STOP_DRAIN_MS` in `server/lib/stopGate.js`), SIGTERM to every
+  capture asked for before the stop began, then SIGKILL to a group still there
+  75 ms later (`STOP_COMMAND_GRACE_MS`). A capture the spawner has not yet
+  answered for is ended once its pid arrives. The spawner ignores SIGHUP,
+  SIGINT and SIGTERM, so a terminal's Ctrl-C or a service manager's stop
+  signal to the whole cgroup does not end it early, and it reports the
+  commands still running until the editor exits.
+- **End:** its channel closes when the editor exits for any reason, SIGKILL
+  included, and the spawner exits with it.
 
 ## Main Request Shape
 

@@ -8,7 +8,7 @@ import {
   __testables,
   publishTarget,
   runBuildStage,
-  spawnCommand,
+  runPackagingTool,
   withStageCredentials
 } from "../../packages/vibe64-packaging/src/server/stages.js";
 
@@ -63,7 +63,7 @@ test("Stage 1 runs with no credential in its environment or argv and snapshots c
   const built = await runBuildStage(buildInput(paths), {
     runCommand: async (request) => {
       calls.push(request);
-      return spawnCommand(request);
+      return runPackagingTool(request);
     }
   });
   assert.equal(calls.length, 1);
@@ -162,7 +162,7 @@ test("Stage 2 credentials are private temp files or stdin, removed on success an
 // EPIPE, which once ended the server instead of failing the command.
 test("a tool that exits before reading its input fails with its own exit status and stderr", async (t) => {
   const paths = await workspace(t);
-  const result = await spawnCommand({
+  const result = await runPackagingTool({
     command: "git",
     args: ["update-ref", "--stdin"],
     cwd: paths.root,

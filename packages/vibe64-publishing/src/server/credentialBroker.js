@@ -3,9 +3,7 @@
 // Stage 2 receives a value only for one operation, as a private temporary file
 // the shared stage code removes. No value is ever returned to a caller here
 // except into that stage.
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
+import { execFileCommand } from "@local/vibe64-execution/server/commandSpawner";
 import { ANDROID_SIDELOAD_KEYSTORE, ANDROID_SIDELOAD_KEY_PASSWORD } from "@local/vibe64-packaging/server";
 
 import { publishingError } from "./publishingError.js";
@@ -13,7 +11,6 @@ import { publishingError } from "./publishingError.js";
 /** @typedef {import("@local/vibe64-packaging/server/types").AgeStore} AgeStore */
 /** @typedef {import("./types.js").PublishingPackaging} PublishingPackaging */
 
-const run = promisify(execFile);
 const ACCOUNT_ID = /^[a-z0-9][a-z0-9-]{0,62}$/u;
 const ACCOUNT_KINDS = Object.freeze(["npm", "pypi", "github"]);
 const PROOF_FIELDS = Object.freeze([
@@ -105,7 +102,7 @@ function createCredentialBroker({
    */
   async function githubCliToken() {
     try {
-      const { stdout } = await run(ghCommand, ["auth", "token"], { timeout: 15_000, env: { ...baseEnvironment, GH_PROMPT_DISABLED: "1" } });
+      const { stdout } = await execFileCommand(ghCommand, ["auth", "token"], { timeout: 15_000, env: { ...baseEnvironment, GH_PROMPT_DISABLED: "1" } });
       return stdout.trim();
     } catch {
       throw publishingError("The GitHub CLI is not signed in on this computer. Run gh auth login, or paste a token.", "vibe64_publishing_github_cli_missing");

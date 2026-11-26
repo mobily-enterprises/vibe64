@@ -12,7 +12,7 @@ import path from "node:path";
 
 import { canonicalJson } from "../../canonical.js";
 import { publishError } from "../../errors.js";
-import { fileSha256Hex, spawnCommand } from "../../stages.js";
+import { fileSha256Hex, runPackagingTool } from "../../stages.js";
 import { describeAndroidSdk } from "../../toolchains/androidSdk.js";
 import { toolchainEnvironment } from "../../toolchains/download.js";
 import { artifactFiles, noReadBackCredentials, settingsOf, withToolHome } from "../registryCommon.js";
@@ -66,7 +66,7 @@ async function signingTools(toolchains = {}) {
   };
 }
 
-async function run(argv, { cwd, home, failure, code, runCommand = spawnCommand }) {
+async function run(argv, { cwd, home, failure, code, runCommand = runPackagingTool }) {
   const result = await runCommand({ command: argv[0], args: argv.slice(1), cwd, env: toolchainEnvironment(process.env, { HOME: home }) });
   if (result?.ok !== true) {
     throw publishError(code, failure, {

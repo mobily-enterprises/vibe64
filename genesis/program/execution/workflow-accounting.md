@@ -12,6 +12,9 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/request.js`
 - `packages/vibe64-execution/src/server/engines/capture.js`
 - `packages/vibe64-execution/src/server/engines/captureProcess.js`
+- `packages/vibe64-execution/src/server/engines/commandSpawner.js`
+- `packages/vibe64-execution/src/server/engines/commandExecutor.js`
+- `packages/vibe64-execution/src/server/engines/commandSpawnerProcess.js`
 - `packages/vibe64-execution/src/server/engines/detached.js`
 - `packages/vibe64-execution/src/server/engines/detachedReaper.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessions.js`
@@ -53,6 +56,33 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `src/components/studio/vibe64-session/Vibe64AutopilotProjectPanel.vue`
 
 ## Public contract
+
+Every finite command, the ones Vibe64 waits for, starts in one executor, which
+runs Node's spawn with exactly the options it is given. The editor server sends
+every finite command to its spawner, started at boot; small short-lived
+processes (the session work child, CLIs, tests) run the same executor in
+themselves, because a spawner there costs more than their own fork. So the
+editor never forks its own heap for a command, which held its main thread for
+10 ms at 158 MB and 33 ms at 1.5 GB per start. Neither decides anything: for a
+gateway command, the gateway, cwd and permission policy and managed execution
+approve it before it gets there, and the few direct callers of the starters
+(Vibe64's own fixed tools) are listed in a test with their reasons. A call it
+cannot carry out throws to its caller alone. The spawner talks only through its
+private IPC channel and a pipe of start records only the editor reads, runs as
+the editor with only the editor's `NODE_OPTIONS` in its environment, and ends
+with the editor. Every command leads its own process group. Every started
+command's pid is in that pipe before the spawner does anything else, so when
+it dies, stops answering or sends what the editor does not know, every command
+it started fails naming it and has its process group ended, and the next
+command starts a new spawner; nothing falls back to a direct start. The one
+exception is an outside kill of the spawner in the microseconds between a
+start and its record. The files that start processes themselves are listed
+once, with their counts and reasons, in
+`tests/server/commandSpawnerOwnership.unit.test.js`: long-lived starters, once
+per owner, one finite exception (the synchronous Git identity read a
+terminal's environment needs), and programs that are not the editor. The
+execution gateway rundown (`docs/execution-gateway-rundown.md`) covers the
+security model and failures.
 
 The existing runtime catalogue also maps Python, Ruby, Go, Java, Kotlin, C# and
 Rust to explicit host packs. Kotlin receives Java tools, and Rust receives the
