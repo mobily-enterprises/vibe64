@@ -602,9 +602,40 @@ async function inspectPath(filename, directory) {
   return stat;
 }
 
+// Each folder chain checked whole, by its last folder's path: that folder's device, inode and birth time. Every
+// learning request checks its system root's chain, so while the same folder is still found at that path, the path
+// still leads to the folder whose every part was checked, and one lstat replaces an lstat and a realpath per part. A
+// different folder there (a part replaced, by a symlink or anything else) is checked whole again.
+const VERIFIED_CHAIN_LIMIT = 64;
+const verifiedChains = new Map();
+
 async function inspectDirectoryChain(directory) {
+  const verified = verifiedChains.get(directory);
+  if (verified) {
+    const stat = await lstat(directory).catch((error) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (stat?.isDirectory() && folderIdentity(stat) === verified) return stat;
+    verifiedChains.delete(directory);
+  }
+  const stat = await walkDirectoryChain(directory);
+  if (stat) {
+    verifiedChains.set(directory, folderIdentity(stat));
+    if (verifiedChains.size > VERIFIED_CHAIN_LIMIT) verifiedChains.delete(verifiedChains.keys().next().value);
+  }
+  return stat;
+}
+
+// A folder made where an earlier one was removed may reuse its inode number, but not its birth time where the file
+// system records one.
+function folderIdentity(stat) {
+  return `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`;
+}
+
+async function walkDirectoryChain(directory) {
   const parent = path.dirname(directory);
-  if (parent !== directory) await inspectDirectoryChain(parent);
+  if (parent !== directory) await walkDirectoryChain(parent);
   return inspectPath(directory, true);
 }
 
