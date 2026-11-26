@@ -567,8 +567,11 @@ project's one `ssh-ed25519` public key as a root-owned key file for the
 account in the key folder its settings name (loopback only, no forwarding, and
 the login's forced command, `staging-shell`, named in the key itself, so sshd
 confines the account on a host without host setup's SSH policy; where that
-policy names the same command, sshd runs the policy's), a
-`visudo`-checked sudoers rule of its own (`stagingSudoersPath`, in the sudo rule folder its settings name) that lets
+policy names the same command, sshd runs the policy's), `0644` whatever the
+helper's umask, in folders it makes `0755`, as sshd reads the key as the
+account, which neither owns it nor is in its group (the managed umask `0007`
+once left it `0640`, and every staging login was refused), a
+`visudo`-checked sudoers rule of its own, `0440` whatever the umask (`stagingSudoersPath`, in the sudo rule folder its settings name) that lets
 the account run exactly `vibe64-exec-helper staging-service *` (by the command
 its settings name), and the
 login shell `/bin/sh`, which the account check accepts only while that key
