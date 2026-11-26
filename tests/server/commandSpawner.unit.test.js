@@ -15,8 +15,8 @@ import {
   spawnCommand,
   startCommandSpawner
 } from "../../packages/vibe64-execution/src/server/engines/commandSpawner.js";
-import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
 import { processGroupHasLiveMember } from "../../packages/vibe64-execution/src/server/runtime/processStart.js";
+import { processRuns } from "../fixtures/processGroupMembers.js";
 
 // The rules of the editor's command spawner (packages/vibe64-execution/src/server/engines/commandSpawner.js), one
 // test each. This process sends its commands to a spawner, as the editor server does from its boot. The capture
@@ -49,25 +49,6 @@ function events(child) {
 async function spawnerPid() {
   const { stdout } = await execFileCommand("sh", ["-c", "echo $PPID"], { env });
   return Number(stdout.trim());
-}
-
-// A process that has ended may stay a zombie until its parent reaps it, and an orphan's parent is init, which can take
-// over a second on a loaded host. So, as for a drain, a zombie has ended (processEnded) and only a live process runs.
-function processRuns(pid) {
-  if (process.platform === "linux") {
-    try {
-      return !processEnded(linuxProcessStat(readFileSync(`/proc/${pid}/stat`, "utf8")));
-    } catch (error) {
-      if (error.code === "ENOENT" || error.code === "ESRCH") return false;
-      throw error;
-    }
-  }
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === "EPERM";
-  }
 }
 
 async function waitUntil(check, timeoutMs = 5_000) {
