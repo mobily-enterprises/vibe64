@@ -51,6 +51,8 @@ import {
 import { VIBE64_INTEGRATION_SETUP_SECTION, parseVibe64IntegrationSetupLines, vibe64IntegrationSetupInspection } from "./integrationSetup.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
+/** @typedef {import("./types.js").GenesisPass} GenesisPass */
+/** @typedef {import("./types.js").GenesisMasterPass} GenesisMasterPass */
 
 const require = createRequire(import.meta.url);
 const hostContextRegistries = new Map();
@@ -90,6 +92,7 @@ const {
   inspectStackSection,
   inspectStackSections,
   inspectSubsystems,
+  inspectVerification,
   listStackPieces,
   listTemplates,
   parserEnvironment: genesisParserEnvironment,
@@ -451,6 +454,20 @@ function verifyGenesisProject(options = {}) {
   return runGenesisOperation(genesisCompiler.verify, options);
 }
 
+/**
+ * The Stack's declared `## Verification` commands, each { label, argv } in order, and the Stack identity verify
+ * records with them, from one Genesis Stack read that runs nothing: how a host recognises a declared check.
+ * @param {{ projectRoot: string }} options
+ * @returns {Promise<{ stackHash: string, commands: { label: string, argv: string[] }[] }>}
+ */
+async function inspectGenesisVerification(options = {}) {
+  if (!inspectVerification) {
+    throw new Error("This genesis-compiler cannot list the Stack's Verification commands. Update it to the release Vibe64 declares.");
+  }
+  const { stackHash, commands } = await exactGenesisInspection(inspectVerification, GENESIS_CONTRACTS.verificationInspection, options);
+  return { stackHash, commands };
+}
+
 function inspectGenesisEnvironment(options = {}) {
   return exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options);
 }
@@ -474,32 +491,6 @@ function inspectGenesisEngineering(options = {}) {
 function inspectGenesisCollaboration(options = {}) {
   return exactGenesisInspection(inspectCollaboration, GENESIS_CONTRACTS.collaboration, options);
 }
-
-/**
- * One pass in Genesis's list (contract genesis.passes.v1). Genesis's entries also carry skill and stackGuidance, which
- * its own prompt uses.
- * @typedef {object} GenesisPass
- * @property {string} id the Genesis prompt task the pass runs
- * @property {string} title its name, as the person reads it
- * @property {string} description one line on what it does
- * @property {{ when: string, hint: string }} recommend when Genesis advises running it: "after-change", "first-version"
- *   or "periodic", and a line saying so; Vibe64 decides when to suggest it
- * @property {string} request the pass's own request, over the whole app
- * @property {string | null} lastRun when it last completed, from Genesis's committed record (a UTC ISO time), or null
- * @property {string | null} unavailable why the Genesis serving the project cannot run it, or null
- * @property {{ id: string, label: string, request: string, files?: number, lines?: number }[]} runs the runs Genesis
- *   offers now ("whole", "since-last", and "deep" with the files and lines it reads, which its label shows), none while
- *   the pass is unavailable: Run sends a run's request verbatim, and Genesis records the pass only for these requests
- */
-
-/**
- * The Master pass in Genesis's list: it runs `passes` (pass ids, in its order) deeply, one after another, and
- * `lastPasses` are those it ran when it last completed. Each of its `runs` ("whole", then "since-last" once one has
- * completed) carries `request`, for every pass, and `selectedRequest`, whose `{passes}` the chosen passes' titles
- * replace, comma-separated, with its size in `files`, `lines` and its label.
- * @typedef {{ id: string, title: string, description: string, request: string, lastRun: string | null,
- *   lastPasses: string[] | null, unavailable: string | null, passes: string[], runs: object[] }} GenesisMasterPass
- */
 
 /**
  * The passes Genesis offers for a project, in its order, each with its last completed run there and its runs, the
@@ -708,6 +699,7 @@ export {
   inspectVibe64StagingData,
   verifyGenesisProject,
   inspectGenesisEnvironment,
+  inspectGenesisVerification,
   inspectVibe64Outputs,
   inspectVibe64ResourceEstimates,
   inspectVibe64WorkspaceSetup,
