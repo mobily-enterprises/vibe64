@@ -1,6 +1,7 @@
 // 20261125-agent-run-history against runs shaped as earlier releases wrote them: every event of every turn, Codex's
 // several a turn and one at each phase change, pretty-printed, up to the 4 MiB a long session's run reached.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -232,6 +233,28 @@ test("a run written while the upgrade prepares stops it before anything changes"
   assert.deepEqual(after.events.slice(0, -1), record.events, "the run keeps every event and the writer's");
   assert.equal(await historyOf(file).then((history) => history.length), 0, "no history was published");
   assert.deepEqual((await readdir(path.dirname(file))).sort(), ["codex_app_server.json"]);
+});
+
+test("a preparation holds no run's text: each new history and run is staged as it is split, or left unstaged by a check", async (t) => {
+  const f = await fixture(t);
+  const record = codexRun(10);
+  const file = await writeRun(f.store, "one", record);
+  for (const stage of [true, false]) {
+    const temporaryRoot = await mkdtemp(path.join(f.systemRoot, "staging-"));
+    const { updates, runs } = await f.store.prepareAgentRunHistoryUpgrade({ temporaryRoot, stage });
+    assert.equal(runs, 1);
+    assert.deepEqual(updates.map((update) => path.basename(update.filePath)), ["codex_app_server.history.jsonl", "codex_app_server.json"]);
+    for (const update of updates) {
+      assert.ok(!Object.hasOwn(update, "original") && !Object.hasOwn(update, "contents"), `${update.filePath} keeps text`);
+      assert.ok(stage ? update.replacementPath?.startsWith(temporaryRoot) : update.unstaged, `${update.filePath} ${stage}`);
+    }
+    assert.deepEqual(updates.map((update) => update.originalDigest), [null, createHash("sha256").update(await readFile(file)).digest("hex")]);
+    if (stage) {
+      const staged = JSON.parse(await readFile(updates[1].replacementPath, "utf8"));
+      assert.deepEqual(staged.events, record.events.slice(lastTwoTurns(record.events)), "the staged run keeps its last two turns");
+    }
+    assert.deepEqual((await readdir(temporaryRoot)).sort(), stage ? updates.map((update) => path.basename(update.replacementPath)).sort() : []);
+  }
 });
 
 test("an unreadable run stops the upgrade before anything changes", async (t) => {

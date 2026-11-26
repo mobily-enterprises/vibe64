@@ -26,11 +26,11 @@ async function upgradeAgentRunHistory(context) {
     ...context,
     backupRoot,
     inputs: () => projectSessionRoots(context.systemRoot),
-    async prepareUpdates(temporaryRoot) {
+    async prepareUpdates(temporaryRoot, { stage }) {
       const updates = [];
       for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {
         const store = createVibe64SessionStore({ projectContextRoot: projectRuntimeRoot, projectRuntimeRoot });
-        const prepared = await store.prepareAgentRunHistoryUpgrade({ temporaryRoot });
+        const prepared = await store.prepareAgentRunHistoryUpgrade({ temporaryRoot, stage });
         context.report("info", `${path.basename(projectRuntimeRoot)}: ${prepared.runs} agent run(s) to split, moving ${prepared.events} event(s) of earlier turns to their histories.`);
         updates.push(...prepared.updates);
       }

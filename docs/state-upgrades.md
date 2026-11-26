@@ -98,6 +98,26 @@ change, which the publisher counts in `N state file(s) to change` and refuses
 in any preparation it publishes (`A state upgrade left a file unstaged for a
 preparation that is published.`).
 
+What a preparation holds follows the one record it converts, not the whole
+state: an update may give `originalDigest` (the sha256 of what it read, null
+for none) instead of `original`, and a `replacementPath` it staged instead of
+`contents`; `stagedUpgradeFile` makes one (unstaged for a check that publishes
+nothing). `20261124-chat-transcript-log` writes each live chat's new file to
+`temporaryRoot` as it makes it and keeps only digests, and converts each chat in
+a frame of its own, so a chat is held as two parsed copies at most while it is
+converted and not at all after; an archive is extracted, changed and repacked
+one at a time. `20261125-agent-run-history` stages each run's new history and
+run the same way. Everything an apply stages before its first change (each
+replacement, each repacked archive) is in `temporaryRoot`, the system's
+temporary folder: a host whose `/tmp` is memory gives the command a `TMPDIR`
+on disk.
+
+Each copy the publisher makes (each `before/` and `after/` backup, the
+manifest, each published file) is synced to the disk before it is renamed into
+place, and its folder after, with each folder made for it, so the backups an
+apply relies on before its first change are on the disk, not only in the page
+cache (`tests/server/stateUpgradeFiles.unit.test.js`).
+
 `20261124-chat-transcript-log` and `20261125-agent-run-history` name each
 project's sessions folder (`projectSessionRoots.js`); every other upgrade
 prepares twice, as each did before. With both pending, the agent-run upgrade

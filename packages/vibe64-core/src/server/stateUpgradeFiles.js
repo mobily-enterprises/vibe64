@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, copyFile, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, mkdtemp, open, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { syncDirectory } from "./atomicFile.js";
 import { isPlainObject } from "./isPlainObject.js";
 import { sha256Hex } from "./sha256Hex.js";
 
@@ -52,17 +53,36 @@ async function fileDigest(filePath) {
   for await (const chunk of createReadStream(filePath)) hash.update(chunk);
   return hash.digest("hex");
 }
+/**
+ * Replaces destination with a copy of source, durably: the copy's data reaches the disk before it is renamed over
+ * destination, and its folder after, with each folder made for it, so a power cut leaves the old file or the whole new
+ * one, and a backup or manifest this returned for is on the disk.
+ */
 async function atomicCopy(source, destination) {
-  await mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
+  const folder = path.dirname(destination);
+  const made = await mkdir(folder, { recursive: true, mode: 0o700 });
   const temporary = `${destination}.${randomUUID()}.tmp`;
   try {
     await writeFile(temporary, "", { flag: "wx", mode: 0o600 });
     await copyFile(source, temporary);
     await chmod(temporary, 0o600);
+    const copy = await open(temporary, "r");
+    try {
+      await copy.sync();
+    } finally {
+      await copy.close();
+    }
     await rename(temporary, destination);
   } finally {
     await rm(temporary, { force: true });
   }
+  await syncFolders(folder, made);
+}
+
+/** Syncs folder, and each parent holding a folder mkdir just made (made: the first it made, or undefined). */
+async function syncFolders(folder, made) {
+  await syncDirectory(folder);
+  if (made) for (let child = folder; child.startsWith(made); child = path.dirname(child)) await syncDirectory(path.dirname(child));
 }
 
 /**
@@ -73,6 +93,20 @@ async function atomicCopy(source, destination) {
  * @param {string} backupRoot
  * @returns {Promise<{ current: string, earlier: string[] }>}
  */
+/**
+ * An update that holds none of a file's text, for an upgrade whose files together are too big to hold: its contents
+ * written to temporaryRoot now when the preparation is staged, or left unstaged for a check that publishes nothing,
+ * with the digest of what was read (original: the file's text or bytes, null for none).
+ * @param {{ temporaryRoot: string, stage: boolean, filePath: string, original: string | Buffer | null, contents: string | Buffer }} file
+ */
+export async function stagedUpgradeFile({ temporaryRoot, stage, filePath, original, contents }) {
+  const originalDigest = original === null ? null : sha256Hex(original);
+  if (!stage) return { filePath, originalDigest, unstaged: true };
+  const replacementPath = path.join(temporaryRoot, randomUUID());
+  await writeFile(replacementPath, contents, { flag: "wx", mode: 0o600 });
+  return { filePath, originalDigest, replacementPath };
+}
+
 export async function stateUpgradeRunBackupRoots(backupRoot) {
   const earlier = [];
   for (let attempt = 1; ; attempt += 1) {
@@ -156,6 +190,9 @@ export function createStateUpgradePlan() {
  * A single upgrade-owned manifest retains both sides of every file replacement.
  * This is intentionally separate from the general runner's lock and ledger.
  *
+ * Each update names its `filePath` and either its new `contents` (null removes the file) or a `replacementPath` staged in
+ * `temporaryRoot`, with what it read of the file: `original` (its text, null for none) or `originalDigest` (its sha256,
+ * null for none), which an upgrade that must not hold every file's text gives instead.
  * `prepareUpdates(temporaryRoot, { stage })` returns the updates, or `{ updates, reusable }`. `stage` is false only for a
  * check whose preparation nothing publishes (a standalone check): the upgrade still reads and inspects everything an
  * apply would, refusing what an apply refuses, but may leave a replacement it would only discard unbuilt (an archive's
@@ -195,7 +232,10 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
         update.relative = relativeFile(update.filePath);
         await verifyUpgradeParents(systemRoot, update.filePath);
         update.before = await fileDigest(update.filePath);
-        if (Object.hasOwn(update, "original") && update.before !== (update.original === null ? null : sha256Hex(update.original))) {
+        // What the preparation read: its text, or (an upgrade that keeps no file's text) its digest, null for none.
+        const read = Object.hasOwn(update, "originalDigest") ? update.originalDigest
+          : Object.hasOwn(update, "original") ? (update.original === null ? null : sha256Hex(update.original)) : update.before;
+        if (update.before !== read) {
           throw new Error(`Application state changed during preparation: ${update.relative}. Stop all writers before retrying.`);
         }
         const beforePath = path.join(backupRoot, "before", update.relative);
@@ -304,8 +344,12 @@ export async function publishStateUpgradeFiles({ systemRoot, apply, backupRoot, 
   for (const entry of manifest.files) {
     const destination = path.join(systemRoot, entry.path);
     if (await fileDigest(destination) === entry.after) continue;
-    if (entry.after === null) await rm(destination);
-    else await atomicCopy(path.join(backupRoot, "after", entry.path), destination);
+    if (entry.after === null) {
+      await rm(destination);
+      await syncFolders(path.dirname(destination));
+    } else {
+      await atomicCopy(path.join(backupRoot, "after", entry.path), destination);
+    }
     report("info", `Published state: ${entry.path}`);
   }
 }
