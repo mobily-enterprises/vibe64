@@ -134,6 +134,33 @@ describe("useVibe64ConversationLog", () => {
     scope.stop();
   });
 
+  // Each load checks a visible pending request; the conversation it shows was just read.
+  it("rereads the chat after a setup check only when the server decided the request or a sent check failed", async () => {
+    const scope = effectScope();
+    const session = ref({ sessionId: "session-1" });
+    const requestId = "a".repeat(64);
+    endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
+      integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
+    const request = { sessionId: "session-1", turnId: "000001", requestId };
+    const config = (accountMode = "shared") => ({ configuration: { integrations: { mail: { accountMode } } }, baseHash: "hash" });
+    httpRequest.mockResolvedValueOnce(config()).mockResolvedValueOnce({ ok: true, status: "unconfigured", setupIssue: "Not yet" })
+      .mockResolvedValueOnce(config()).mockResolvedValueOnce({ ok: true, status: "pending", attemptId: "attempt-1" })
+      .mockResolvedValueOnce(config("per-user"));
+    expect(await model.checkIntegrationRequest(request)).toBe(true);
+    expect(await model.connectIntegrationRequest(request)).toBe(true);
+    expect(await model.checkIntegrationRequest(request)).toBe(false);
+    expect(endpointMocks.resource.reload).not.toHaveBeenCalled();
+    httpRequest.mockResolvedValueOnce(config()).mockRejectedValueOnce(new Error("Status response lost"));
+    expect(await model.checkIntegrationRequest(request)).toBe(false);
+    expect(endpointMocks.resource.reload).toHaveBeenCalledOnce();
+    httpRequest.mockResolvedValueOnce(config()).mockResolvedValueOnce({ ok: true, status: "connected",
+      integrationSetup: { outcome: "completed", continuation: { status: "accepted" } } });
+    expect(await model.checkIntegrationRequest(request)).toBe(true);
+    expect(endpointMocks.resource.reload).toHaveBeenCalledTimes(2);
+    scope.stop();
+  });
+
   it("retains a completed connection when chat continuation is unconfirmed", async () => {
     const scope = effectScope();
     const session = ref({ sessionId: "session-1" });
