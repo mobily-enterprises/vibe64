@@ -273,6 +273,16 @@ test("a standalone check reads and refuses every archived chat as an apply does,
   assert.equal(staged.chats, 2);
   assert.equal(staged.built.length, 1, "an apply's preparation repacks the archive it publishes");
   assert.ok(staged.updates.some((update) => update.filePath === archive && update.replacementPath), JSON.stringify(staged.updates));
+  // What a preparation holds of a live chat: where its new file went and the digests of what it read, never the chat,
+  // so what an apply holds follows the one chat it converts, not every chat of the workspace.
+  const live = (updates) => updates.filter((update) => update.filePath.startsWith(store.paths().activeSessionsRoot));
+  for (const [updates, stage] of [[staged.updates, true], [unstaged.updates, false]]) {
+    assert.equal(live(updates).length, 2, JSON.stringify(updates));
+    for (const update of live(updates)) {
+      assert.ok(!Object.hasOwn(update, "original") && Object.hasOwn(update, "originalDigest"), update.filePath);
+      assert.ok(update.contents === movedNote || (stage ? update.replacementPath : update.unstaged), `${update.filePath} ${stage}`);
+    }
+  }
 
   // An archived chat the upgrade cannot convert stops the start's check, as it stops the apply, with nothing changed.
   const sessionId = "2026-10-01_12-00-00_0000";

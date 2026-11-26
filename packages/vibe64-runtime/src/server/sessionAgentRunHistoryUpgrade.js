@@ -5,6 +5,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { isPlainObject } from "@local/vibe64-core/server/core";
+import { stagedUpgradeFile } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { AGENT_RUN_HISTORY_SUFFIX, splitAgentRunHistory } from "./agentRunHistory.js";
 import { isSafeAgentRunId } from "./sessionRecordRules.js";
 
@@ -22,11 +23,13 @@ function createSessionAgentRunHistoryUpgrade({ prepareSessionStateUpgrade }) {
    * history (with the events it already had) is published before the run without them, so a stop between the two
    * leaves every event in the run, and the history's extra lines are what the run's `eventHistoryBytes` says to cut
    * off before the next append. A run already split, by this upgrade or by a write, holds two turns at most and is
-   * left alone, so a second run changes nothing.
-   * @param {{ temporaryRoot: string }} options
+   * left alone, so a second run changes nothing. Each new history and run goes to `temporaryRoot` as it is made
+   * (`stage: false`, a check that publishes nothing, stages none), and the updates keep only the digests of what was
+   * read, so what a preparation holds follows the one run it splits.
+   * @param {{ temporaryRoot: string, stage?: boolean }} options
    * @returns {Promise<{ updates: object[], runs: number, events: number }>}
    */
-  async function prepareAgentRunHistoryUpgrade({ temporaryRoot }) {
+  async function prepareAgentRunHistoryUpgrade({ temporaryRoot, stage = true }) {
     let runs = 0;
     let events = 0;
     const updates = await prepareSessionStateUpgrade({
@@ -55,8 +58,10 @@ function createSessionAgentRunHistoryUpgrade({ prepareSessionStateUpgrade }) {
           runs += 1;
           events += record.events.length - split.record.events.length;
           changes.push(
-            { filePath: historyPath, original: history, contents: split.history },
-            { filePath: runPath, original, contents: `${JSON.stringify(split.record, null, 2)}\n` }
+            await stagedUpgradeFile({ temporaryRoot, stage, filePath: historyPath, original: history, contents: split.history }),
+            await stagedUpgradeFile({
+              temporaryRoot, stage, filePath: runPath, original, contents: `${JSON.stringify(split.record, null, 2)}\n`
+            })
           );
         }
         return changes;

@@ -30,6 +30,7 @@ so the same command works without a source checkout in the relocated runtime.
 - `packages/vibe64-core/src/server/stateUpgrades.js`
 - `packages/vibe64-core/src/server/stateUpgradeFiles.js`
 - `tests/server/stateUpgradePlan.unit.test.js`
+- `tests/server/stateUpgradeFiles.unit.test.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20260923-codex-login-id.js`
 - `tests/server/stateUpgrades.unit.test.js`
 - `docs/state-upgrades.md`
@@ -80,7 +81,11 @@ its inputs (`publishStateUpgradeFiles`'s `inputs` in
 check prepared while an lstat fingerprint of those folders is unchanged, so the
 chat and agent-run upgrades read every session once per apply instead of twice,
 and a standalone check, whose preparation nothing publishes, repacks no archive
-(`tests/server/stateUpgradePlan.unit.test.js`). Ordinary application
+(`tests/server/stateUpgradePlan.unit.test.js`). The chat and agent-run upgrades
+stage each converted chat and split run as they go and keep only digests, so
+their memory follows one chat or run, and every backup, manifest and published file is synced to the disk
+before the apply goes on (`tests/server/stateUpgradeFiles.unit.test.js`).
+Ordinary application
 reads and startup do not backfill old metadata. The first upgrade supplies a
 Vibe64-local login identity for existing Codex connections without changing
 native credentials or canonical project content. See `docs/state-upgrades.md`
