@@ -22,6 +22,8 @@ const UNREAD = "comment";
 const plan = (operation) => (f, input) => f.session.managePlan(f.sessionId, { operation, ...input });
 /** Calls a session command, as its route hands the agent's own fields to it. */
 const session = (name) => (f, input) => f.session[name](f.sessionId, input);
+/** `vibe64-helper inventory ...`, a host's own group, as the session control's route hands its fields over. */
+const hostGroup = (f, input) => f.session.runHelperGroup(f.sessionId, input, { signal: new AbortController().signal, stdout() {}, stderr() {} });
 const erdMoves = (f, input) => moveErdLayoutTables(f.schema, f.layout, input);
 const erdMove = (f, move) => erdMoves(f, { revision: 1, moves: [move] });
 /** `vibe64-helper preview identities save` with the input as its stdin: a refusal is a failed command answer. */
@@ -62,6 +64,9 @@ const OPERATIONS = [
   { name: "session status", fields: [], send: session("sessionStatus") },
   { name: "session update", fields: ["reviewedConflictId"], send: session("updateSession") },
   { name: "session save", fields: [], send: session("saveSession") },
+  // A host's group refuses before its folder is checked or its run is called.
+  { name: "inventory", fields: ["group", "args", "cwd"], required: ["args", "cwd", "group"],
+    base: { group: "inventory", args: ["count"], cwd: "." }, send: hostGroup },
   { name: "database erd apply", fields: ["revision", "moves"], required: ["revision", "moves"],
     base: { revision: 1, moves: [{ table: "public.addresses", x: 400, y: 0 }] }, send: erdMoves },
   { name: "database erd apply move 1", fields: ["table", "x", "y", "pinned"], required: ["table", "x", "y"],
@@ -98,7 +103,8 @@ async function fixture(t) {
   readProjectPreview: called("readProjectPreview"), reportWorkflowOutcome: called("reportWorkflowOutcome"),
   handPlanToSenior: called("handPlanToSenior"), retryWorkspaceSetup: called("retryWorkspaceSetup", { ok: true, state: {} }),
   updateSessionWork: called("updateSessionWork"), saveSessionWork: called("saveSessionWork"),
-  previewStartedBefore: () => false });
+  previewStartedBefore: () => false,
+  helperCommandGroups: [{ name: "inventory", summary: "Count the stock", help: "Usage: vibe64-helper inventory count", run: called("inventory", { exit: 0 }) }] });
   t.after(() => service.closeAllForSession(sessionId));
   await service.bindSession(sessionId, { wrapperHostDir: path.join(root, "commands") });
   await manageWorkPlan(context, { operation: "new", text: PLAN }, "senior");

@@ -24,6 +24,7 @@ import {
   inspectGenesisEngineering,
   inspectGenesisEnvironment,
   inspectGenesisProjectFormat,
+  inspectGenesisVerification,
   inspectVibe64Outputs,
   inspectVibe64WorkspaceSetup,
   inspectVibe64Deployment,
@@ -77,6 +78,39 @@ test("Architecture inspection uses the actual Genesis Stack boundary and explici
     assert.equal(inspected.status, 'ready');
     assert.deepEqual(inspected.inspectors, []);
     assert.match(inspected.stackHash, /^sha256:[a-f0-9]{64}$/u);
+  });
+});
+
+// A host recognises a declared check from the Stack's own Verification commands, which Genesis reads once and runs none
+// of, with the Stack identity verify records beside them.
+test("Genesis verification inspection returns the Stack's declared commands and its identity, running none", async () => {
+  await assert.rejects(() => inspectGenesisVerification({}), /explicit absolute projectRoot/u);
+  await withTemporaryRoot(async (projectRoot) => {
+    await initializeGit(projectRoot);
+    await initializeGenesisProject({ projectRoot });
+    const stackPath = path.join(projectRoot, "genesis/stack.md");
+    await writeFile(stackPath, "# Stack\n\n## Components\n\n## Verification\n\n" +
+      "- Verify `tests`: `npm` `test`\n- Verify `browser`: `npx` `playwright` `test` `--project=chromium`\n");
+    const inspected = await inspectGenesisVerification({ projectRoot });
+    assert.deepEqual(inspected, {
+      stackHash: (await inspectGenesisEnvironment({ projectRoot })).stackHash,
+      commands: [
+        { label: "tests", argv: ["npm", "test"] },
+        { label: "browser", argv: ["npx", "playwright", "test", "--project=chromium"] }
+      ]
+    });
+    assert.match(inspected.stackHash, /^sha256:[a-f0-9]{64}$/u);
+    await assert.rejects(readFile(path.join(projectRoot, ".genesis/verification.json")), { code: "ENOENT" });
+
+    // The identity follows the section: without the browser entry, and with no Verification section at all.
+    await writeFile(stackPath, "# Stack\n\n## Components\n\n## Verification\n\n- Verify `tests`: `npm` `test`\n");
+    const changed = await inspectGenesisVerification({ projectRoot });
+    assert.deepEqual(changed.commands, [{ label: "tests", argv: ["npm", "test"] }]);
+    assert.notEqual(changed.stackHash, inspected.stackHash);
+    await writeFile(stackPath, "# Stack\n\n## Components\n");
+    const none = await inspectGenesisVerification({ projectRoot });
+    assert.deepEqual(none, { stackHash: (await inspectGenesisEnvironment({ projectRoot })).stackHash, commands: [] });
+    assert.notEqual(none.stackHash, changed.stackHash);
   });
 });
 
