@@ -103,6 +103,7 @@ function turnPublication({ afterRoutedTurn = async () => {} } = {}) {
     cancelGoalIfMainAiChanged: async () => false,
     continueGoalWhenLimitResets: async () => {},
     resumeGoalAfterTurn: async () => false,
+    restorePreviewAfterTurn: () => null,
     logger: silentLogger,
     providerUsage: { observe() {} },
     publishSessionChanged: { agentTerminal: async () => {} },

@@ -49,6 +49,8 @@ function createOutputTargetTerminalSessions({
   async function closeAllForSession(sessionId) {
     const testRun = state.previewTestRuns.get(sessionId);
     if (testRun) testRun.closing = true;
+    // A finished run's restore, waiting or failed, has nothing left to restore once the session's Preview closes.
+    if (testRun?.restoreLater && !testRun.restoreRun) state.previewTestRuns.delete(sessionId);
     // A start waiting for the workspace preparation, outside the lock, starts nothing once the session closes.
     launchCoordination.interruptLaunches(sessionId, "closed");
     await stopActiveUsageRecording(currentProjectScopeKey(), sessionId, "session-ended");

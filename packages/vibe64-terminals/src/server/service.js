@@ -206,6 +206,7 @@ function createService({
     cancelGoalIfMainAiChanged: (sessionId, vibe64User, options) => goals.cancelGoalIfMainAiChanged(sessionId, vibe64User, options),
     continueGoalWhenLimitResets: (sessionId) => goals.continueGoalWhenLimitResets(sessionId),
     resumeGoalAfterTurn: (sessionId) => goals.resumeGoalAfterTurn(sessionId),
+    restorePreviewAfterTurn: (sessionId) => commands.outputTarget.restorePreviewAfterTurn(sessionId),
     logger,
     providerUsage,
     publishSessionChanged,

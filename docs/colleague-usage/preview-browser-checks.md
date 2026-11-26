@@ -27,11 +27,14 @@ does not expose the access token.
 A persistent token error needs browser-access investigation, not a pool restart.
 
 The coding agent runs managed test suites and live Preview browser checks one
-after the other. A suite owns Preview until its cleanup and restoration finish;
-the agent can read status and logs while waiting, then confirms there is no
-active test run and the restored Preview is ready before live inspection. This
-also applies after cancelling a suite. If restoration fails, ask the coding
-agent to recover that existing run before another check. **Test Preview**
+after the other. A suite owns Preview until its cleanup finishes; the agent can
+read status and logs while waiting, then confirms there is no active test run
+before live inspection. This also applies after cancelling a suite. A suite on
+a test target leaves that target in Preview for the agent's next run: the
+previous Preview returns when the agent's turn ends, or first when the agent
+ensures Preview for a live check or you press **Restart**. If cleanup fails, ask
+the coding agent to recover that existing run before another check; if only
+bringing your app back failed, **Restart** starts it again. **Test Preview**
 identifies the test environment while it is selected. Colleague can explain the
 sequence and offer coding-agent assistance through the existing chat controls.
 While a suite runs in the background, the coding agent waits on its existing

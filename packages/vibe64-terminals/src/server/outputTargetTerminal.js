@@ -159,6 +159,50 @@ function createOutputTargetTerminalController({
     });
   }
 
+  // A request that starts, restarts, stops or closes Preview first takes back the Preview a finished browser test left
+  // waiting (outputTargetPreviewTests.js); one that names no target starts the person's own.
+  const afterTestRestore = (operation, options) => async (sessionId, ...input) => {
+    await previewTests.handPreviewBack(sessionId, options);
+    return operation(sessionId, ...input);
+  };
+  const withPersonTarget = (back, input = {}) => back && !input.outputTargetId ? { ...input, outputTargetId: back.targetId } : input;
+
+  /**
+   * @param {string} sessionId
+   * @param {{ outputTargetId?: string, requestedBy?: string }} [input]
+   */
+  async function ensurePreview(sessionId, input = {}) {
+    const back = await previewTests.handPreviewBack(sessionId);
+    return launchStart.ensurePreview(sessionId, withPersonTarget(back, input));
+  }
+
+  /**
+   * @param {string} sessionId
+   * @param {{ requestedBy?: string }} [input]
+   */
+  async function restartPreview(sessionId, input = {}) {
+    const back = await previewTests.handPreviewBack(sessionId);
+    // The person's own target starting over the test target is that restart.
+    return back ? launchStart.ensurePreview(sessionId, withPersonTarget(back, input)) : launchStart.restartPreview(sessionId, input);
+  }
+
+  /**
+   * @param {string} sessionId
+   * @param {object} [input]
+   */
+  async function startPreviewTerminal(sessionId, input = {}) {
+    const back = await previewTests.handPreviewBack(sessionId);
+    return startTerminal(sessionId, withPersonTarget(back, input));
+  }
+
+  /**
+   * The agent's turn ended: the Preview a finished browser test left waiting is restored now.
+   * @param {string} sessionId
+   */
+  function restorePreviewAfterTurn(sessionId) {
+    return previewTests.restorePendingPreview(sessionId);
+  }
+
   async function launchStatus(sessionId, options = {}) {
     const status = await outputStatus.launchStatus(sessionId, options);
     const starts = launchStarts(sessionId);
@@ -169,23 +213,24 @@ function createOutputTargetTerminalController({
     close: terminalSessions.close,
     closeAllForSession: terminalSessions.closeAllForSession,
     removeResultsForSession: terminalSessions.removeResultsForSession,
-    closeTerminal: terminalSessions.closeTerminal,
+    closeTerminal: afterTestRestore(terminalSessions.closeTerminal),
     launchStarts,
     launchStatus,
     selectPreviewIdentity: outputStatus.selectPreviewIdentity,
     verifyPreviewIdentity: outputStatus.verifyPreviewIdentity,
-    ensurePreview: launchStart.ensurePreview,
+    ensurePreview,
     withPreviewTarget: previewTests.withPreviewTarget,
+    restorePreviewAfterTurn,
     retryPreviewTestCleanup: previewTests.retryPreviewTestCleanup,
     previewTestRunAdmission: previewTests.previewTestRunAdmission,
-    restartPreview: launchStart.restartPreview,
+    restartPreview,
     restartPreviewAfterWorkspaceSetup: launchStart.restartPreviewAfterWorkspaceSetup,
     usageRecordingTargets: outputStatus.usageRecordingTargets,
     openOutputTarget: outputStatus.openOutputTarget,
     readResult: terminalSessions.readResult,
     readTerminal: terminalSessions.readTerminal,
-    startTerminal,
-    stopTerminal: terminalSessions.stopTerminal,
+    startTerminal: startPreviewTerminal,
+    stopTerminal: afterTestRestore(terminalSessions.stopTerminal, { stop: true }),
     subscribeTerminal: terminalSessions.subscribeTerminal,
     writeTerminal: terminalSessions.writeTerminal,
     resizeTerminal: terminalSessions.resizeTerminal

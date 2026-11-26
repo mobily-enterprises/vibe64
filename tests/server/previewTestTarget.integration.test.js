@@ -356,18 +356,113 @@ try {
   };
 }
 
-test("failed restoration remains visible until managed recovery succeeds", async t => {
+test("a restore at the turn's end that fails stays visible until managed recovery, or a Preview restart, takes over", async t => {
   const f = await fixture(t, "restore-status");
   const normal = await f.controller.ensurePreview(f.sessionId);
   await f.waitReady(normal);
-  const result = await f.controller.withPreviewTarget(f.sessionId, "test-app", async () => {
+  const breakNormalStart = () => f.controller.withPreviewTarget(f.sessionId, "test-app", async () => {
     await writeFile(path.join(f.sourceRoot, "fail-normal-start"), "yes");
     return { ok: true, exitCode: 0 };
   }, { waitUntilReady: f.waitReady });
-  assert.equal(result.previewRecoveryRequired, true);
+  assert.deepEqual(await breakNormalStart(), { ok: true, exitCode: 0, previewRestorePending: true });
+  assert.deepEqual((await f.controller.launchStatus(f.sessionId)).previewTestRun, { targetId: "test-app", state: "restore_pending" });
+  assert.equal((await f.controller.restorePreviewAfterTurn(f.sessionId)).previewRecoveryRequired, true);
   assert.deepEqual((await f.controller.launchStatus(f.sessionId)).previewTestRun, { targetId: "test-app", state: "restore_failed" });
   await rm(path.join(f.sourceRoot, "fail-normal-start"));
   assert.equal((await f.controller.retryPreviewTestCleanup(f.sessionId)).ok, true);
+  assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun, undefined);
+
+  // The same failure, then the person's Restart: it puts their saved target back and starts it.
+  await breakNormalStart();
+  assert.equal((await f.controller.restorePreviewAfterTurn(f.sessionId)).previewRecoveryRequired, true);
+  await rm(path.join(f.sourceRoot, "fail-normal-start"));
+  const restarted = await f.controller.restartPreview(f.sessionId);
+  assert.equal(restarted.ok, true, JSON.stringify(restarted));
+  const status = await f.waitReady(restarted);
+  assert.equal(status.previewTestRun, undefined);
+  assert.equal(status.activeTerminal.metadata.outputTargetId, "app");
+});
+
+test("back-to-back test runs skip starting the person's app between them, each on a fresh test target, until the turn ends or Preview is asked for", async t => {
+  const f = await fixture(t, "back-to-back");
+  const parameters = { label: "kept between runs" };
+  const normal = await f.controller.startTerminal(f.sessionId, { outputTargetId: "app", outputParameters: parameters });
+  await f.waitReady(normal);
+  const testState = async (status, action = "test-state") => {
+    const url = new URL(status.previewTarget.href);
+    url.pathname = `${url.pathname.replace(/\/$/u, "")}/${action}`;
+    const response = await fetch(url);
+    return action === "test-state" ? response.json() : response.text();
+  };
+  const testRun = (operation = async () => ({ ok: true, exitCode: 0 })) => f.controller.withPreviewTarget(f.sessionId, "test-app",
+    operation, { waitUntilReady: f.waitReady });
+  const terminals = [];
+  const repeated = async () => {
+    const startsBefore = f.previewStarts.length;
+    for (let run = 0; run < 3; run++) {
+      const result = await testRun(async () => {
+        const status = await f.controller.launchStatus(f.sessionId);
+        terminals.push(status.activeTerminal.id);
+        assert.deepEqual(await testState(status), { mode: "test-app", count: 0, effects: "disabled" }, "each run starts on fresh test data");
+        assert.equal(await testState(status, "add"), "ok");
+        return { ok: true, exitCode: 0 };
+      });
+      assert.deepEqual(result, { ok: true, exitCode: 0, previewRestorePending: true });
+      assert.deepEqual((await f.controller.launchStatus(f.sessionId)).previewTestRun, { targetId: "test-app", state: "restore_pending" });
+    }
+    assert.deepEqual(f.previewStarts.slice(startsBefore), ["test-app", "test-app", "test-app"], "the person's app never starts between runs");
+    assert.equal(new Set(terminals.splice(0)).size, 3, "no run reuses the last run's server");
+  };
+
+  // The turn ends: the person's app comes back with its parameters.
+  await repeated();
+  let startsBefore = f.previewStarts.length;
+  await f.controller.restorePreviewAfterTurn(f.sessionId);
+  let status = await f.controller.launchStatus(f.sessionId);
+  assert.deepEqual(f.previewStarts.slice(startsBefore), ["app"]);
+  assert.equal(status.previewTestRun, undefined);
+  assert.equal(status.activeTerminal.metadata.outputTargetId, "app");
+  assert.deepEqual(status.activeTerminal.metadata.outputParameters, parameters);
+  assert.equal(await f.controller.restorePreviewAfterTurn(f.sessionId), null, "nothing waits after the restore");
+
+  // The person presses Restart before the turn ends: their app, once.
+  await repeated();
+  startsBefore = f.previewStarts.length;
+  const restarted = await f.controller.restartPreview(f.sessionId);
+  assert.equal(restarted.ok, true, JSON.stringify(restarted));
+  status = await f.waitReady(restarted);
+  assert.deepEqual(f.previewStarts.slice(startsBefore), ["app"]);
+  assert.equal(status.previewTestRun, undefined);
+  assert.deepEqual(status.activeTerminal.metadata.outputParameters, parameters);
+
+  // The person presses Stop: the test app stops and theirs stays stopped, ready for its next start.
+  await repeated();
+  startsBefore = f.previewStarts.length;
+  const pendingTerminal = (await f.controller.launchStatus(f.sessionId)).activeTerminal.id;
+  assert.equal((await f.controller.stopTerminal(f.sessionId, pendingTerminal)).ok, true);
+  status = await f.controller.launchStatus(f.sessionId);
+  assert.deepEqual(f.previewStarts.slice(startsBefore), []);
+  assert.equal(status.previewTestRun, undefined);
+  assert.equal(status.activeTerminal, null);
+  assert.equal(status.preview.stoppedIntent, true);
+  assert.equal(status.lastOutputTarget.id, "app");
+  assert.deepEqual(status.lastOutputTarget.outputParameters, parameters);
+  assert.equal(await f.controller.restorePreviewAfterTurn(f.sessionId), null);
+  const started = await f.controller.ensurePreview(f.sessionId);
+  status = await f.waitReady(started);
+  assert.equal(status.activeTerminal.metadata.outputTargetId, "app");
+  assert.deepEqual(status.activeTerminal.metadata.outputParameters, parameters);
+
+  // A turn that ends while a run still tests restores as that run finishes, and the session's close drops a waiting run.
+  startsBefore = f.previewStarts.length;
+  const finished = await testRun(async () => {
+    assert.equal(await f.controller.restorePreviewAfterTurn(f.sessionId), null);
+    return { ok: true, exitCode: 0 };
+  });
+  assert.deepEqual(finished, { ok: true, exitCode: 0 });
+  assert.deepEqual(f.previewStarts.slice(startsBefore), ["test-app", "app"]);
+  assert.equal((await testRun()).previewRestorePending, true);
+  await f.controller.closeAllForSession(f.sessionId);
   assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun, undefined);
 });
 
@@ -501,6 +596,8 @@ test("workflow metadata separates real test target runs from development restora
       return { ok: true, exitCode: 0 };
     }, { waitUntilReady: f.waitReady });
     assert.equal(result.ok, true, JSON.stringify(result));
+    assert.deepEqual((await f.controller.launchStatus(f.sessionId)).previewTestRun, { targetId: "test-app", state: "restore_pending" });
+    await f.controller.restorePreviewAfterTurn(f.sessionId);
     assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun, undefined);
     assert.deepEqual(starts.map((input) => [input.operation.targetId, input.environment]), [
       ["app", "development"], ["test-app", "test"], ["app", "development"]
@@ -582,6 +679,8 @@ test("test-target capacity approval resumes the original suite and restores deve
     const result = await completion;
     assert.match(result.stdout, /Waiting for resources/u);
     assert.match(result.stdout, /1 passed/u);
+    assert.deepEqual(starts.slice(5), [["test-app", "test"]], "development returns at the turn's end");
+    await f.controller.restorePreviewAfterTurn(f.sessionId);
     assert.deepEqual(starts.slice(5), [["test-app", "test"], ["app", "development"]]);
     assert.equal((await f.controller.launchStatus(f.sessionId)).activeTerminal.metadata.outputTargetId, "app");
     assert.equal(JSON.parse(await readFile(path.join(f.sourceRoot, "working.json"), "utf8")).count, 42);
@@ -632,6 +731,7 @@ test("declared test Preview runs real servers, isolates session state, and resto
           return { ok: true, exitCode: 0 };
         });
         assert.equal(result.ok, true, JSON.stringify(result));
+        await f.controller.restorePreviewAfterTurn(f.sessionId);
         assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
       } finally { await browser.close(); }
     });
@@ -640,10 +740,14 @@ test("declared test Preview runs real servers, isolates session state, and resto
       { ok: false, exitCode: 1, signal: "SIGTERM", error: "cancelled" },
       { ok: false, exitCode: 1, timedOut: true, error: "timed out" }
     ]) {
+      // Each run's tests ran: the person's Preview comes back at the turn's end, and the next run starts its own target.
+      const startsBefore = f.previewStarts.length;
       const result = await run(async () => outcome);
-      assert.deepEqual(result, outcome);
-      assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
+      assert.deepEqual(result, { ...outcome, previewRestorePending: true });
+      assert.deepEqual(f.previewStarts.slice(startsBefore), ["test-app"]);
+      assert.deepEqual((await f.controller.launchStatus(f.sessionId)).previewTestRun, { targetId: "test-app", state: "restore_pending" });
     }
+    // A run whose target never serves restores at once, the waiting run's restore included.
     const broken = await f.controller.withPreviewTarget(f.sessionId, "broken", () => assert.fail("unready target"), options);
     assert.equal(broken.ok, false);
     assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
@@ -670,11 +774,13 @@ test("declared test Preview runs real servers, isolates session state, and resto
       const startsBeforeSuite = f.previewStarts.length;
       const result = await commands.execute(["--target", "test-app", "test", "--grep", "test database round trip|same suite keeps its fixture"]);
       assert.match(result.stdout, /2 passed/u);
-      assert.deepEqual(f.previewStarts.slice(startsBeforeSuite), ["test-app", "app"], "the whole suite switches once and restores once");
-      assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
+      assert.match(result.stdout, /keeps the test target in Preview for your next run/u);
+      assert.deepEqual(f.previewStarts.slice(startsBeforeSuite), ["test-app"], "the whole suite switches once and leaves the restore to the turn");
+      assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun.state, "restore_pending");
       const nodeSuite = await commands.execute(["--target", "test-app", "npm-run", "test:playwright:fixture"]);
       assert.match(nodeSuite.stdout, /Node browser assertions passed/u);
-      assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
+      assert.deepEqual(f.previewStarts.slice(startsBeforeSuite), ["test-app", "test-app"]);
+      assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun.state, "restore_pending");
       await assert.rejects(commands.execute(["--target", "test-app", "npm-run", "unrelated"]), error => {
         assert.match(error.stdout + error.stderr, /not a declared Playwright test script/u);
         return true;
@@ -683,6 +789,7 @@ test("declared test Preview runs real servers, isolates session state, and resto
         assert.match(error.stdout + error.stderr, /1 failed/u);
         return true;
       });
+      await f.controller.restorePreviewAfterTurn(f.sessionId);
       assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
       assert.equal(await readFile(path.join(f.sourceRoot, "working.json"), "utf8"), workingBytes);
 
@@ -690,10 +797,12 @@ test("declared test Preview runs real servers, isolates session state, and resto
         assert.match(error.stdout + error.stderr, /does not support application identity selection/u);
         return true;
       });
+      await f.controller.restorePreviewAfterTurn(f.sessionId);
       assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
 
       const authenticated = await commands.execute(["--target", "authenticated-test", "--identity", "tester", "test", "--grep", "test target login"]);
       assert.match(authenticated.stdout, /1 passed/u);
+      await f.controller.restorePreviewAfterTurn(f.sessionId);
       assert.equal((await f.controller.launchStatus(f.sessionId)).lastOutputTarget.id, "app");
 
       const launcher = commands.execute(["--target", "test-app", "test", "--grep", "cancelled test"]);
@@ -728,15 +837,16 @@ test("declared test Preview runs real servers, isolates session state, and resto
 
       await assert.rejects(commands.execute(["--target", "test-app", "test", "--grep", "restoration failure"]), error => {
         assert.match(error.stdout + error.stderr, /original test failure/u);
-        assert.match(error.stdout + error.stderr, /Could not restore Preview/u);
+        assert.doesNotMatch(error.stdout + error.stderr, /Could not restore Preview/u, "the restore waits for the turn's end");
         return true;
       });
-      const failed = JSON.parse((await commands.execute(["status"])).stdout).run;
-      assert.equal(failed.state, "restore_failed");
-      assert.equal((await f.command(["ensure", "--target", "app", "--json"])).ok, false);
-      await rm(path.join(f.sourceRoot, "fail-normal-start"));
-      assert.equal(JSON.parse((await commands.execute(["cancel", failed.id])).stdout).ok, true);
       assert.equal(JSON.parse((await commands.execute(["status"])).stdout).run, null);
+      assert.equal((await f.controller.restorePreviewAfterTurn(f.sessionId)).previewRecoveryRequired, true);
+      assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun.state, "restore_failed");
+      // The agent's ensure takes the failed restore over; the app itself still cannot start.
+      assert.equal((await f.command(["ensure", "--target", "app", "--wait", "--json"])).ok, false);
+      assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun, undefined);
+      await rm(path.join(f.sourceRoot, "fail-normal-start"));
       const recovered = await f.command(["ensure", "--target", "app", "--wait", "--json"]);
       assert.equal(recovered.ok, true, JSON.stringify(recovered));
     });
@@ -831,6 +941,7 @@ test("output parameters survive reuse, restart and temporary test-target restora
     return { ok: true, exitCode: 0 };
   }, { waitUntilReady: f.waitReady });
   assert.equal(result.ok, true, JSON.stringify(result));
+  await f.controller.restorePreviewAfterTurn(f.sessionId);
   const restored = await f.controller.launchStatus(f.sessionId);
   assert.deepEqual(restored.activeTerminal.metadata.outputParameters, parameters);
   assert.deepEqual(restored.lastOutputTarget.outputParameters, parameters);
