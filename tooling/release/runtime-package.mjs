@@ -21,8 +21,14 @@ const RUNTIME_ENTRIES = [
   // Hosts configure public Vibe64 before loading it, from outside the bundle.
   "node_modules/@local/vibe64-execution/src/server/hostProfile.js",
   "node_modules/@local/vibe64-execution/src/server/gitTurnCheckpointCommand.js",
+  // The editor server sends every finite command to the spawner it forks by path (commandSpawner.js), and ends a
+  // detached execution's process group through the reaper it starts by path (detached.js).
+  "node_modules/@local/vibe64-execution/src/server/engines/commandSpawnerProcess.js",
+  "node_modules/@local/vibe64-execution/src/server/engines/detachedReaper.js",
   "node_modules/@local/vibe64-database-tools/src/server/sqliteWorker.js",
   "node_modules/@local/vibe64-source-editor/src/server/searchIndexWorker.js",
+  // An Android build runs the Capacitor shell patch by path (buildApk.js).
+  "node_modules/@local/vibe64-packaging/src/server/packers/capacitor/shellPatch.js",
   ...GENESIS_SERVER_ENTRIES,
   "node_modules/@local/vibe64-genesis/bin/genesis",
   "node_modules/@local/vibe64-genesis/bin/vibe64-genesis-host-context",
