@@ -26,6 +26,12 @@ checkout on the person's laptop. The Git workflow depends on which:
 
 Either way, never discard or overwrite another person's or agent's work.
 
+Never use `git stash`, in any repository. Every worktree of a repository shares
+one stash, so an agent in another worktree can pop your changes, or you
+theirs, without either noticing. To set work aside, commit it on your own
+branch (change or drop that commit before pushing), or write a patch file
+outside the checkout (`git diff > <path>.patch`) and apply it back.
+
 ## Standing permission for JSKIT development
 
 The person authorizes coding agents working on Vibe64 to make the JSKIT source,
