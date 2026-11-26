@@ -169,8 +169,8 @@ function inventoryGroup() {
         await new Promise((resolve) => setTimeout(resolve, 15_000).unref());
         return { exit: 0 };
       }
+      // A host asking the caller to run something itself: there is no such answer.
       if (action === "run") return { exec: true };
-      if (action === "inject") return { exec: true, argv: ["sh", "-c", "echo injected"] };
       return { exit: 0, note: "not an answer" };
     }
   };
@@ -269,7 +269,7 @@ test("a host's group streams its output as it comes, with no time limit of its o
   assert.deepEqual([quiet.code, quiet.stdout.toString()], [0, "still here\n"]);
   const invalid = await f.helper(["inventory", "other"]).closed;
   assert.equal(invalid.code, 1);
-  assert.match(invalid.stderr, /answered neither \{ exit \} with a status from 0 to 255 nor \{ exec: true \}/u);
+  assert.match(invalid.stderr, /did not answer \{ exit \} with a status from 0 to 255\./u);
 });
 
 test("a host's group runs only after the session's binding and refuses a field it does not read, before the host runs", async (t) => {
@@ -330,34 +330,14 @@ test("SIGINT, SIGTERM or a hangup of the caller, or the session closing, cancels
   assert.match(ended.stderr, /The command was cancelled: its caller went away or its session closed\./u);
 });
 
-test("\"run it yourself\" runs only the caller's words after --, in its folder with its environment, and its status and signals pass through", async (t) => {
+test("the caller never runs a command itself: a host's answer asking it to is refused, and nothing after -- runs", async (t) => {
   const { calls, group } = inventoryGroup();
   const f = await fixture(t, [group]);
-  const script = "process.stdout.write(JSON.stringify({ args: process.argv.slice(1), cwd: process.cwd(), shop: process.env.SHOP_NAME })); process.exitCode = 7;";
-  const ran = await f.helper(["inventory", "run", "--", process.execPath, "-e", script, "a", "b c", "--json"],
-    { env: { ...f.env, SHOP_NAME: "corner shop" } }).closed;
-  assert.equal(ran.code, 7, ran.stderr);
-  assert.deepEqual(JSON.parse(ran.stdout.toString()), { args: ["a", "b c", "--json"], cwd: f.sourceRoot, shop: "corner shop" });
-  assert.deepEqual(calls.at(-1).args, ["run", "--", process.execPath, "-e", script, "a", "b c", "--json"]);
-
-  // A signal to the caller reaches the command it runs, whose own status the caller then has.
-  const trapping = "process.on('SIGTERM', () => { process.stdout.write('stopping\\n'); process.exit(5); }); process.stdout.write('ready\\n'); setTimeout(() => process.exit(9), 20000);";
-  const running = f.helper(["inventory", "run", "--", process.execPath, "-e", trapping]);
-  await eventually(() => running.stdoutText() === "ready\n", "the command never started");
-  running.child.kill("SIGTERM");
-  const stopped = await running.closed;
-  assert.deepEqual([stopped.code, stopped.stdout.toString()], [5, "ready\nstopping\n"]);
-
-  const missing = await f.helper(["inventory", "run", "--", "vibe64-no-such-command"]).closed;
-  assert.deepEqual([missing.code, missing.stderr], [127, "vibe64-no-such-command: command not found\n"]);
-  // Nothing after -- is nothing to run: the host's answer cannot make the caller run anything else.
-  for (const args of [["run"], ["run", "--"]]) {
-    const empty = await f.helper(["inventory", ...args]).closed;
-    assert.equal(empty.code, 1);
-    assert.match(empty.stderr, /gave nothing to run after --: nothing ran/u);
-  }
-  // "Run it yourself" carries no command of its own: an answer naming one is refused, and nothing runs.
-  const injected = await f.helper(["inventory", "inject", "--", "true"]).closed;
-  assert.deepEqual([injected.code, injected.stdout.toString()], [1, ""]);
-  assert.match(injected.stderr, /answered neither \{ exit \} with a status from 0 to 255 nor \{ exec: true \}/u);
+  const marker = path.join(f.sourceRoot, "ran-by-caller");
+  const script = `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "ran")`;
+  const refused = await f.helper(["inventory", "run", "--", process.execPath, "-e", script]).closed;
+  assert.deepEqual([refused.code, refused.stdout.toString()], [1, ""]);
+  assert.match(refused.stderr, /did not answer \{ exit \} with a status from 0 to 255\./u);
+  assert.deepEqual(calls.at(-1).args, ["run", "--", process.execPath, "-e", script]);
+  await assert.rejects(access(marker), { code: "ENOENT" });
 });

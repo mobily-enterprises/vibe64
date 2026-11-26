@@ -62,27 +62,17 @@ function assertHelperCommandGroups(groups) {
 }
 
 /**
- * The host's answer as the caller's last frame: its exit status, or "run it yourself", which runs only the words the
- * caller gave after its first `--`.
- * @param {string} name @param {string[]} args @param {unknown} answer
+ * The host's answer as the caller's last frame: its exit status, the only answer a group gives. The caller never runs a
+ * command of its own; a host whose work needs a process runs it through its own managed execution.
+ * @param {string} name @param {unknown} answer
  */
-function finalFrame(name, args, answer) {
+function finalFrame(name, answer) {
   const keys = answer && typeof answer === "object" ? Object.keys(answer) : [];
-  if (keys.length === 1 && answer.exec === true) {
-    const at = args.indexOf("--");
-    if (at < 0 || at === args.length - 1) {
-      throw vibe64Error(
-        `${name} answered "run it yourself", but the command gave nothing to run after --: nothing ran.`,
-        "vibe64_helper_group_exec_without_command"
-      );
-    }
-    return { type: "exec" };
-  }
   if (keys.length === 1 && Number.isInteger(answer.exit) && answer.exit >= 0 && answer.exit <= 255) {
     return { type: "exit", exitCode: answer.exit };
   }
   throw vibe64Error(
-    `The host's ${name} command answered neither { exit } with a status from 0 to 255 nor { exec: true }.`,
+    `The host's ${name} command did not answer { exit } with a status from 0 to 255.`,
     "vibe64_helper_group_answer_invalid"
   );
 }
@@ -152,7 +142,7 @@ function createHelperGroupRunner({ groups, runInSessionProject, requestTurn, ses
           signal: tracked.signal
         };
         const answer = await untilCancelled(() => group.run(request, Object.freeze({ stdout, stderr })), tracked.signal);
-        return finalFrame(group.name, fields.args, answer);
+        return finalFrame(group.name, answer);
       });
     } finally {
       tracked.end();
@@ -167,8 +157,8 @@ function createHelperGroupRunner({ groups, runInSessionProject, requestTurn, ses
 
 /**
  * The session control's route for a host group: once the control's identity admits the caller, its answer streams as
- * NDJSON frames ({ type: "stdout" | "stderr", data: base64 }, then one { type: "exit", exitCode, code?, error? } or
- * { type: "exec" }), with no time limit of its own; the caller going away cancels the host's run.
+ * NDJSON frames ({ type: "stdout" | "stderr", data: base64 }, then one { type: "exit", exitCode, code?, error? }), with
+ * no time limit of its own; the caller going away cancels the host's run.
  */
 async function streamHelperGroup({ commandService, fields, response, sessionId }) {
   const cancellation = new AbortController();
@@ -200,16 +190,14 @@ async function streamHelperGroup({ commandService, fields, response, sessionId }
 
 /**
  * The caller every host group shares, `vibe64-helper <group> [arguments]`: help from the host's own text, else one
- * request to the session control whose frames it writes as they come, exiting with the host's status or running the
- * caller's own command after `--` itself when the host says so. SIGINT, SIGTERM and SIGHUP end the request, so the
- * host's run is cancelled, and reach that command once it runs.
+ * request to the session control whose frames it writes as they come, exiting with the host's status. SIGINT, SIGTERM
+ * and SIGHUP end the request, so the host's run is cancelled.
  * @param {string} controlFilePath the session control file (agentControlIdentity.js)
  * @param {{ name: string, help: string }[]} groups
  */
 function helperGroupClientSource(controlFilePath, groups) {
   const help = Object.fromEntries(groups.map(({ name, help: text }) => [name, text.endsWith("\n") ? text : `${text}\n`]));
   return `#!/usr/bin/env node
-import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import http from "node:http";
 
@@ -235,30 +223,6 @@ if (!control?.socketPath || !control.token || !control.sessionId || !control.gen
   fail("Session control is unavailable. Reconnect the assistant.");
 }
 
-// The host's "run it yourself": the caller's own words after its first --, with this command's environment and folder.
-function runItYourself() {
-  const argv = args.slice(args.indexOf("--") + 1);
-  const child = spawn(argv[0], argv.slice(1), { stdio: "inherit" });
-  const forwarders = signals.map((signal) => [signal, () => child.kill(signal)]);
-  for (const [signal, forward] of forwarders) process.on(signal, forward);
-  let ended = false;
-  const end = () => {
-    if (ended) return false;
-    ended = true;
-    for (const [signal, forward] of forwarders) process.off(signal, forward);
-    return true;
-  };
-  child.once("error", (error) => {
-    if (!end()) return;
-    fail(argv[0] + ": " + (error.code === "ENOENT" ? "command not found" : error.message), error.code === "ENOENT" ? 127 : 126);
-  });
-  child.once("exit", (code, signal) => {
-    if (!end()) return;
-    if (signal) process.kill(process.pid, signal);
-    else process.exit(code ?? 1);
-  });
-}
-
 const body = JSON.stringify({ group, args, cwd: process.cwd(), token: control.token, sessionId: control.sessionId,
   generationId: control.generationId });
 let final = null;
@@ -276,7 +240,7 @@ const request = http.request({
     const payload = JSON.parse(line);
     if (payload.type === "stdout") process.stdout.write(Buffer.from(String(payload.data || ""), "base64"));
     else if (payload.type === "stderr") process.stderr.write(Buffer.from(String(payload.data || ""), "base64"));
-    else if (payload.type === "exit" || payload.type === "exec") final = payload;
+    else if (payload.type === "exit") final = payload;
   };
   response.on("data", (chunk) => {
     buffer += chunk;
@@ -294,7 +258,6 @@ const request = http.request({
       fail(refusal?.error || "The session control refused vibe64-helper " + group + ".");
     }
     if (buffer) frame(buffer);
-    if (final?.type === "exec") return runItYourself();
     if (!final) fail("vibe64-helper " + group + " ended without its exit status.");
     if (final.error) process.stderr.write(final.error + "\\n");
     process.exitCode = Number.isInteger(final.exitCode) ? final.exitCode : 1;

@@ -81,9 +81,9 @@
  * @typedef {{ stdout: (chunk: string | Uint8Array) => void, stderr: (chunk: string | Uint8Array) => void }} HelperCommandOutput
  */
 /**
- * The group's answer: the caller's exit status (0 to 255), or "run it yourself", after which the caller runs its own
- * words after its first `--`, in its own job with its own environment and folder, exactly as if run directly.
- * @typedef {{ exit: number } | { exec: true }} HelperCommandAnswer
+ * The group's answer: the caller's exit status (0 to 255). The caller never runs a command of its own; a host whose
+ * work needs a process runs it through its own managed execution.
+ * @typedef {{ exit: number }} HelperCommandAnswer
  */
 /** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
 /** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */

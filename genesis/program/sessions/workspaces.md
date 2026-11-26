@@ -736,10 +736,11 @@ the caller's words, its folder, the session's source and a signal. The host's
 output streams back as NDJSON frames with no time limit of the listener's own;
 the caller's SIGINT, SIGTERM or hangup, or the session closing
 (`sessionCommandRuns.js`), aborts that signal and ends the call at once, without
-waiting for a host that ignores it. The host answers `{ exit }`,
-which the caller exits with, or `{ exec: true }`, after which the caller runs
-its own words after `--` itself, in its own command's job, environment and
-folder, passing those signals on: the answer never names a command.
+waiting for a host that ignores it. The host answers `{ exit }`, with a status
+from 0 to 255, which the caller exits with; any other answer fails the call.
+The caller never starts a process of its own, so a group starts no process
+outside managed execution: a host whose work needs one runs it through its own
+managed execution.
 
 `vibe64-helper spec [<name>]` prints the exact contracts a coding agent
 implements: every Stack section Vibe64 interprets, the Preview identity command
