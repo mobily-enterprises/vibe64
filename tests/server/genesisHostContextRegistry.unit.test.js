@@ -28,7 +28,9 @@ test("installed host guidance reaches native instructions and stays absent on ot
   const resolved = await vibe64DriverInputFromRegistry({ data: { registryPath: registry.registryPath }, providerSessionId: "hosted", scope: "session" });
   assert.equal(vibe64Driver(resolved).includes(guidance), true);
   assert.equal(vibe64Driver(context("main")).includes("vibe64-local"), false);
-  assert.throws(() => vibe64Driver({ ...hosted, hostGuidance: "x".repeat(1025) }), /bounded text/);
+  // A host keeps one guidance text, its own commands' lines among them, of at most 1280 bytes.
+  assert.equal(vibe64Driver({ ...hosted, hostGuidance: "x".repeat(1280) }).includes("x".repeat(1280)), true);
+  assert.throws(() => vibe64Driver({ ...hosted, hostGuidance: "x".repeat(1281) }), /bounded text/);
 });
 
 test("a chat agent answers a message sent while it works in visible text, not only in its thinking", () => {
@@ -55,7 +57,7 @@ test("every session capability combination stays 2 KiB under Genesis's host cont
 }, () => {
   const bound = GENESIS_SESSION_BOUND;
   const SPARE = 2 * 1024;
-  const hostGuidance = "é".repeat(512); // 1024 UTF-8 bytes, not characters.
+  const hostGuidance = "é".repeat(640); // 1280 UTF-8 bytes, not characters.
   const capabilities = [...VIBE64_SESSION_CAPABILITIES, ...VIBE64_OPTIONAL_SESSION_CAPABILITIES];
   for (const conversationKind of ["main", "temporary"]) {
     for (let mask = 0; mask < 2 ** capabilities.length; mask++) {

@@ -71,6 +71,9 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
+- `packages/vibe64-terminals/src/server/helperCommandGroups.js`
+- `packages/vibe64-terminals/src/server/sessionCommandRuns.js`
+- `tests/server/helperCommandGroups.unit.test.js`
 - `tests/server/sessionNaming.unit.test.js`
 - `tests/server/sessionRename.unit.test.js`
 - `tests/e2e/session-naming.spec.ts`
@@ -715,6 +718,26 @@ each command only its own. Manual names may contain spaces and have a 120-charac
 automatic names contain one word of up to 40 characters. The store checks for
 an existing label under its mutation lock before applying an automatic name,
 so a manual rename wins. IDs, directories, source branches and URLs never move.
+
+A composed host may add its own `vibe64-helper` groups through the terminals
+feature's optional `vibe64.terminals.helper-command-groups` token, a list of
+`{ name, summary, help, run }` (`helperCommandGroups.js`). Composition refuses a
+name `vibe64-helper` already has, so a host adds groups and never replaces one;
+without the token `vibe64-helper` lists and refuses exactly its own. A host's
+groups follow its own in `vibe64-helper --help`, and `<group> --help` prints the
+host's help without reaching it. Each call goes through the same session
+control listener as the other session commands, authorized by its control
+token, generation and bound project, then `refuseUnreadFields` (`group`, `args`,
+`cwd`) and the session folder check, before `run` receives the session, project,
+the person the current request acts for, that request's turn while it works,
+the caller's words, its folder, the session's source and a signal. The host's
+output streams back as NDJSON frames with no time limit of the listener's own;
+the caller's SIGINT, SIGTERM or hangup, or the session closing
+(`sessionCommandRuns.js`), aborts that signal and ends the call at once, without
+waiting for a host that ignores it. The host answers `{ exit }`,
+which the caller exits with, or `{ exec: true }`, after which the caller runs
+its own words after `--` itself, in its own command's job, environment and
+folder, passing those signals on: the answer never names a command.
 
 `vibe64-helper spec [<name>]` prints the exact contracts a coding agent
 implements: every Stack section Vibe64 interprets, the Preview identity command

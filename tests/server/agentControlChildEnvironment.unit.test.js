@@ -74,6 +74,7 @@ async function prepareSessionControls(sessionId) {
     prepareAgentSessionCommand({
       commandService: {
         ...bound,
+        helperGroups: [],
         managePlan: async (id, fields) => ({ ok: true, plan: `${fields.operation} ${id}` }),
         sessionStatus: async (id) => ({ ok: true, status: `session ${id}` })
       },

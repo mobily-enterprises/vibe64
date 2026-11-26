@@ -5438,9 +5438,12 @@ The in-process dispatch does not add durable restart recovery. A reply invokes t
 same command with the exact source project and session ID. Reply instructions
 include `--session`, so selection and pin changes cannot redirect the reply.
 
-The native context also accepts optional host guidance bounded to 1024 UTF-8
-bytes. All capability combinations, including that maximum, fit Genesis’s 16384-byte
-session contribution limit and pass its instruction composer. Codex, Claude
+The native context also accepts optional host guidance bounded to 1280 UTF-8
+bytes, which a host may also use to describe its own `vibe64-helper` groups.
+Every capability combination with that maximum stays at least 2 KiB under the
+session contribution bound the installed Genesis exports
+(`HOST_CONTEXT_MAX_BYTES.session`) and passes its instruction composer
+(`genesisHostContextRegistry.unit.test.js`). Codex, Claude
 and OpenCode pass it from the daemon's host environment through the existing
 context registry and driver. The terminals provider explicitly carries this trusted
 host key through the filtered runtime environment before constructing any provider.

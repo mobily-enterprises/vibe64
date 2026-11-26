@@ -46,6 +46,14 @@ import {
   withGenesisCommandShim
 } from "@local/vibe64-genesis/server";
 import { createAgentCommandProjectBinding } from "./agentCommandProjectBinding.js";
+import { createSessionCommandRuns } from "./sessionCommandRuns.js";
+import {
+  HELPER_GROUP_ROUTE,
+  NO_HELPER_COMMAND_GROUPS,
+  createHelperGroupRunner,
+  streamHelperGroup,
+  writeHelperGroupClient
+} from "./helperCommandGroups.js";
 import {
   createSessionCommandServers,
   shortCommandHash,
@@ -138,6 +146,7 @@ const commandServers = createSessionCommandServers({
     "/agent-session-command/update": controlRoute("updateSession"),
     "/agent-session-command/save": controlRoute("saveSession"),
     "/agent-session-command/plan": controlRoute("managePlan"),
+    [HELPER_GROUP_ROUTE]: { handle: streamHelperGroup, token: "controlToken" },
     "/agent-session-command/run": {
       handle({ commandService, input, request, response }) {
         const abortController = new AbortController();
@@ -191,6 +200,7 @@ const commandServers = createSessionCommandServers({
  * @param {typeof runVibe64Command} [dependencies.runCommand]
  * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
  * @param {typeof stopVibe64OwnedExecutions} [dependencies.stopOwnedExecutions]
+ * @param {import("./types.js").HelperCommandGroup[]} [dependencies.helperCommandGroups] a host's own vibe64-helper groups
  */
 function createAgentSessionCommandService({
   listProjectSessions,
@@ -208,7 +218,8 @@ function createAgentSessionCommandService({
   listPasses = listGenesisPasses,
   runCommand = runVibe64Command,
   stopExecution = stopVibe64Execution,
-  stopOwnedExecutions = stopVibe64OwnedExecutions
+  stopOwnedExecutions = stopVibe64OwnedExecutions,
+  helperCommandGroups = NO_HELPER_COMMAND_GROUPS
 }) {
   const projectBinding = createAgentCommandProjectBinding(project, {
     sessionRequired: ["Vibe64 session command binding is incomplete.", "vibe64_agent_session_command_binding_required"],
@@ -217,7 +228,7 @@ function createAgentSessionCommandService({
     changed: ["The shell command session no longer matches its bound project.", "vibe64_agent_session_command_project_binding_changed"]
   });
   const sessionExecutions = new Map();
-  const sessionRuns = new Map();
+  const sessionRuns = createSessionCommandRuns();
 
   async function bindSession(sessionId = "", options = {}) {
     const { wrapperHostDir = "" } = options;
@@ -292,15 +303,20 @@ function createAgentSessionCommandService({
   }
 
   /**
-   * Cross-project commands act for the person who submitted the current request.
+   * Cross-project commands act for the person who submitted the current request; its turn, while it works.
    * @param {Vibe64SessionStore} store
    * @param {string} sessionId
    * @param {object} binding
    */
-  async function requestActor(store, sessionId, binding) {
+  async function requestTurn(store, sessionId, binding) {
     const routing = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
-    return routing?.submittedBy || binding.actor;
+    return {
+      actor: routing?.submittedBy || binding.actor,
+      turnId: routing?.status === "working" ? toText(routing.turnId) : ""
+    };
   }
+  const requestActor = async (store, sessionId, binding) => (await requestTurn(store, sessionId, binding)).actor;
+  const helperGroups = createHelperGroupRunner({ groups: helperCommandGroups, runInSessionProject, requestTurn, sessionRuns });
 
   async function listProject(sessionId, input) {
     return runSessionCommand(sessionId, "listProject", input, async ({ binding, store }) => {
@@ -574,13 +590,7 @@ function createAgentSessionCommandService({
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const sessionId = toText(input.sessionId);
-    const abortController = new AbortController();
-    const runs = sessionRuns.get(sessionId) || new Set();
-    runs.add(abortController);
-    sessionRuns.set(sessionId, runs);
-    const abort = () => abortController.abort(input.signal?.reason);
-    input.signal?.addEventListener("abort", abort, { once: true });
-    if (input.signal?.aborted) abort();
+    const tracked = sessionRuns.track(sessionId, input.signal);
     let result;
     try {
       if (!sessionId) {
@@ -591,7 +601,7 @@ function createAgentSessionCommandService({
       }
       result = await runInSessionProject(
         sessionId,
-        (context) => execute({ ...input, signal: abortController.signal }, context)
+        (context) => execute({ ...input, signal: tracked.signal }, context)
       );
     } catch (error) {
       const payload = vibe64ErrorResponse(error, {
@@ -600,11 +610,7 @@ function createAgentSessionCommandService({
       });
       result = commandLineFailure(payload.error, payload.code);
     } finally {
-      input.signal?.removeEventListener("abort", abort);
-      runs.delete(abortController);
-      if (sessionRuns.get(sessionId) === runs && runs.size === 0) {
-        sessionRuns.delete(sessionId);
-      }
+      tracked.end();
     }
     logOperationalEvent(logger, result?.ok === false ? "warn" : "info", {
       code: toText(result?.code),
@@ -622,10 +628,7 @@ function createAgentSessionCommandService({
   async function closeAllForSession(sessionId = "") {
     const normalizedSessionId = toText(sessionId);
     const binding = projectBinding.forget(normalizedSessionId);
-    for (const abortController of sessionRuns.get(normalizedSessionId) || []) {
-      abortController.abort();
-    }
-    sessionRuns.delete(normalizedSessionId);
+    sessionRuns.cancelSession(normalizedSessionId);
     const executions = [...(sessionExecutions.get(normalizedSessionId) || [])];
     sessionExecutions.delete(normalizedSessionId);
     const owned = await stopOwnedExecutions({
@@ -675,7 +678,9 @@ function createAgentSessionCommandService({
     updateSession,
     saveSession,
     managePlan,
-    run
+    run,
+    helperGroups: helperGroups.listing,
+    runHelperGroup: helperGroups.run
   });
 }
 
@@ -705,7 +710,8 @@ async function prepareAgentSessionCommand({
     writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-plan"), planCommandSource(SESSION_RENAME_CONTROL_ENV, controlFilePath)),
     writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-session"), sessionRenameCommandSource(controlFilePath)),
     writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource()),
-    writeExecutableFileIfChanged(runnerHostPath(normalizedWrapperHostDir), commandRunnerSource())
+    writeExecutableFileIfChanged(runnerHostPath(normalizedWrapperHostDir), commandRunnerSource()),
+    writeHelperGroupClient(normalizedWrapperHostDir, controlFilePath, commandService.helperGroups)
   ]);
   const socketPath = commandSocketHostPath(normalizedWrapperHostDir);
   const server = await commandServers.ensure({ commandService, sessionId: normalizedSessionId, socketPath });
