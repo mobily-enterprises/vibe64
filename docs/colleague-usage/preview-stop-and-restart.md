@@ -23,7 +23,8 @@ for example **The preview process exited with code 1: listen EADDRINUSE: address
 already in use 127.0.0.1:4103.** That one means another program already listens
 on the port. Vibe64 never gives a Preview a port from the range the system uses
 for outgoing connections, so such a clash comes from a program listening there.
-Fix the cause, or ask the coding agent to, then use **Restart preview**.
+Fix the cause, or ask the coding agent to, then use **Restart preview** (the pane
+shows **Retry preview** instead when only the last run can be tried again).
 
 A Preview also stops when the platform restarts, for example during an update.
 The pane then removes the old page instead of leaving it looking alive. It shows
