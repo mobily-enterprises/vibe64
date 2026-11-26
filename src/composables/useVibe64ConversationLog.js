@@ -17,6 +17,7 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import { resumeIntegrationContinuation } from "@/lib/vibe64IntegrationContinuation.js";
+import { sessionRecordHasDetailProjection } from "@/lib/vibe64MountedSessionState.js";
 import {
   normalizeConversationTurn as normalizeSharedConversationTurn
 } from "@jskit-ai/assistant-core/shared/conversation";
@@ -316,7 +317,18 @@ function useVibe64ConversationLog({
       return payload.reason === "session-assistant-selection-updated"
         ? conversation.reload({ resubscribe: true }) : conversation.reload();
     } });
-  watch(() => conversationLogCompletedTurnKey(currentSession.value), key => {
+  // A session's first detailed record (one with its agent session), here at mount or arriving after it, starts the
+  // watch: the supplied binding's own state already holds a turn completed by then, unless it still shows that turn
+  // working, a completion it missed. After it, each newly completed turn reloads.
+  let startedSessionId = "";
+  const detailedSessionId = computed(() => sessionRecordHasDetailProjection(currentSession.value) ? sessionId.value : "");
+  const completedTurnKey = computed(() => conversationLogCompletedTurnKey(currentSession.value));
+  watch([detailedSessionId, completedTurnKey], ([detailed, key]) => {
+    if (!detailed) return;
+    if (detailed !== startedSessionId) {
+      startedSessionId = detailed;
+      if (conversation.snapshot.value?.status !== "working") return;
+    }
     if (!enabled.value || !key) return;
     if (key === realtimeCompletionKey) {
       realtimeCompletionKey = "";
@@ -325,7 +337,7 @@ function useVibe64ConversationLog({
     void conversation.reload()?.catch(() => {
       // The supplied binding retains the error and its ordinary recovery.
     });
-  }, { flush: "post" });
+  }, { flush: "post", immediate: true });
   return { integrationConnections: integrationActions.integrationConnections,
     connectIntegrationRequest: integrationActions.connectIntegrationRequest,
     checkIntegrationRequest: integrationActions.checkIntegrationRequest,

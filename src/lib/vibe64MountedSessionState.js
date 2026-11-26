@@ -170,5 +170,6 @@ export {
   mountedSessionDetailRefreshReason,
   mountedSessionRealtimeShouldRefresh,
   mountedSessionRecord,
-  sessionRecordHasActiveAgentWork
+  sessionRecordHasActiveAgentWork,
+  sessionRecordHasDetailProjection
 };

@@ -16,6 +16,9 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", async importOriginal
   const actual = await importOriginal();
   return { ...actual, useCommand: options => actual.useCommand({ ...options, client: options?.client || fixtureClient }) };
 });
+// The real conversation log, which one test mounts, takes the sessions path its identity gives; nothing else here
+// resolves paths.
+vi.mock("@jskit-ai/shell-web/client/navigation/usePaths", () => ({ usePaths: () => ({ api: () => "/api/vibe64/sessions" }) }));
 // Same feedback resource interface; original tests have no practical commands.
 vi.mock("@jskit-ai/shell-web/client/error", () => ({ useShellWebErrorRuntime: () => ({ report: vi.fn() }) }));
 // The runtime takes the account event names from their own module: the accounts client entry loads every account
@@ -41,11 +44,13 @@ const renderer = createRenderer({ createElement: () => ({}), createText: () => (
 const releases = [];
 afterEach(() => { releases.splice(0).reverse().forEach(release => release()); vi.clearAllMocks(); });
 function fixture({ readGoal = () => null, status = "ready", steering = true,
-  projectSlug = "one", sessionId = "s1", sessionsApiPath = "/api/vibe64/sessions", beforeMount, provideShell } = {}) {
+  projectSlug = "one", sessionId = "s1", sessionsApiPath = "/api/vibe64/sessions", beforeMount, provideShell,
+  session = identity => ({ sessionId: identity.sessionId, agentSession: { turn: {} } }),
+  log = ({ conversation }) => ({ turns: conversation.turns }) } = {}) {
   const disposed = [];
   const owners = [];
   mocks.mounted.mockImplementation(identity => {
-    const value = { identity, session: ref({ sessionId: identity.sessionId, agentSession: { turn: {} } }),
+    const value = { identity, session: ref(session(identity)),
       detailState: ref({}), agentConnectionStatus: ref("connected"), refresh: vi.fn(async () => {}) };
     owners.push(value); onScopeDispose(() => disposed.push(`${identity.projectSlug}/${identity.sessionId}`)); return value;
   });
@@ -57,7 +62,7 @@ function fixture({ readGoal = () => null, status = "ready", steering = true,
   }
   const socket = createConversationFixtureSocket(read);
   mocks.read.mockImplementation(url => url.endsWith("/goal") ? readGoal() : read(decodeURIComponent(url.split("/conversations/")[1])));
-  mocks.log.mockImplementation(({ conversation }) => ({ turns: conversation.turns }));
+  mocks.log.mockImplementation(log);
   const access = { canUseChat: ref(true), restrictionMessage: ref(""), accessError: ref("") };
   mocks.access.mockReturnValue(access);
   mocks.request.mockResolvedValue({ ok: true });
@@ -180,6 +185,44 @@ describe("retained project conversation ownership", () => {
     expect(mocks.request).not.toHaveBeenCalled();
     expect(reads().every(([url]) => url.startsWith("/api/assistant/app/conversations/") && !url.includes("/agent-goal"))).toBe(true);
   });
+  it("reads the conversation and its goal once when its session arrives with a completed turn, and again for a later or missed one", async () => {
+    const { useVibe64ConversationLog } = await vi.importActual("../../src/composables/useVibe64ConversationLog.js");
+    const conversationReads = () => mocks.read.mock.calls.filter(([url]) => url.includes("/conversations/") && !url.endsWith("/goal")).length;
+    const goalReads = () => mocks.read.mock.calls.filter(([url]) => url.endsWith("/goal")).length;
+    const settled = async () => {
+      for (let turn = 0; turn < 5; turn += 1) {
+        await nextTick();
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    };
+    // A page load: the binding reads at mount, then the session's detailed record arrives.
+    async function load(sessionId, turn, status = "ready") {
+      const before = { conversation: conversationReads(), goal: goalReads() };
+      const f = fixture({ sessionId, status, session: () => null, log: useVibe64ConversationLog });
+      await vi.waitFor(() => expect(f.runtime.value?.goalState.value.pending).toBe(false));
+      f.owners[0].session.value = { sessionId, revision: 4, agentSession: { turn } };
+      await settled();
+      return { f, reads: { conversation: conversationReads() - before.conversation, goal: goalReads() - before.goal } };
+    }
+    const working = await load("s-working", { id: "t1", active: true });
+    const completed = await load("s-completed", { id: "t1", active: false });
+    // The binding's first state comes from its subscription: a conversation GET is a reload, and the mount has none.
+    expect(working.reads).toEqual({ conversation: 0, goal: 1 });
+    expect(completed.reads).toEqual(working.reads);
+    // A conversation still showing the turn working when its session arrives completed missed that completion.
+    const missed = await load("s-missed", { id: "t1", active: false }, "working");
+    expect(missed.reads).toEqual({ conversation: 1, goal: 2 });
+
+    // A turn completed after the session arrived reloads the conversation once.
+    const before = conversationReads();
+    completed.f.owners[0].session.value = { sessionId: "s-completed", revision: 6, agentSession: { turn: { id: "t2", active: false } } };
+    await vi.waitFor(() => expect(conversationReads()).toBe(before + 1));
+    working.f.owners[0].session.value = { sessionId: "s-working", revision: 5, agentSession: { turn: { id: "t1", active: false } } };
+    await vi.waitFor(() => expect(conversationReads()).toBe(before + 2));
+    await settled();
+    expect(conversationReads()).toBe(before + 2);
+  });
+
   it("keeps the original target after navigation and text-screen unmount, then disposes its last reader", async () => {
     const f = fixture(); const original = f.runtime.value;
     const binding = createProjectVoiceBinding(original);
