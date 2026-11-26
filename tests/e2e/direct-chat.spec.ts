@@ -1271,6 +1271,44 @@ test.describe("direct chat", () => {
         await expect(otherTab).not.toHaveClass(/studio-ai-sessions__tab--active/u);
         expect(selections).not.toContain(secondSessionId);
       });
+
+      // A short name puts the tab's centre near its work-state icon: a click or tap on the tab, or on the centre of its
+      // name, selects the session, and only the icon's own box and the side away from the name open its info.
+      test("a click or tap on a short tab, or on the centre of its name, selects its session without opening its info", async ({ page }) => {
+        await page.setViewportSize({ width: device.width, height: 844 });
+        const [betaId, gammaId] = ["work-state-beta-session", "work-state-gamma-session"];
+        await mockDirectChat(page, {
+          additionalSessionIds: [betaId, gammaId],
+          additionalSessionNames: ["Beta", "Gamma"],
+          workState: { operation: null, unsaved: false, updateOperation: null }
+        });
+        const selections: string[] = [];
+        page.on("request", (request) => {
+          if (request.method() === "PUT" && new URL(request.url()).pathname.endsWith("/sessions/current")) {
+            selections.push(String(request.postDataJSON()?.sessionId || ""));
+          }
+        });
+        await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}`);
+        const tabFor = (sessionId: string) => page.locator(`[data-vibe64-session-id="${sessionId}"]:visible`).first();
+        const underPoint = (x: number, y: number) => page.evaluate(([pointX, pointY]) => {
+          const element = document.elementFromPoint(pointX, pointY);
+          return element?.closest(".studio-ai-sessions__repository-state") ? "work-state icon"
+            : element?.closest("[data-vibe64-session-id]")?.getAttribute("data-vibe64-session-id") || "";
+        }, [x, y]);
+        const press = (x: number, y: number) => device.hasTouch ? page.touchscreen.tap(x, y) : page.mouse.click(x, y);
+        for (const [sessionId, name, point] of [[betaId, "Beta", "tab"], [gammaId, "Gamma", "name"]] as const) {
+          const tab = tabFor(sessionId);
+          await expect(tab.locator(".studio-ai-sessions__tab-label")).toHaveText(name);
+          await expect(tab).not.toHaveClass(/studio-ai-sessions__tab--active/u);
+          const box = (await (point === "tab" ? tab : tab.locator(".studio-ai-sessions__tab-label")).boundingBox())!;
+          const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+          expect(await underPoint(x, y), `the centre of ${name}'s ${point}`).toBe(sessionId);
+          await press(x, y);
+          await expect(tab).toHaveClass(/studio-ai-sessions__tab--active/u);
+          await expect.poll(() => selections).toContain(sessionId);
+          await expect(page.locator(".studio-ai-sessions__info:visible")).toHaveCount(0);
+        }
+      });
     });
   }
 
@@ -2015,6 +2053,7 @@ test.describe("direct chat", () => {
 
 async function mockDirectChat(page: Page, {
   additionalSessionIds = [],
+  additionalSessionNames = [],
   agentActive = false,
   agentTurn = null,
   creation = {},
@@ -2029,6 +2068,8 @@ async function mockDirectChat(page: Page, {
   }
 }: {
   additionalSessionIds?: string[];
+  // Each additional session's name, by its place; "Second session", then "Session 3" and on, where none is given.
+  additionalSessionNames?: string[];
   agentActive?: boolean;
   agentTurn?: Record<string, unknown> | null;
   creation?: Record<string, unknown>;
@@ -2052,7 +2093,7 @@ async function mockDirectChat(page: Page, {
       agentActive: false,
       includeWorktreePaths,
       sessionId,
-      sessionName: index === 0 ? "Second session" : `Session ${index + 2}`
+      sessionName: additionalSessionNames[index] || (index === 0 ? "Second session" : `Session ${index + 2}`)
     }))
   ];
   let selectedSessionId = SESSION_ID;
