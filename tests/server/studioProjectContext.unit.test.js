@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import childProcess, { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
@@ -1084,6 +1084,48 @@ test("Studio project context resolves GitHub capability from explicit target rem
     const ambiguousListed = await ambiguousContext.listProjects();
     assert.equal(ambiguousListed.currentProject.repositoryMode, PROJECT_REPOSITORY_MODE_LOCAL_SOURCE);
     assert.equal(ambiguousListed.currentProject.githubRepository, undefined);
+  });
+});
+
+test("a local project's GitHub remote and branch come from Git once while its Git files stay the same", async (t) => {
+  await withTemporaryRoot(async (root) => {
+    const target = path.join(root, "local-target");
+    await createGitProject(target, { origin: "git@github.com:example/first.git" });
+    await runGit(target, ["symbolic-ref", "HEAD", "refs/heads/trunk"]);
+    const context = createStudioProjectContext({ explicitTargetRoot: target, env: {}, home: root });
+    const spawned = [];
+    const spawn = childProcess.spawn;
+    t.mock.method(childProcess, "spawn", function countedSpawn(...args) {
+      spawned.push(args);
+      return spawn.apply(this, args);
+    });
+    syncBuiltinESMExports();
+    try {
+      const list = async (listings) => {
+        const before = spawned.length;
+        let listed;
+        for (let index = 0; index < listings; index += 1) listed = await context.listProjects();
+        return { project: listed.currentProject, spawns: spawned.length - before };
+      };
+      const first = await list(1);
+      assert.equal(first.project.githubRepository.fullName, "example/first");
+      assert.equal(first.project.repository.defaultBranch, "trunk");
+      assert.ok(first.spawns > 0, "the first listing asks Git");
+      const few = await list(2);
+      const many = await list(20);
+      assert.equal(many.spawns, few.spawns, "Git runs as often for 20 listings as for 2");
+      assert.equal(few.spawns, 0);
+      assert.equal(many.project.githubRepository.fullName, "example/first");
+
+      await runGit(target, ["remote", "set-url", "origin", "https://github.com/example/second.git"]);
+      await runGit(target, ["symbolic-ref", "HEAD", "refs/heads/feature"]);
+      const changed = await list(1);
+      assert.equal(changed.project.githubRepository.fullName, "example/second");
+      assert.equal(changed.project.repository.defaultBranch, "feature");
+    } finally {
+      t.mock.restoreAll();
+      syncBuiltinESMExports();
+    }
   });
 });
 
