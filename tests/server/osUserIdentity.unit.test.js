@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -52,6 +52,7 @@ test("local OS identity stays fresh without spawning a process, including after 
     const options = {
       platform: "linux",
       readFileFn: (file, encoding) => readFile(path.join(root, path.basename(file)), encoding),
+      statFn: (file, statOptions) => stat(path.join(root, path.basename(file)), statOptions),
       execFileFn: async () => {
         spawns += 1;
         return { stdout: "" };
@@ -74,6 +75,64 @@ test("local OS identity stays fresh without spawning a process, including after 
     await writeFile(path.join(root, "nsswitch.conf"), "passwd: sss files\n");
     await assert.rejects(resolveOsUser("ada", options), { code: "vibe64_os_user_not_found" });
     assert.equal(spawns, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a workspace account in the extra users database resolves without a fork, its files read once until they change", async () => {
+  // A host keeps its workspace accounts in libnss-extrausers ("passwd: files extrausers"); the account is not in
+  // /etc/passwd. Each request resolves it, so a fork per lookup ran about 20 times a second on a busy workspace.
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-os-identity-"));
+  try {
+    const files = {
+      "/etc/nsswitch.conf": path.join(root, "nsswitch.conf"),
+      "/etc/passwd": path.join(root, "passwd"),
+      "/var/lib/extrausers/passwd": path.join(root, "extrausers-passwd")
+    };
+    await writeFile(files["/etc/nsswitch.conf"], "passwd:         files extrausers\ngroup:          files extrausers\n");
+    await writeFile(files["/etc/passwd"], "root:x:0:0:root:/root:/bin/bash\n");
+    await writeFile(files["/var/lib/extrausers/passwd"], "v64d_shop:x:2001:2001:Shop:/home/v64d_shop:/bin/bash\n");
+    let spawns = 0;
+    const reads = {};
+    const options = {
+      platform: "linux",
+      readFileFn: (file, encoding) => {
+        reads[file] = (reads[file] || 0) + 1;
+        return readFile(files[file], encoding);
+      },
+      statFn: (file, statOptions) => stat(files[file], statOptions),
+      execFileFn: async () => {
+        spawns += 1;
+        return { stdout: "v64d_shop:x:2001:2001:Shop:/home/v64d_shop:/bin/bash\n" };
+      }
+    };
+    for (const count of [1, 200]) {
+      const users = await Promise.all(Array.from({ length: count }, () => resolveOsUser("v64d_shop", options)));
+      assert.ok(users.every((user) => user.uid === 2001 && user.home === "/home/v64d_shop"));
+    }
+    assert.equal(spawns, 0, "no lookup forks getent");
+    assert.deepEqual(reads, { "/etc/nsswitch.conf": 1, "/etc/passwd": 1, "/var/lib/extrausers/passwd": 1 },
+      "201 lookups read each file once");
+    // useradd --extrausers replaces the file: the next lookup reads the new one, once.
+    await writeFile(`${files["/var/lib/extrausers/passwd"]}.new`,
+      "v64d_shop:x:2001:2001:Shop:/home/v64d_shop:/bin/bash\nada:x:2002:2002:Ada:/home/ada:/bin/bash\n");
+    await rename(`${files["/var/lib/extrausers/passwd"]}.new`, files["/var/lib/extrausers/passwd"]);
+    assert.equal((await resolveOsUser("ada", options)).uid, 2002);
+    assert.equal((await resolveOsUser("ada", options)).uid, 2002);
+    assert.equal(reads["/var/lib/extrausers/passwd"], 2);
+    // An account in neither file is not found, as NSS answers after its last source, without a fork.
+    await assert.rejects(resolveOsUser("nobody-here", options), { code: "vibe64_os_user_not_found" });
+    assert.equal(spawns, 0);
+    // A source this process cannot read still goes to NSS once the files before it lack the account.
+    await writeFile(files["/etc/nsswitch.conf"], "passwd: files extrausers sss\n");
+    assert.equal((await resolveOsUser("ada", options)).uid, 2002);
+    assert.equal(spawns, 0);
+    await assert.rejects(resolveOsUser("nobody-here", { ...options, execFileFn: async () => {
+      spawns += 1;
+      throw Object.assign(new Error("no such key"), { code: 2 });
+    } }), { code: "vibe64_os_user_not_found" });
+    assert.equal(spawns, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

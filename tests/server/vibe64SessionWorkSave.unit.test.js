@@ -1235,7 +1235,8 @@ test("a session that stays updated because files kept changing is on the saved v
           await writeFile(path.join(session.sourcePath, "shared.txt"), "written after the switch\n", "utf8");
           return { code: "git_failed", ok: false, output: "", stderr: "HEAD could not move.", stdout: "" };
         }
-        if (request.command === "git" && request.args[0] === "read-tree" && request.args[1] === "-m") {
+        // A worktree switch (`read-tree -m -u`), not a tree write's own index (`read-tree -m` alone).
+        if (request.command === "git" && request.args[0] === "read-tree" && request.args[1] === "-m" && request.args[2] === "-u") {
           switches += 1;
           if (switches > 1) {
             return { code: "git_failed", ok: false, output: "", stderr: "error: Entry 'remote.txt' not uptodate. Cannot merge.", stdout: "" };

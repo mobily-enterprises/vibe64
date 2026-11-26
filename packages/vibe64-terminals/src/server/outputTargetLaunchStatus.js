@@ -115,15 +115,31 @@ function createOutputTargetLaunchStatus({
     return response;
   }
 
+  // The outputs reads waiting for a session's launch lock, by session and request: a read that arrives while another
+  // runs shares the one that runs next, which still starts after it asked, so pages polling a busy session no longer
+  // queue one whole read per poll behind the lock.
+  const queuedReads = new Map();
+
   async function launchStatus(sessionId, options = {}) {
     if (launchCoordination.launchStartBusy(sessionId)) {
       return vibe64Result(async () => launchCoordination.withLaunchAdmission(sessionId, () => (
         readLaunchStatus(sessionId, options, true)
       )));
     }
-    return vibe64Result(async () => launchCoordination.withLaunchStartLock(sessionId, () => (
-      launchCoordination.withLaunchAdmission(sessionId, () => readLaunchStatus(sessionId, options))
-    )));
+    const key = JSON.stringify([String(sessionId || ""), options]);
+    const queued = queuedReads.get(key);
+    if (queued) return queued.result;
+    const read = {};
+    const forget = () => {
+      if (queuedReads.get(key) === read) queuedReads.delete(key);
+    };
+    queuedReads.set(key, read);
+    read.result = vibe64Result(async () => launchCoordination.withLaunchStartLock(sessionId, () => {
+      forget();
+      return launchCoordination.withLaunchAdmission(sessionId, () => readLaunchStatus(sessionId, options));
+    }));
+    read.result.then(forget, forget);
+    return read.result;
   }
 
   async function selectPreviewIdentity(sessionId, input = {}, options = {}) {
