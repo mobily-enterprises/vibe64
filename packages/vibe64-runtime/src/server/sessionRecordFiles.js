@@ -37,6 +37,14 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 /** @typedef {import("./types.js").SessionStorePaths} SessionStorePaths */
 
 const agentRunFileCache = createParsedFileCache(256);
+// Each session's metadata values, by its metadata folder, reused while the folder is unchanged: every writer publishes
+// a value by rename or removes it, and either changes the folder's modification time, so one stat of the folder
+// stands in for reading every value on each session read. A folder changed within the last two seconds is read again
+// the next time, since a change within the same timestamp step (as coarse as two seconds on some filesystems) can leave
+// that time as it was.
+const metadataFolderCache = new Map();
+const METADATA_FOLDER_CACHE_LIMIT = 512;
+const METADATA_FOLDER_SETTLED_NS = 2_000_000_000n;
 // Whether a session has an active agent run, by its runs folder, for the
 // session list's every refresh. A run write here forgets its folder's answer
 // and a change from elsewhere changes the folder, so only then are runs reread.
@@ -72,8 +80,17 @@ function createSessionRecordFiles({ state, storePaths }) {
    * Ordinary readers always pass through readMetadataFromPaths above.
    */
   async function readUnboundMetadataFromPaths(sessionPaths) {
+    const folderPath = sessionPaths.metadataRoot;
+    const folder = folderPath ? await stat(folderPath, { bigint: true }).catch((error) => {
+      if (isMissingPathError(error)) return null;
+      throw error;
+    }) : null;
+    const identity = folder ? `${folder.dev}:${folder.ino}:${folder.mtimeNs}:${folder.ctimeNs}` : "";
+    const cached = metadataFolderCache.get(folderPath);
+    if (identity && cached?.identity === identity) return { ...cached.metadata };
+    const settled = Boolean(folder) && folder.mtimeNs < BigInt(Date.now()) * 1_000_000n - METADATA_FOLDER_SETTLED_NS;
     const names = sortedFileNames(
-      await readDirectoryEntries(sessionPaths.metadataRoot),
+      await readDirectoryEntries(folderPath),
       (name) => METADATA_NAME_PATTERN.test(name)
     );
     const metadataEntries = await Promise.all(
@@ -84,7 +101,15 @@ function createSessionRecordFiles({ state, storePaths }) {
         ];
       })
     );
-    return Object.fromEntries(metadataEntries);
+    const metadata = Object.fromEntries(metadataEntries);
+    metadataFolderCache.delete(folderPath);
+    if (settled) {
+      metadataFolderCache.set(folderPath, { identity, metadata });
+      if (metadataFolderCache.size > METADATA_FOLDER_CACHE_LIMIT) {
+        metadataFolderCache.delete(metadataFolderCache.keys().next().value);
+      }
+    }
+    return { ...metadata };
   }
 
   async function readSessionSourceDescriptorFromPaths(sessionPaths) {
