@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -89,6 +90,17 @@ async function withRouteProject(operation) {
   }
 }
 
+/**
+ * The call an assistant's request makes where the page's made `httpCall`: the same, except that an output start
+ * records who asked, `http` for the page and `assistant-tool` for an assistant (terminalActions.js).
+ */
+function assistantCallFor(httpCall) {
+  const [sessionId, options, ...rest] = httpCall.args;
+  if (options?.requestedBy === undefined) return httpCall;
+  assert.equal(options.requestedBy, "http", "the page's own request records http");
+  return { ...httpCall, args: [sessionId, { ...options, requestedBy: "assistant-tool" }, ...rest] };
+}
+
 function routeProjectParams(params = {}) {
   return {
     slug: TEST_PROJECT_SLUG,
@@ -97,6 +109,7 @@ function routeProjectParams(params = {}) {
 }
 
 export {
+  assistantCallFor,
   findRegisteredRoute,
   routeProjectParams,
   testReply,

@@ -6,7 +6,7 @@ import { registerVibe64ActionContext, createVibe64ActionPolicy } from "@local/vi
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { registerRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { assistantCallFor, findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 import { underActionPolicy } from "./vibe64TestHelpers.js";
 
 test("output tools share HTTP ownership and bounded state without grants, paths or commands", async () => {
@@ -71,7 +71,8 @@ test("output tools share HTTP ownership and bounded state without grants, paths 
           ...(suffix.includes(":terminalSessionId") ? { terminalSessionId: "terminal-1" } : {}), ...data, ...patch }) });
       const result = await execute();
       assert.equal(result.ok, true, JSON.stringify(result));
-      assert.deepEqual(calls.at(-1), httpCall);
+      assert.equal(httpCall.args[1]?.requestedBy, operation === "output-target.start" ? "http" : undefined, operation);
+      assert.deepEqual(calls.at(-1), assistantCallFor(httpCall));
       assert.equal(httpCall.actor, actor);
       assert.equal(httpCall.slug, slug);
       assert.equal(JSON.stringify(result).includes("private"), false);

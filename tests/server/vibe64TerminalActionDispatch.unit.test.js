@@ -17,7 +17,7 @@ import { withMainChatOperations } from "./vibe64SessionsTestHelpers.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import { registerRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
-import { findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
+import { assistantCallFor, findRegisteredRoute, routeProjectParams, testReply, testRouteApp, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 function catalogue(terminals, projectContext, { resolveUser, authorizeProject } = {}) {
   const actions = createActionCatalogue({ policy: createVibe64ActionPolicy({ localhostCheckBypassed: false }) });
@@ -127,7 +127,8 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       assert.equal(fromHttp.project, slug);
       const execute = (input = { ...actionInput, projectSlug: slug }) => actions.execute({ actionId, input, context: { channel: "automation", surface: "app" } });
       await execute();
-      assert.deepEqual(calls.at(-1), fromHttp, operation);
+      assert.equal(fromHttp.args[1]?.requestedBy, operation === "output-target.start" ? "http" : undefined, operation);
+      assert.deepEqual(calls.at(-1), assistantCallFor(fromHttp), operation);
       if (operation.endsWith("control.text") || operation.endsWith("control.key")) {
         const [text, options] = fromHttp.args.slice(-2);
         assert.equal(text, operation.endsWith("control.text") ? data.text : "\u0003");
