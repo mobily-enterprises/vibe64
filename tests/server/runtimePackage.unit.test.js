@@ -458,6 +458,20 @@ test("runtime release relocates, runs native and browser services, and packs wit
       const metadata = JSON.parse(await readFile(path.join(installed, "node_modules", name, "package.json"), "utf8"));
       assert.equal(metadata.dependencies, undefined, `${name} must not reinstall bundled code`);
     }
+    // An editor whose command spawner cannot run a command refuses to start, as a release without the spawner's
+    // program did not: it answered health while every command failed (b5eab06864ca). verifyRuntime above started one
+    // with it; without it, a fresh process's start fails, saying why.
+    await rm(path.join(installed, "node_modules/@local/vibe64-execution/src/server/engines/commandSpawnerProcess.js"));
+    await mkdir(path.join(root, "boot-project"));
+    const start = execute(process.execPath, ["--input-type=module", "--eval", `
+      const { createServer } = await import(${JSON.stringify(pathToFileURL(path.join(installed, "server.bundle.mjs")).href)});
+      await createServer({ runtimeMode: "local", targetRoot: ${JSON.stringify(path.join(root, "boot-project"))},
+        systemRoot: ${JSON.stringify(path.join(root, "boot-state"))}, logLevel: "silent" });
+      console.log("started");
+      process.exit(0);
+    `], { cwd: installed, timeout: 60_000 });
+    await assert.rejects(start, error => error.code === 1 && !/started/u.test(error.stdout) &&
+      /command spawner could not run a command, and every command goes through it/u.test(error.stderr));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
