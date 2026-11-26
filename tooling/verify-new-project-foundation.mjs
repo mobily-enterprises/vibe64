@@ -7,7 +7,6 @@ import {
   readdir,
   rm
 } from "node:fs/promises";
-import { randomInt } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 
@@ -119,11 +118,13 @@ async function main() {
     await run("npm", ["ls"], { cwd: checkoutRoot });
     await run("npm", ["run", "verify"], { cwd: checkoutRoot });
 
-    // The new app is told its port and answers on a health URL made from it, so its port is chosen here, by the rule a
-    // Preview's is: free and outside the ephemeral range, where an outgoing connection can take it before the app binds it.
-    const reservation = await reserveAvailableWebLaunchTargetPort(24_000 + randomInt(8_000));
+    // The new app is told its port and answers on a health URL made from it, so its port is chosen here, by Preview's own
+    // picker from Preview's own start: free, outside the ephemeral range, where an outgoing connection can take it before
+    // the app binds it, and outside the ports the host claims, never a range of this check's own.
+    const reservation = await reserveAvailableWebLaunchTargetPort();
     reservation.release();
     const port = reservation.port;
+    process.stdout.write(`Starting the created application on port ${port}.\n`);
     server = spawn("npm", ["start"], {
       cwd: checkoutRoot,
       env: {
