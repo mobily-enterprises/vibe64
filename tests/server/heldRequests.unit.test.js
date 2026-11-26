@@ -31,3 +31,20 @@ test("a held request with no request id waits for its work, is never joined or r
     await held.close();
   }
 });
+
+// scopeNames names the log lines' scope fields (`sessionId`); every caller passes it, `[]` when its scope has none.
+test("held requests made without scopeNames are refused when made, by a message that names the option and its fix", () => {
+  const options = {
+    component: "test.held_requests",
+    heldAs: "creating",
+    logger: silentLogger,
+    notFollowed: { code: "test_not_followed", error: "Not followed." }
+  };
+  for (const scopeNames of [undefined, "sessionId"]) {
+    assert.throws(() => createHeldRequests({ ...options, scopeNames }), {
+      name: "TypeError",
+      message: "test.held_requests's held requests need scopeNames: pass scopeNames: [] or the scope's id names, such "
+        + "as [\"sessionId\"]."
+    });
+  }
+});
