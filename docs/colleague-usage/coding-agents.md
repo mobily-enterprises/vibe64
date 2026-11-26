@@ -322,57 +322,9 @@ without waiting for suggestions. Suggestions read the project's Blueprint and it
 subsystems map, so after a starter is applied they propose changes to the app it
 built instead of building it again.
 
-An unconfirmed message shows small red error text, **Retry** and **Cancel**
-inside its own bubble. The notice belongs to
-those exact words; it does not describe the previous assistant reply. The layout
-is the same on desktop and phones.
-
-A message rejected before sending, including text beyond the input limit, stays
-failed with its original error. Use **Edit** to shorten it or **Cancel** to remove
-that rejected attempt. Cancel does not send the message, remove accepted history,
-or bring the failed bubble back after a reload. These controls work the same
-after a reload or reconnect. A lost delivery acknowledgement
-still requires checking the exact request; it is not treated as a rejection.
-
-If **Retry** reports that delivery is still unknown, the old message
-remains visible with **Retry** and **Cancel**. It is never resent: each **Retry**
-only checks whether the AI received it. While it stays unconfirmed, a different
-message you **Send** to that chat is not sent either. Its bubble shows that it
-was not sent and names the way out: **Retry** the earlier message to check it
-again, or **Cancel** it, then send your new message again. **Cancel** gives the
-earlier message up for good (it never comes back as a draft), stops any turn it
-may have started, and frees the chat at once. Choosing another AI also works
-while a message is unconfirmed.
-
-When the AI can prove that the earlier message never arrived, it counts as not
-sent: **Retry** sends it once, and newer messages go through without Cancel.
-Claude proves this when its work has settled without the message in its
-history. In Main chat, OpenCode proves it when the message is missing from the
-conversation's history and the OpenCode server that could have received it has stopped, for
-example after it was restarted; while that same server keeps running, or after
-Vibe64 itself restarted, the delivery stays unknown and **Cancel** is the way
-out. Active or unresolved server work still blocks continuation. Checking again
-reports the latest result rather than keeping an earlier connection error.
-Colleague can explain recovery; sending a new message, checking delivery or
-cancelling remains your explicit action.
-
-Claude cold startup can wait up to 90 seconds for its initialization handshake
-while managed startup probes finish. **Pending** means the message has not yet
-been acknowledged. Keep the bubble in place; use its **Retry** action after a
-failure rather than sending another copy. Stop and other normal controls retain
-their existing deadlines.
-
-For a slow Claude start, an operator can inspect the private startup diagnostic.
-A successful start taking over five seconds records one warning with total time,
-time until the managed process stream was ready, and time spent initializing
-Claude afterward. This separates process launch from native initialization;
-the timing record contains no prompt, credentials or native output. A warning
-does not mean delivery failed: the message's acknowledgement remains authoritative.
-
-If Claude rejects an input before writing it to the native process, its retained
-request becomes retryable after delivery inspection. Use **Retry** on that exact
-message. An uncertain acknowledgement still uses **Retry delivery check** first;
-that action checks the existing receipt and does not submit a duplicate.
+A message that shows **Retry** and **Cancel** in its bubble, or stays **Pending**, has not been
+confirmed: read [A message that was not confirmed](coding-agent-recovery.md#a-message-that-was-not-confirmed)
+before sending it again.
 
 ### Tables in chat
 
