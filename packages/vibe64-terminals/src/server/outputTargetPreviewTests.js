@@ -3,7 +3,13 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import { closeTerminalSessionsForNamespace } from "@local/vibe64-execution/server/terminalSessions";
 import { browserTestNeedsCleanup, drainBrowserTestExecutions } from "./browserTestCleanup.js";
 import { outputTargetTerminalNamespace } from "./terminalShared.js";
-import { clearLaunchMetadata, OUTPUT_METADATA, outputTargetFromMetadata, writePreviewStopState } from "./outputTargetMetadata.js";
+import {
+  clearLaunchMetadata,
+  outputTargetFromMetadata,
+  writePreviewRestore,
+  writePreviewStopState,
+  writeSavedOutputTarget
+} from "./outputTargetMetadata.js";
 import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
 import {
   readLaunchContext,
@@ -26,23 +32,25 @@ const startTargetNow = (start) => start();
 const ignoreTestRunState = () => {};
 /**
  * A finished run whose restore of the person's Preview waits for the agent's
- * turn to end, or whose later restore failed: the next test run, or a request
- * that starts or stops Preview, takes it over.
+ * turn to end, or whose later restore failed: the next test run, the turn's
+ * end, or a request that starts or stops Preview, takes it over.
  */
 const restoreWaits = (testRun) => Boolean(testRun?.restorePending ||
   (testRun?.restoreLater && testRun.state === "restore_failed" && !testRun.restoreRun));
 
 /**
- * Puts the target the session had saved before a test run back as its saved target.
- * @param {{ store: object, savedTarget: { id: string, label: string, outputParameters: object } }} previous
+ * Records a restore that waits in the session's record as well, the test target it waits over and the person's saved
+ * target, so a server restart hands that target back (launchPreviewStatus.js). Answers whether the restore can wait:
+ * one that cannot be recorded restores at once.
+ * @param {{ store: object, savedTarget: { id: string, label: string, outputParameters: object } | null }} previous
  * @param {string} sessionId
+ * @param {string} testTargetId
  */
-async function writeSavedTarget({ store, savedTarget }, sessionId) {
-  await store.mutateSession(sessionId, async () => {
-    await store.writeMetadataValue(sessionId, OUTPUT_METADATA.id, savedTarget.id);
-    await store.writeMetadataValue(sessionId, OUTPUT_METADATA.label, savedTarget.label);
-    await store.writeMetadataValue(sessionId, OUTPUT_METADATA.parameters, JSON.stringify(savedTarget.outputParameters));
-  });
+async function recordWaitingRestore({ store, savedTarget }, sessionId, testTargetId) {
+  if (!savedTarget) return true;
+  const { id, label, outputParameters } = savedTarget;
+  return writePreviewRestore(store, sessionId, { testTargetId, target: { id, label, outputParameters } })
+    .then(() => true, () => false);
 }
 
 /**
@@ -80,6 +88,7 @@ function createOutputTargetPreviewTests({
       onState(nextState);
       launchCoordination.publishLaunchCleanup(sessionId, testRun.projectSlug, "preview-test-state-changed");
     }
+    testRun.changeState = changeState;
     // A run waiting to restore the person's Preview hands that restore to this one, whose target starts afresh.
     let replaced = null;
     const previous = await launchCoordination.withLaunchStartLock(sessionId, async () => {
@@ -141,6 +150,7 @@ function createOutputTargetPreviewTests({
       if (started?.ok === false) {
         throw Object.assign(new Error(started.error), started);
       }
+      if (!testRun.restoring) testRun.terminalId = started?.id;
       await waitUntilReady(started, options);
     }
 
@@ -192,10 +202,11 @@ function createOutputTargetPreviewTests({
             if (closed?.ok === false) throw new Error(closed.error);
             await clearLaunchMetadata(previous.store, sessionId);
             if (previous.savedTarget) {
-              await writeSavedTarget(previous, sessionId);
+              await writeSavedOutputTarget(previous.store, sessionId, previous.savedTarget);
             }
           });
         }
+        await writePreviewRestore(previous.store, sessionId, null);
         state.previewTestRuns.delete(sessionId);
         launchCoordination.publishLaunchCleanup(sessionId, testRun.projectSlug, "preview-test-state-changed");
       } catch (error) {
@@ -214,7 +225,8 @@ function createOutputTargetPreviewTests({
     // Restoring would start the person's app again: a run that tested hands its result back now and restores later. A
     // run refused or cancelled restores at once, as its caller expects Preview back.
     if (testRun.tested && !signal?.aborted && !cleanupRequired && !testRun.closing && !testRun.restoreWhenFinished &&
-        previous.running && previous.targetId && previous.targetId !== testRun.targetId) {
+        previous.running && previous.targetId && previous.targetId !== testRun.targetId &&
+        await recordWaitingRestore(previous, sessionId, testRun.targetId)) {
       testRun.restorePending = true;
       testRun.restoreLater = true;
       changeState("restore_pending");
@@ -225,13 +237,14 @@ function createOutputTargetPreviewTests({
 
   /**
    * The agent's turn ended: the person's running target starts again over the test target a finished run left
-   * waiting, with its parameters. A run still testing restores as it finishes. Answers the restore, if one runs.
+   * waiting, or whose later restore failed, with its parameters. A run still testing restores as it finishes.
+   * Answers the restore, if one runs.
    * @param {string} sessionId
    */
   function restorePendingPreview(sessionId) {
     const testRun = state.previewTestRuns.get(sessionId);
     if (!testRun) return null;
-    if (testRun.restorePending) {
+    if (restoreWaits(testRun)) {
       testRun.restorePending = false;
       testRun.restoreRun = testRun.finish().finally(() => {
         testRun.restoreRun = null;
@@ -243,23 +256,27 @@ function createOutputTargetPreviewTests({
   }
 
   /**
-   * Before a request that starts, restarts, stops or closes Preview: a running restore finishes first, and a waiting
-   * restore, or a later one that failed, hands the Preview back to that request with the person's saved target put
-   * back. A start's test target keeps running for the start to replace, as it replaces any Preview: a record with no
-   * process and no Stop reads as stale and is cleared (launchPreviewStatus.js), parameters and all. For a Stop
+   * Before a request that stops or closes Preview: a running restore finishes first, and a waiting restore, or a later
+   * one that failed, hands the Preview back to that request with the person's saved target put back. For a Stop
    * (`stop`) the Preview is marked stopped first and the test target closes, so no stopped test target is left for
-   * the next Start to start again. Answers the person's target, for a request that names none.
+   * the next Start to start again. A Stop that meets a start taking the Preview back (`startOverTestTarget`) ends that
+   * restore instead of waiting for it: the start ends at its next step, as any start a Stop meets does.
    * @param {string} sessionId
    * @param {{ stop?: boolean }} [options]
-   * @returns {Promise<{ targetId: string } | null>}
    */
   async function handPreviewBack(sessionId, { stop = false } = {}) {
     const current = state.previewTestRuns.get(sessionId);
-    if (!current || (!restoreWaits(current) && !current.restoreRun)) return null;
+    if (!current || (!restoreWaits(current) && !current.restoreRun)) return;
+    if (stop && current.handBack) {
+      await writePreviewRestore(current.previous.store, sessionId, null);
+      state.previewTestRuns.delete(sessionId);
+      launchCoordination.publishLaunchCleanup(sessionId, current.projectSlug, "preview-test-state-changed");
+      return;
+    }
     await current.restoreRun;
-    return launchCoordination.withLaunchStartLock(sessionId, async () => {
+    await launchCoordination.withLaunchStartLock(sessionId, async () => {
       const testRun = state.previewTestRuns.get(sessionId);
-      if (!restoreWaits(testRun)) return null;
+      if (!restoreWaits(testRun)) return;
       const { previous } = testRun;
       if (stop) {
         // A Stop the test target's close does not finish is finished by the Stop itself, which stops what still runs.
@@ -268,11 +285,62 @@ function createOutputTargetPreviewTests({
         await closeTerminalSessionsForNamespace(outputTargetTerminalNamespace(sessionId));
         await clearLaunchMetadata(previous.store, sessionId);
       }
-      if (previous.savedTarget) await writeSavedTarget(previous, sessionId);
+      if (previous.savedTarget) await writeSavedOutputTarget(previous.store, sessionId, previous.savedTarget);
+      await writePreviewRestore(previous.store, sessionId, null);
       state.previewTestRuns.delete(sessionId);
       launchCoordination.publishLaunchCleanup(sessionId, testRun.projectSlug, "preview-test-state-changed");
-      return { targetId: previous.targetId };
     });
+  }
+
+  /**
+   * A request that starts or restarts Preview while a finished run's restore waits, or failed later: a running restore
+   * finishes first, then the person's target, unless the request names another, starts over the test target as that
+   * run's restore, with the person's saved target put back. The run owns Preview until the start ends, so a refused
+   * start (capacity, say) leaves the restore waiting, as failed, for the next request or the turn's end, and a start
+   * that kept the test target running leaves it waiting: the test target is never left without its run.
+   * @param {string} sessionId
+   * @param {(back: { targetId: string, outputParameters: object, previewTestRun: object } | null) => Promise<object>} start
+   *   the request's start, given the person's target, its parameters and the run to start as, or null when no restore
+   *   waits
+   */
+  async function startOverTestTarget(sessionId, start) {
+    const current = state.previewTestRuns.get(sessionId);
+    if (!current || (!restoreWaits(current) && !current.restoreRun)) return start(null);
+    await current.restoreRun;
+    const testRun = await launchCoordination.withLaunchStartLock(sessionId, async () => {
+      const waiting = state.previewTestRuns.get(sessionId);
+      if (!restoreWaits(waiting)) return null;
+      const { previous } = waiting;
+      if (previous.savedTarget) await writeSavedOutputTarget(previous.store, sessionId, previous.savedTarget);
+      waiting.restorePending = false;
+      waiting.restoring = true;
+      waiting.handBack = Promise.withResolvers();
+      waiting.restoreRun = waiting.handBack.promise;
+      waiting.changeState("restoring");
+      return waiting;
+    });
+    if (!testRun) return start(null);
+    let outcome = "restore_failed";
+    try {
+      const { targetId, outputParameters } = testRun.previous;
+      const result = await start({ targetId, outputParameters, previewTestRun: testRun });
+      if (result?.ok !== false) outcome = result?.id && result.id === testRun.terminalId ? "restore_pending" : "restored";
+      if (outcome === "restored" && state.previewTestRuns.get(sessionId) === testRun) {
+        await writePreviewRestore(testRun.previous.store, sessionId, null);
+        state.previewTestRuns.delete(sessionId);
+        launchCoordination.publishLaunchCleanup(sessionId, testRun.projectSlug, "preview-test-state-changed");
+      }
+      return result;
+    } finally {
+      if (state.previewTestRuns.get(sessionId) === testRun) {
+        testRun.restoring = false;
+        testRun.restorePending = true;
+        testRun.changeState(outcome === "restore_pending" ? "restore_pending" : "restore_failed");
+      }
+      testRun.restoreRun = null;
+      testRun.handBack.resolve();
+      testRun.handBack = null;
+    }
   }
 
   async function retryPreviewTestCleanup(sessionId) {
@@ -286,8 +354,8 @@ function createOutputTargetPreviewTests({
 
   function previewTestRunAdmission(sessionId, token = "") {
     const testRun = state.previewTestRuns.get(sessionId);
-    // A new run takes over a run waiting to restore (withPreviewTarget).
-    if (restoreWaits(testRun) && !token) return null;
+    // A new run takes over a run waiting to restore, after a start taking the Preview back (withPreviewTarget).
+    if ((restoreWaits(testRun) || testRun?.handBack) && !token) return null;
     if ((!testRun && token) || (testRun && (testRun.closing || testRun.token !== token))) {
       return {
         ok: false,
@@ -302,6 +370,7 @@ function createOutputTargetPreviewTests({
     withPreviewTarget,
     restorePendingPreview,
     handPreviewBack,
+    startOverTestTarget,
     retryPreviewTestCleanup,
     previewTestRunAdmission
   });

@@ -118,7 +118,10 @@ function createOutputTargetTerminalController({
   async function startTerminal(sessionId, input = {}) {
     const { startId: requestedStartId, ...start } = input;
     const startId = normalizeText(requestedStartId);
-    if (!startId) return launchStart.startTerminal(sessionId, start);
+    const startNow = (stage) => previewTests.startOverTestTarget(sessionId, (back) => (
+      launchStart.startTerminal(sessionId, back ? asRestore(back, start) : start, { stage })
+    ));
+    if (!startId) return startNow();
     const key = startKey(sessionId, startId);
     const ended = heldStarts.inspect(key);
     if (ended?.settled) return ended.result;
@@ -126,7 +129,7 @@ function createOutputTargetTerminalController({
     sessionStarts.set(sessionId, [...(sessionStarts.get(sessionId) || []).filter(id => id !== startId), startId]
       .slice(-REPORTED_STARTS));
     const answer = await heldStarts.run(key, async ({ stage }) => {
-      const result = await launchStart.startTerminal(sessionId, start, { stage });
+      const result = await startNow(stage);
       launchCoordination.publishLaunchCleanup(sessionId, projectSlug, "output-target-start-settled");
       return result;
     });
@@ -159,40 +162,49 @@ function createOutputTargetTerminalController({
     });
   }
 
-  // A request that starts, restarts, stops or closes Preview first takes back the Preview a finished browser test left
-  // waiting (outputTargetPreviewTests.js); one that names no target starts the person's own.
+  // A request that stops or closes Preview first takes back the Preview a finished browser test left waiting
+  // (outputTargetPreviewTests.js). One that starts or restarts it starts the person's own target, unless it names one,
+  // as that test run's restore (`asRestore`), so a refused start leaves the restore waiting. The person's target gets
+  // its parameters from the run, not from the record, which the replaced test target's end clears.
   const afterTestRestore = (operation, options) => async (sessionId, ...input) => {
     await previewTests.handPreviewBack(sessionId, options);
     return operation(sessionId, ...input);
   };
-  const withPersonTarget = (back, input = {}) => back && !input.outputTargetId ? { ...input, outputTargetId: back.targetId } : input;
+  const asRestore = (back, input) => {
+    const outputTargetId = input.outputTargetId || back.targetId;
+    return {
+      ...input,
+      outputTargetId,
+      ...(outputTargetId === back.targetId && input.outputParameters === undefined
+        ? { outputParameters: back.outputParameters }
+        : {}),
+      previewTestRun: back.previewTestRun
+    };
+  };
 
   /**
    * @param {string} sessionId
    * @param {{ outputTargetId?: string, requestedBy?: string }} [input]
    */
-  async function ensurePreview(sessionId, input = {}) {
-    const back = await previewTests.handPreviewBack(sessionId);
-    return launchStart.ensurePreview(sessionId, withPersonTarget(back, input));
+  function ensurePreview(sessionId, input = {}) {
+    return previewTests.startOverTestTarget(sessionId, (back) => back
+      ? launchStart.startTerminal(sessionId, asRestore(back, {
+        outputTargetId: input.outputTargetId,
+        ensurePreview: true,
+        requestedBy: input.requestedBy
+      }))
+      : launchStart.ensurePreview(sessionId, input));
   }
 
   /**
    * @param {string} sessionId
    * @param {{ requestedBy?: string }} [input]
    */
-  async function restartPreview(sessionId, input = {}) {
-    const back = await previewTests.handPreviewBack(sessionId);
+  function restartPreview(sessionId, input = {}) {
     // The person's own target starting over the test target is that restart.
-    return back ? launchStart.ensurePreview(sessionId, withPersonTarget(back, input)) : launchStart.restartPreview(sessionId, input);
-  }
-
-  /**
-   * @param {string} sessionId
-   * @param {object} [input]
-   */
-  async function startPreviewTerminal(sessionId, input = {}) {
-    const back = await previewTests.handPreviewBack(sessionId);
-    return startTerminal(sessionId, withPersonTarget(back, input));
+    return previewTests.startOverTestTarget(sessionId, (back) => back
+      ? launchStart.startTerminal(sessionId, asRestore(back, { ensurePreview: true, requestedBy: input.requestedBy }))
+      : launchStart.restartPreview(sessionId, input));
   }
 
   /**
@@ -229,7 +241,7 @@ function createOutputTargetTerminalController({
     openOutputTarget: outputStatus.openOutputTarget,
     readResult: terminalSessions.readResult,
     readTerminal: terminalSessions.readTerminal,
-    startTerminal: startPreviewTerminal,
+    startTerminal,
     stopTerminal: afterTestRestore(terminalSessions.stopTerminal, { stop: true }),
     subscribeTerminal: terminalSessions.subscribeTerminal,
     writeTerminal: terminalSessions.writeTerminal,

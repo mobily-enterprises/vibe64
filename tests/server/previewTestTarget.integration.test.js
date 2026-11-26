@@ -11,7 +11,8 @@ import { promisify } from "node:util";
 import { initializeGenesisProject, inspectVibe64Outputs, inspectVibe64WorkspaceSetup } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createOutputTargetTerminalController } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 import { createAgentPreviewCommandService, prepareAgentPreviewCommand } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
-import { startTerminalSession } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
+import { closeTerminalSessionsForNamespace, startTerminalSession } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
+import { outputTargetTerminalNamespace } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/index.js";
 import { runCaptureCommand, stopCaptureExecution } from "../../packages/vibe64-execution/src/server/engines/capture.js";
 import { runDetachedCommand, stopDetachedExecution } from "../../packages/vibe64-execution/src/server/engines/detached.js";
@@ -37,7 +38,10 @@ test("shared assistant instructions explain target discovery, safe setup, invoca
     "vibe64-helper preview targets --json", "vibe64-helper playwright --target", "npm-run <script>",
     "restores the previous Preview", "application must verify the server's actual test database",
     "preview-identity command must use the same database", "Never spoof safety checks",
-    "add one through the project's existing Outputs contract", "external-effect controls are missing"
+    "add one through the project's existing Outputs contract", "external-effect controls are missing",
+    "Each such target is a test server the project declares", "the project's own Run command and disposable data",
+    "points `PLAYWRIGHT_BASE_URL` at it", "Specs create the data they need in fixtures",
+    "tests that write never use the person's development target"
   ]) assert.ok(instructions.includes(required), required);
 });
 
@@ -214,7 +218,8 @@ process.stdout.write(JSON.stringify({
   };
   // The session-changed publisher a test watches, or one that publishes nowhere.
   const publishSessionChanged = workflowHooks.publishSessionChanged ?? (async () => null);
-  const controller = createOutputTargetTerminalController({ ensureProjectServices: async () => {}, publishSessionChanged, sessionAdmissionFailure: () => null,
+  // What a controller of this fixture is made from, for a test that makes another, as a restarted server does.
+  const controllerOptions = { ensureProjectServices: async () => {}, publishSessionChanged, sessionAdmissionFailure: () => null,
     ensureWorkspacePrepared: async () => ({ ok: true }),
     // The server's env, with a short temporary folder for this fixture's sockets.
     env: { ...process.env, TMPDIR: socketRoot },
@@ -224,7 +229,8 @@ process.stdout.write(JSON.stringify({
     // This standalone fixture runs inside the test execution, not a catalogue project.
     startWorkflow: async () => ({ ok: true, workflow: null }),
     ...workflowHooks
-  });
+  };
+  const controller = createOutputTargetTerminalController(controllerOptions);
   const commandService = createAgentPreviewCommandService({ logger: silentLogger,
     project,
     launchTarget: controller, runManagedCommand: runCommand,
@@ -242,10 +248,10 @@ process.stdout.write(JSON.stringify({
     await rm(socketRoot, { recursive: true, force: true });
   });
   const command = args => commandService.run({ sessionId, args });
-  const waitReady = async (terminal) => {
+  const waitReadyOn = (target) => async (terminal) => {
     assert.notEqual(terminal?.ok, false, JSON.stringify(terminal));
     for (let count = 0; count < 100; count++) {
-      const status = await controller.launchStatus(sessionId);
+      const status = await target.launchStatus(sessionId);
       if (status.preview?.state === "ready") return status;
       if (status.preview?.state === "failed") throw new Error(status.preview.message);
       if (status.ok === false || status.activeTerminal?.status === "exited") throw new Error(status.error || status.activeTerminal?.output || "Preview exited");
@@ -253,7 +259,9 @@ process.stdout.write(JSON.stringify({
     }
     throw new Error(`Preview ${terminal.id} did not become ready`);
   };
-  return { root, socketRoot, sourceRoot, sessionId, project, controller, commandService, command, waitReady, captureExecutionIds, previewStarts };
+  const waitReady = waitReadyOn(controller);
+  return { root, socketRoot, sourceRoot, sessionId, project, controller, controllerOptions, commandService, command, waitReady,
+    waitReadyOn, captureExecutionIds, previewStarts };
 }
 
 async function browserCommands(f) {
@@ -464,6 +472,118 @@ test("back-to-back test runs skip starting the person's app between them, each o
   assert.equal((await testRun()).previewRestorePending, true);
   await f.controller.closeAllForSession(f.sessionId);
   assert.equal((await f.controller.launchStatus(f.sessionId)).previewTestRun, undefined);
+});
+
+test("a server restart while the person's Preview waits for its restore hands their target back with its parameters", async t => {
+  const f = await fixture(t, "restore-after-restart");
+  const parameters = { label: "kept through a restart" };
+  await f.waitReady(await f.controller.startTerminal(f.sessionId, { outputTargetId: "app", outputParameters: parameters }));
+  const result = await f.controller.withPreviewTarget(f.sessionId, "test-app", async () => ({ ok: true, exitCode: 0 }),
+    { waitUntilReady: f.waitReady });
+  assert.equal(result.previewRestorePending, true);
+  // The server stops while the test app runs: the app's process ends with it, and the session's record stays as the
+  // test app's start wrote it.
+  const { metadata } = await (await f.project.createRuntime()).getSession(f.sessionId);
+  const record = { ...metadata };
+  assert.equal(record.output_target_id, "test-app");
+  await closeTerminalSessionsForNamespace(outputTargetTerminalNamespace(f.sessionId));
+  for (let count = 0; count < 100 && metadata.output_target_terminal_id; count++) await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(metadata.output_target_terminal_id, undefined);
+  for (const name of Object.keys(metadata)) delete metadata[name];
+  Object.assign(metadata, record);
+  // The restarted server reads the session's record afresh for each request, as it reads it from its files.
+  const restartedProject = {
+    ...f.project,
+    async createRuntime() {
+      const runtime = await f.project.createRuntime();
+      const getSession = async (id) => {
+        const session = await runtime.getSession(id);
+        return { ...session, metadata: { ...session.metadata } };
+      };
+      return { ...runtime, getSession, getSessionWithoutSource: getSession };
+    }
+  };
+  const restarted = createOutputTargetTerminalController({ ...f.controllerOptions, project: restartedProject });
+  t.after(() => restarted.close());
+  // The agent's first ensure after the restart starts the person's target with its parameters, not the test target.
+  const status = await f.waitReadyOn(restarted)(await restarted.ensurePreview(f.sessionId));
+  assert.equal(status.activeTerminal.metadata.outputTargetId, "app");
+  assert.deepEqual(status.activeTerminal.metadata.outputParameters, parameters);
+  assert.equal(status.previewTestRun, undefined);
+  assert.equal(metadata.output_target_preview_restore, undefined, "a restore handed back is not handed back again");
+});
+
+test("a refused start of the person's app keeps the waiting restore, failed, until the turn's end or the next request brings it back", async t => {
+  let refuse = false;
+  let gate = null;
+  let reached = null;
+  const f = await fixture(t, "refused-restore", {
+    async startWorkflow(input) {
+      if (input.environment === "development" && gate) {
+        reached.resolve();
+        await gate.promise;
+      }
+      return refuse && input.environment === "development"
+        ? { ok: false, code: "vibe64_capacity_rejected", error: "Your app may not fit comfortably." }
+        : { ok: true, workflow: null };
+    }
+  });
+  const parameters = { label: "kept through a refusal" };
+  await f.waitReady(await f.controller.startTerminal(f.sessionId, { outputTargetId: "app", outputParameters: parameters }));
+  const testRun = async () => assert.equal((await f.controller.withPreviewTarget(f.sessionId, "test-app",
+    async () => ({ ok: true, exitCode: 0 }), { waitUntilReady: f.waitReady })).previewRestorePending, true);
+  const testRunState = async () => (await f.controller.launchStatus(f.sessionId)).previewTestRun?.state;
+  const personsApp = (status) => {
+    assert.equal(status.previewTestRun, undefined);
+    assert.equal(status.activeTerminal.metadata.outputTargetId, "app");
+    assert.deepEqual(status.activeTerminal.metadata.outputParameters, parameters);
+  };
+  // The page's start answers as starting while it runs; the outputs read reports how it ended.
+  const pageStart = async (startId) => {
+    const answer = await f.controller.startTerminal(f.sessionId, { startId, outputTargetId: "" });
+    for (let count = 0; answer.starting && count < 100; count++) {
+      const start = f.controller.launchStarts(f.sessionId).find(entry => entry.startId === startId);
+      if (start?.status !== "starting") return start;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return answer;
+  };
+
+  // Restart is refused: the restore waits, failed, and each turn's end tries it again.
+  await testRun();
+  refuse = true;
+  assert.equal((await f.controller.restartPreview(f.sessionId)).code, "vibe64_capacity_rejected");
+  assert.equal(await testRunState(), "restore_failed");
+  assert.equal((await f.controller.restorePreviewAfterTurn(f.sessionId)).code, "vibe64_preview_restore_failed");
+  assert.equal(await testRunState(), "restore_failed");
+  refuse = false;
+  await f.controller.restorePreviewAfterTurn(f.sessionId);
+  personsApp(await f.controller.launchStatus(f.sessionId));
+
+  // The page's Start is refused: the restore waits, failed, and the next request brings the person's app back.
+  await testRun();
+  refuse = true;
+  assert.equal((await pageStart("refused-start")).code, "vibe64_capacity_rejected");
+  assert.equal(await testRunState(), "restore_failed");
+  refuse = false;
+  personsApp(await f.waitReady(await f.controller.ensurePreview(f.sessionId)));
+
+  // Stop during a slow start of the person's app answers at once and ends that restore: nothing is left to restore.
+  await testRun();
+  gate = Promise.withResolvers();
+  reached = Promise.withResolvers();
+  const restart = f.controller.restartPreview(f.sessionId);
+  await reached.promise;
+  assert.equal(await testRunState(), "restoring");
+  const stopped = await f.controller.stopTerminal(f.sessionId, "");
+  assert.equal(stopped.stopping, true, JSON.stringify(stopped));
+  gate.resolve();
+  gate = null;
+  await restart;
+  const status = await f.controller.launchStatus(f.sessionId);
+  assert.equal(status.previewTestRun, undefined);
+  assert.equal(status.preview.stoppedIntent, true);
+  assert.equal(status.preview.state, "stopped");
 });
 
 test("ordinary managed suites restore a stopped Preview and retain an already running Preview", async t => {

@@ -29,7 +29,10 @@ stops the test app without starting yours.
 **Restoring your app** remains visible while Vibe64 restores the previous target.
 The bar disappears when restoration succeeds. A red **Preview recovery required** bar means cleanup or
 restoration failed: ask the coding agent to recover the managed browser run
-before using Preview. Colleague can inspect output status and explain recovery;
+before using Preview. When only bringing your app back failed, for example
+because the workspace had no room for it, **Restart** tries again, and so does
+the end of the agent's next turn. If Vibe64 itself restarts while the test app
+waits, Preview brings back your own app, with its settings, not the test app. Colleague can inspect output status and explain recovery;
 it must not claim the normal app is restored from a test exit code alone.
 
 The Preview address bar has two groups. The page group, styled as the address
