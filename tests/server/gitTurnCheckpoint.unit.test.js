@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -293,6 +293,81 @@ test("selected conflict paths are literal filenames, never Git pathspecs", async
   }
 });
 
+test("a worktree tree hashes the files that changed, not every tracked file, and is the tree an empty index gives", async () => {
+  // Each /work read, update check and turn checkpoint writes the worktree's tree. Started from an empty index,
+  // `git add -A` re-read and re-stored every tracked file each time; Git freshens each object it stores, counted here.
+  const freshened = {};
+  for (const files of [40, 400]) {
+    const root = await createRepository();
+    try {
+      await git(root, ["config", "gc.auto", "0"]);
+      const written = [path.join(root, "tracked.txt")];
+      for (let index = 0; index < files; index += 1) {
+        const file = path.join(root, `dir${index % 8}`, `file${index}.txt`);
+        await mkdir(path.dirname(file), { recursive: true });
+        await writeFile(file, `file ${index}\n`);
+        written.push(file);
+      }
+      // Files older than the index that records them, as files written before Git last looked at the worktree are.
+      const hourAgo = new Date(Date.now() - 3_600_000);
+      await Promise.all(written.map((file) => utimes(file, hourAgo, hourAgo)));
+      await git(root, ["add", "-A"]);
+      await git(root, ["commit", "-m", "files"]);
+      await writeFile(path.join(root, "dir1", "file1.txt"), "changed\n");
+      await writeFile(path.join(root, "new.txt"), "new\n");
+      await rm(path.join(root, "dir2", "file2.txt"));
+      const longAgo = new Date("2001-01-01T00:00:00.000Z");
+      await Promise.all((await looseObjects(root)).map((file) => utimes(file, longAgo, longAgo)));
+
+      const tree = await writeGitWorktreeTree({ runCommand: runVibe64Command, worktreePath: root });
+
+      const times = await Promise.all((await looseObjects(root)).map(async (file) => (await stat(file)).mtimeMs));
+      freshened[files] = times.filter((time) => time > longAgo.getTime()).length;
+      assert.equal(tree, await emptyIndexTree(root), `${files} files`);
+      assert.equal(await git(root, ["show", `${tree}:dir1/file1.txt`]), "changed");
+      assert.equal(await git(root, ["show", `${tree}:new.txt`]), "new");
+      await assert.rejects(git(root, ["cat-file", "-e", `${tree}:dir2/file2.txt`]));
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  }
+  assert.equal(freshened[400], freshened[40], `objects stored: ${JSON.stringify(freshened)}`);
+});
+
+test("a worktree tree records files Git's index is told to skip, and is written during an unresolved merge", async () => {
+  const root = await createRepository();
+  try {
+    await writeFile(path.join(root, "assumed.txt"), "assumed\n");
+    await writeFile(path.join(root, "skipped.txt"), "skipped\n");
+    await git(root, ["add", "-A"]);
+    await git(root, ["commit", "-m", "flag fixtures"]);
+    await git(root, ["update-index", "--assume-unchanged", "assumed.txt"]);
+    await git(root, ["update-index", "--skip-worktree", "skipped.txt"]);
+    await writeFile(path.join(root, "assumed.txt"), "assumed changed\n");
+    await writeFile(path.join(root, "skipped.txt"), "skipped changed\n");
+    const flagged = await writeGitWorktreeTree({ runCommand: runVibe64Command, worktreePath: root });
+    assert.equal(await git(root, ["show", `${flagged}:assumed.txt`]), "assumed changed");
+    assert.equal(await git(root, ["show", `${flagged}:skipped.txt`]), "skipped changed");
+    assert.equal(flagged, await emptyIndexTree(root));
+
+    await git(root, ["update-index", "--no-assume-unchanged", "assumed.txt"]);
+    await git(root, ["update-index", "--no-skip-worktree", "skipped.txt"]);
+    await git(root, ["checkout", "--", "."]);
+    await git(root, ["checkout", "-b", "side"]);
+    await writeFile(path.join(root, "tracked.txt"), "side\n");
+    await git(root, ["commit", "-am", "side"]);
+    await git(root, ["checkout", "main"]);
+    await writeFile(path.join(root, "tracked.txt"), "main\n");
+    await git(root, ["commit", "-am", "main"]);
+    await assert.rejects(git(root, ["merge", "side"]));
+    const conflicted = await writeGitWorktreeTree({ runCommand: runVibe64Command, worktreePath: root });
+    assert.match(await git(root, ["show", `${conflicted}:tracked.txt`]), /^<<<<<<< HEAD\nmain\n[^]*\nside\n>>>>>>> side$/u);
+    assert.equal(conflicted, await emptyIndexTree(root));
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("turn checkpoint refs use safe digests and invalid identities fail closed", async () => {
   const refs = checkpointRefs({
     outerTurnId: "message/with spaces",
@@ -538,6 +613,27 @@ async function createRepository() {
   await git(root, ["add", "tracked.txt"]);
   await git(root, ["commit", "-m", "base"]);
   return root;
+}
+
+// The worktree's tree as an empty index gives it: the tree read in, then every file added.
+async function emptyIndexTree(root) {
+  const env = { ...process.env, GIT_INDEX_FILE: path.join(root, ".git", "empty-index-tree") };
+  try {
+    for (const args of [["read-tree", "HEAD"], ["add", "-A", "--", "."]]) {
+      await execFileAsync("git", args, { cwd: root, encoding: "utf8", env });
+    }
+    return String((await execFileAsync("git", ["write-tree"], { cwd: root, encoding: "utf8", env })).stdout).trim();
+  } finally {
+    await rm(env.GIT_INDEX_FILE, { force: true });
+  }
+}
+
+async function looseObjects(root) {
+  const objects = path.join(root, ".git", "objects");
+  const folders = (await readdir(objects)).filter((name) => /^[0-9a-f]{2}$/u.test(name));
+  const files = await Promise.all(folders.map(async (folder) => (await readdir(path.join(objects, folder)))
+    .map((name) => path.join(objects, folder, name))));
+  return files.flat();
 }
 
 async function git(cwd, args) {

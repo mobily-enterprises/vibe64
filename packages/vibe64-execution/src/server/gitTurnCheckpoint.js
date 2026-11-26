@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readdir, rm, statfs } from "node:fs/promises";
+import { copyFile, lstat, mkdir, mkdtemp, readdir, rm, stat, statfs, utimes } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -293,10 +293,22 @@ async function writeGitWorktreeTreeUnlocked({
   const temporaryIndex = path.join(temporaryRoot, "index");
   try {
     const indexEnv = { GIT_INDEX_FILE: temporaryIndex };
-    await requiredGitOutput(runCommand, normalizedWorktreePath, [
-      "read-tree",
-      baseCommit || "HEAD"
-    ], { env: indexEnv, project });
+    const seeded = await seedTemporaryIndex({
+      baseCommit: baseCommit || "HEAD",
+      gitDirectory,
+      indexEnv,
+      project,
+      runCommand,
+      temporaryIndex,
+      worktreePath: normalizedWorktreePath
+    });
+    if (!seeded) {
+      await rm(temporaryIndex, { force: true });
+      await requiredGitOutput(runCommand, normalizedWorktreePath, [
+        "read-tree",
+        baseCommit || "HEAD"
+      ], { env: indexEnv, project });
+    }
     const selectedPaths = Array.isArray(paths)
       ? paths.map((entry) => String(entry || "")).filter(Boolean)
       : [];
@@ -321,6 +333,42 @@ async function writeGitWorktreeTreeUnlocked({
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
   }
+}
+
+/**
+ * Starts the temporary index from a copy of the worktree's own, so `git add -A` hashes only the files whose stat data
+ * changed since Git last recorded them instead of every tracked file: `read-tree -m` keeps an entry's stat data where
+ * its content matches the tree it reads, so the tree written is the same. False when the copy cannot stand in for an
+ * empty index (no index yet, an unresolved merge, or an entry Git is told not to check), and the caller reads the
+ * tree into an empty one.
+ */
+async function seedTemporaryIndex({
+  baseCommit,
+  gitDirectory,
+  indexEnv,
+  project,
+  runCommand,
+  temporaryIndex,
+  worktreePath
+}) {
+  const worktreeIndex = path.join(gitDirectory, "index");
+  try {
+    const { atime, mtime } = await stat(worktreeIndex);
+    await copyFile(worktreeIndex, temporaryIndex);
+    // Git rechecks an entry changed at or after its index file's time, so the copy keeps the original's time.
+    await utimes(temporaryIndex, atime, mtime);
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+  const merged = await gitCommand(runCommand, worktreePath, ["read-tree", "-m", baseCommit], { env: indexEnv, project });
+  if (merged.ok !== true) return false;
+  // An assume-unchanged (lower-case tag) or skip-worktree (S) entry would hide its file's changes from `git add`.
+  const entries = await requiredGitOutput(runCommand, worktreePath, ["ls-files", "-v", "-z"], {
+    env: indexEnv,
+    project
+  });
+  return !nullSeparatedPaths(entries).some((entry) => /^[a-zS] /u.test(entry));
 }
 
 /**
