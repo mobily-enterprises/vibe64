@@ -50,7 +50,8 @@
 // commands still running until the editor exits, which ends it. If it dies or stops answering, its commands fail with
 // vibe64_command_spawner_failed, naming it (runCaptureCommand then ends each one's process group), and the next command
 // starts a new spawner. It is stuck when a spawn or kill goes unanswered for STUCK_AFTER_MS, the grace a timed-out
-// command gets before SIGKILL; the editor then kills it.
+// command gets before SIGKILL; the editor then kills it. A command it started but died before reporting is unknown to
+// the editor, so nothing ends its group (the rundown's Failure behaviour has the window).
 
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";

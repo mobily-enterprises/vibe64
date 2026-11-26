@@ -201,6 +201,12 @@ Nothing ever falls back to starting a command in the editor.
   as above. The decision waits one turn of the event loop, so answers already
   read on a starved loop still count.
 - **It cannot start**: the command fails with the same code, naming the error.
+- **It dies just after starting a command**, before the answer carrying the
+  command's pid reached the editor: the editor never learns that command's
+  process group, so nothing ends it, and the command runs on, orphaned, until
+  it exits. The spawner writes that answer in the same step that starts the
+  command, so the window is that step, or longer only while the channel is
+  backed up with output the editor has yet to read. No test covers it.
 
 ### Lifecycle
 

@@ -15,6 +15,8 @@ import {
   spawnCommand,
   startCommandSpawner
 } from "../../packages/vibe64-execution/src/server/engines/commandSpawner.js";
+import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
+import { processGroupHasLiveMember } from "../../packages/vibe64-execution/src/server/runtime/processStart.js";
 
 // The rules of the editor's command spawner (packages/vibe64-execution/src/server/engines/commandSpawner.js), one
 // test each. This process sends its commands to a spawner, as the editor server does from its boot. The capture
@@ -49,7 +51,17 @@ async function spawnerPid() {
   return Number(stdout.trim());
 }
 
+// A process that has ended may stay a zombie until its parent reaps it, and an orphan's parent is init, which can take
+// over a second on a loaded host. So, as for a drain, a zombie has ended (processEnded) and only a live process runs.
 function processRuns(pid) {
+  if (process.platform === "linux") {
+    try {
+      return !processEnded(linuxProcessStat(readFileSync(`/proc/${pid}/stat`, "utf8")));
+    } catch (error) {
+      if (error.code === "ENOENT" || error.code === "ESRCH") return false;
+      throw error;
+    }
+  }
   try {
     process.kill(pid, 0);
     return true;
@@ -142,7 +154,7 @@ test("the editor's stop ends the whole process group of a command the spawner st
   const { ended, scopeEmpty } = await endCaptures({ termTimeoutMs: 75, killTimeoutMs: 75 });
   assert.equal(ended, 1);
   assert.equal(scopeEmpty, true);
-  assert.throws(() => process.kill(-groupId, 0), { code: "ESRCH" });
+  assert.equal(await processGroupHasLiveMember(groupId), false);
   assert.equal((await running).signal, "SIGTERM");
 });
 
@@ -163,7 +175,7 @@ test("a spawner that dies mid-command fails its commands naming it, their groups
   assert.equal(result.code, COMMAND_SPAWNER_FAILED);
   assert.match(result.error, /^Command failed with vibe64_command_spawner_failed: sh -c /u);
   assert.match(result.error, /Vibe64's command spawner stopped \(signal SIGKILL\) while this command ran\./u);
-  assert.throws(() => process.kill(-groupId, 0), { code: "ESRCH" });
+  assert.equal(await processGroupHasLiveMember(groupId), false);
   // The next command goes to a new spawner: once a process uses a spawner, it never runs a command itself.
   const next = await runCaptureCommand("sh", ["-c", "echo $PPID"], { env });
   assert.equal(next.ok, true);
