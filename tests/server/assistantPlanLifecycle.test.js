@@ -495,12 +495,12 @@ test("a plan write whose text is missing, empty or under a name the operation do
   ]) {
     await assert.rejects(f.change(operation, "junior", extra), (error) => {
       assert.match(error.message, refusal, `${operation} ${JSON.stringify(extra)}`);
-      assert.ok(["vibe64_work_plan_input_unknown", "vibe64_work_plan_text_required"].includes(error.code), error.code);
+      assert.ok(["vibe64_command_input_unread", "vibe64_work_plan_text_required"].includes(error.code), error.code);
       return true;
     });
   }
   await assert.rejects(manageWorkPlan(f.context, { operation: "read", progressOffset: 10 }, "junior"),
-    { code: "vibe64_work_plan_input_unknown", message: /^plan read does not read progressOffset: nothing changed\. It takes offset, limit, expectedRevision, expectedProgressRevision, archiveId\.$/u });
+    { code: "vibe64_command_input_unread", message: /^plan read does not read progressOffset: nothing changed\. It takes offset, limit, expectedRevision, expectedProgressRevision, archiveId\.$/u });
   const after = await readWorkPlan(f.context);
   assert.deepEqual([after.text, after.progressText, after.progressRevision], [before.text, before.progressText, before.progressRevision]);
   assert.notEqual(after.progressRevision, createHash("sha256").update("").digest("hex"), "never the empty Progress");
