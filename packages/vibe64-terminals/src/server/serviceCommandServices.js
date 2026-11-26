@@ -35,6 +35,7 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * @param {ServiceAssistant["inspectAssistantAccess"]} dependencies.inspectAssistantAccess
  * @param {RuntimeLogger} dependencies.logger
  * @param {StagingEnvironmentProvider} dependencies.stagingEnvironmentProvider
+ * @param {import("./types.js").ProductionEnvironmentProvider} [dependencies.productionEnvironmentProvider]
  * @param {ProjectService} dependencies.project
  * @param {ProjectServices} dependencies.projectServices
  * @param {PublishAgentSessionChanged} dependencies.publishAgentSessionChanged
@@ -53,6 +54,7 @@ function createServiceCommandServices({
   inspectAssistantAccess,
   logger,
   stagingEnvironmentProvider,
+  productionEnvironmentProvider,
   project,
   projectServices,
   publishAgentSessionChanged,
@@ -94,6 +96,7 @@ function createServiceCommandServices({
   const agentEnvCommand = createAgentEnvCommandService({
     logger,
     stagingEnvironmentProvider,
+    productionEnvironmentProvider,
     project,
     savedEnvValueLinks
   });

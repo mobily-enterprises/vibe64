@@ -34,6 +34,18 @@
  * @property {(input: { actor: object | null, key: string, projectSlug: string, secret: boolean, value: string }) => Promise<object>} setVariable
  */
 /**
+ * A host's Production Env for the agent Env command (vibe64.terminals.production-environment): the settings its Deploy
+ * to production gives the project's app. The command writes it and lists it by name; no value ever comes back, and a
+ * change reaches Production only when the person deploys. The host refuses a change from a person who may not deploy.
+ * @typedef {object} ProductionEnvironmentProvider
+ * @property {(input: { actor: object | null, projectSlug: string }) => Promise<object>} readRecords { ok, records:
+ *   [{ key, secret, services, valuePresent, change, editable, owner, source }] }, never a value
+ * @property {(input: { actor: object | null, key: string, projectSlug: string, sessionId: string }) => Promise<object>} removeVariable
+ * @property {(input: { actor: object | null, key: string, projectSlug: string, secret: boolean, services: string[] | null,
+ *   sessionId: string, value: string }) => Promise<object>} setVariable services null keeps an entry's own, or gives a new
+ *   one to the public service
+ */
+/**
  * Who asks a host for its staging: the person whose request prepared the session's agent, the project the
  * session is bound to, and the session.
  * @typedef {{ actor: object | null, projectSlug: string, sessionId: string }} StagingAccess

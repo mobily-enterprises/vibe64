@@ -88,6 +88,35 @@ generates that code and shows it to the project owner alone; the Staging
 status lists the name, never the code, so the coding agent sends the person to
 the host's page that publishes to Staging for it.
 
+Where the host deploys projects to production, the coding agent can also add
+or change the project's **Production Env**, the settings Production uses, but
+never read a value of it back. A secret it generates goes in through a pipe,
+so the value never appears in the chat or a command line:
+
+```sh
+openssl rand -hex 32 | vibe64-helper env set production APP_KEY --secret
+```
+
+A plain setting is piped the same way; `--services=web,worker` names the
+services of `genesis/stack.md` that get it (a new setting otherwise goes to the
+public service, and one already there keeps its services).
+`vibe64-helper env remove production <KEY>` removes one, and
+`vibe64-helper env status production` lists the names, which are secret, their
+services and what changed since the last Deploy to production, never a value.
+`env get production` and `env export production` are refused, as is a value
+given as an argument instead of on stdin. In every scope, an option, argument
+or stdin an `env` operation doesn't read is refused, and so is a missing
+argument and `env remove` of a name the Env doesn't store: the refusal names
+what the operation takes and nothing changes, so a misspelt option or name is
+never answered as done. Nothing reaches Production until the
+person deploys: the host's Plan lists each change first, and the person can
+discard it there. A credential the person holds, such as a payment provider's
+live key, never goes through the chat: the agent names it, and the person types
+it into the Production Env form on the host's Deploy page. The host decides who
+may change the Production Env (the people who may deploy); when it refuses, the
+agent reports its message instead of retrying. Colleague can explain this but
+does not change the Production Env.
+
 When the host publishes projects, `vibe64-helper staging status` shows the
 coding agent the session project's Staging: whether it is published, its
 public addresses, the current release with its commit, publish time and recorded

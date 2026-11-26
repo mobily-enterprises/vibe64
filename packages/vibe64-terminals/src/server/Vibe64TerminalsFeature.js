@@ -21,6 +21,11 @@ import {
   assertStagingEnvironmentProvider
 } from "./stagingEnvironment.js";
 import { NO_SAVED_ENV_VALUE_LINKS, TERMINALS_SAVED_ENV_VALUE_LINKS_TOKEN, assertSavedEnvValueLinks } from "./savedEnvValueLinks.js";
+import {
+  NO_PRODUCTION_ENVIRONMENT,
+  TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
+  assertProductionEnvironmentProvider
+} from "./productionEnvironment.js";
 import { createService } from "./service.js";
 import { createProjectServices } from "./projectServices.js";
 import { startProjectRuntimeDormancyCleanupSchedule } from "./projectRuntimeDormancy.js";
@@ -34,6 +39,7 @@ import { startProjectRuntimeDormancyCleanupSchedule } from "./projectRuntimeDorm
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").TerminalsService} TerminalsService */
 /** @typedef {import("./types.js").StagingEnvironmentProvider} StagingEnvironmentProvider */
+/** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
 /** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
 
 // Each terminals service's idle-project sweep, started in setup and stopped at shutdown.
@@ -56,9 +62,10 @@ const Vibe64TerminalsFeature = defineFeature({
     uploads: "runtime.uploads",
     project: "vibe64.project"
   },
-  // A composed host's staging Env and saved values for the agent Env command.
+  // A composed host's staging Env, Production Env and saved values for the agent Env command.
   optional: {
     stagingEnvironmentProvider: TERMINALS_STAGING_ENVIRONMENT_TOKEN,
+    productionEnvironmentProvider: TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
     savedEnvValueLinks: TERMINALS_SAVED_ENV_VALUE_LINKS_TOKEN
   },
   provides: {
@@ -72,6 +79,7 @@ const Vibe64TerminalsFeature = defineFeature({
    * @param {RuntimeHttp} capabilities.http
    * @param {RuntimeLogger} capabilities.logger
    * @param {StagingEnvironmentProvider | null} capabilities.stagingEnvironmentProvider
+   * @param {ProductionEnvironmentProvider | null} capabilities.productionEnvironmentProvider
    * @param {ProjectService} capabilities.project
    * @param {SavedEnvValueLinks | null} capabilities.savedEnvValueLinks
    * @param {FeatureSetupContext} context
@@ -83,10 +91,12 @@ const Vibe64TerminalsFeature = defineFeature({
     http,
     logger,
     stagingEnvironmentProvider,
+    productionEnvironmentProvider,
     project,
     savedEnvValueLinks
   }, { actionCatalogue }) {
     assertStagingEnvironmentProvider(stagingEnvironmentProvider);
+    assertProductionEnvironmentProvider(productionEnvironmentProvider);
     assertSavedEnvValueLinks(savedEnvValueLinks);
     // Session debug logging, which the sessions and their agent work share, follows the server's env.
     configureVibe64SessionDebugLog(env);
@@ -96,6 +106,7 @@ const Vibe64TerminalsFeature = defineFeature({
       env,
       logger,
       stagingEnvironmentProvider: stagingEnvironmentProvider ?? NO_STAGING_ENVIRONMENT,
+      productionEnvironmentProvider: productionEnvironmentProvider ?? NO_PRODUCTION_ENVIRONMENT,
       projectServices: createProjectServices(),
       project,
       publishProjectRuntimeChanged: createProjectRuntimeChangedPublisher(events),

@@ -87,6 +87,8 @@ function selfTargetCodexAppServerProviderOptions({ codexTerminalController, env 
  * @param {RuntimeLogger} dependencies.logger
  * @param {object} [dependencies.opencodeTerminalController] a host's OpenCode terminal settings
  * @param {StagingEnvironmentProvider} dependencies.stagingEnvironmentProvider a host's staging Env, or none
+ * @param {import("./types.js").ProductionEnvironmentProvider} [dependencies.productionEnvironmentProvider] a host's
+ *   Production Env, or none
  * @param {ProjectServices} dependencies.projectServices
  * @param {ProjectService} dependencies.project
  * @param {ProjectRuntimeChangedPublisher} dependencies.publishProjectRuntimeChanged
@@ -107,6 +109,7 @@ function createService({
   // readable-check: allow dependency-default - data: a host's OpenCode terminal settings, none by default
   opencodeTerminalController = {},
   stagingEnvironmentProvider,
+  productionEnvironmentProvider,
   projectServices,
   project,
   publishProjectRuntimeChanged,
@@ -118,11 +121,8 @@ function createService({
 }) {
   const previewDiagnostics = createPreviewDiagnosticRecorder({ logger });
 
-  /**
-   * The one Claude Code account status read, with the inputs Claude
-   * conversations run with. Accounts and readiness read it too, so one
-   * account costs one status read per cache period.
-   */
+  // The one Claude Code account status read, with the inputs Claude conversations run with. Accounts and readiness
+  // read it too, so one account costs one status read per cache period.
   const readClaudeAccountStatus = () => readClaudeCodeAuthStatus({ env });
   const state = createServiceState({ readClaudeAccountStatus });
   const codexProviderOptions = selfTargetCodexAppServerProviderOptions({ codexTerminalController, env });
@@ -197,6 +197,7 @@ function createService({
     inspectAssistantAccess: (sessionId, options) => assistant.inspectAssistantAccess(sessionId, options),
     logger,
     stagingEnvironmentProvider,
+    productionEnvironmentProvider,
     project,
     projectServices,
     publishAgentSessionChanged,
