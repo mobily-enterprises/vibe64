@@ -59,6 +59,32 @@
  * @property {(request: { actor: object | null, entryId: string, environment: string, fieldId: string, key: string, projectSlug: string, sessionId: string }) => Promise<object>} link
  * @property {(request: { actor: object | null, environment: string, key: string, projectSlug: string, sessionId: string }) => Promise<object>} unlink
  */
+/**
+ * A composed host's own vibe64-helper group (vibe64.terminals.helper-command-groups, helperCommandGroups.js), run as
+ * `vibe64-helper <name> [arguments]` after the session control's identity, the session's binding and refuseUnreadFields.
+ * @typedef {object} HelperCommandGroup
+ * @property {string} name a-z, 0-9 and -, starting with a letter, at most 24 characters; never one of vibe64-helper's own
+ * @property {string} summary one line of at most 100 characters, which vibe64-helper --help lists after its own groups
+ * @property {string} help what `vibe64-helper <name> --help` (or -h) prints, without reaching the host; at most 16 KiB
+ * @property {(request: HelperCommandRequest, output: HelperCommandOutput) => Promise<HelperCommandAnswer>} run
+ */
+/**
+ * One call of a host's group: the session, the project it is bound to, the person whose request the agent works on,
+ * that request's turn while it works (else ""), the caller's words after the group's name, the caller's folder (in
+ * the session's source or its temporary folder), the session's source, and a signal that aborts when the caller goes
+ * away (SIGINT, SIGTERM, hangup, its job stopped) or the session closes.
+ * @typedef {{ sessionId: string, projectSlug: string, actor: object | null, turnId: string, args: string[], cwd: string,
+ *   sourceRoot: string, signal: AbortSignal }} HelperCommandRequest
+ */
+/**
+ * The caller's output, which reaches it as it is written.
+ * @typedef {{ stdout: (chunk: string | Uint8Array) => void, stderr: (chunk: string | Uint8Array) => void }} HelperCommandOutput
+ */
+/**
+ * The group's answer: the caller's exit status (0 to 255), or "run it yourself", after which the caller runs its own
+ * words after its first `--`, in its own job with its own environment and folder, exactly as if run directly.
+ * @typedef {{ exit: number } | { exec: true }} HelperCommandAnswer
+ */
 /** @typedef {ReturnType<typeof import("./agentSessionCommand.js").createAgentSessionCommandService>} AgentSessionCommandService */
 /** @typedef {ReturnType<typeof import("./agentPreviewCommand.js").createAgentPreviewCommandService>} AgentPreviewCommandService */
 /** @typedef {ReturnType<typeof import("@jskit-ai/assistant-core/server/codex-turn").createCodexAppServerRunOwner>} CodexAppServerRunOwner */

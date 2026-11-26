@@ -6,11 +6,40 @@ import { writeExecutableFileIfChanged } from "./writeExecutableFileIfChanged.js"
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
+// vibe64-helper's own groups, as its help lists them. A host's groups (helperCommandGroups.js) follow them there and
+// never take one of these names.
+const VIBE64_HELPER_GROUPS = Object.freeze([
+  ["preview", "Preview lifecycle, opening a page in the Preview pane, browser inspection, screenshots and logs"],
+  ["playwright", "Managed project browser test suites"],
+  ["env", "Project environment settings"],
+  ["staging", "Staging status, and how this session reaches staging itself (ssh staging)"],
+  ["database", "Database refresh, overview and diagram operations"],
+  ["github", "GitHub view refresh"],
+  ["pages", "Publish, update and list pages everyone on the project can open"],
+  ["session", "Session status, Update, Save, setup retry, rename, and listing and messaging project sessions"],
+  ["plan", "Read and maintain the current plan and archived plans"],
+  ["training", "Validate, bundle and pin local teaching content"],
+  ["spec", "Exact Vibe64 contracts: Stack sections and command protocols"]
+]);
+const VIBE64_HELPER_GROUP_NAMES = Object.freeze(VIBE64_HELPER_GROUPS.map(([name]) => name));
+// The caller every host group shares, beside vibe64-helper in the session's wrapper directory.
+const HELPER_GROUP_CLIENT_NAME = "vibe64-helper-group";
+
+/** vibe64-helper's help: its own groups, then a host's. @param {{ name: string, summary: string }[]} hostGroups */
+function helperUsage(hostGroups) {
+  const lines = [...VIBE64_HELPER_GROUPS, ...hostGroups.map(({ name, summary }) => [name, summary])]
+    .map(([name, summary]) => `  ${name.padEnd(12)} ${summary}`);
+  return ["Usage: vibe64-helper <group> [arguments]", "", "Groups:", ...lines, "",
+    "Use vibe64-helper <group> --help for that group.", "Commands use the current managed session and its access checks."].join("\n");
+}
+
 /**
  * Writes a session's vibe64 and vibe64-helper commands into its wrapper directory.
- * @param {{ wrapperHostDir?: string, env: RuntimeEnv }} options env locates the Studio app the commands run
+ * @param {{ wrapperHostDir?: string, env: RuntimeEnv, hostGroups?: { name: string, summary: string }[] }} options env
+ *   locates the Studio app the commands run; hostGroups are a host's own groups, which run through its caller
+ *   (HELPER_GROUP_CLIENT_NAME, written with the session command)
  */
-async function prepareAgentHelperCommand({ wrapperHostDir = "", env }) {
+async function prepareAgentHelperCommand({ wrapperHostDir = "", env, hostGroups = [] }) {
   const directory = String(wrapperHostDir || "").trim();
   if (!directory) {
     return { ok: false };
@@ -45,30 +74,18 @@ ${run} training "$@"
   await writeExecutableFileIfChanged(path.join(directory, "vibe64-helper"), `#!/bin/sh
 case "\${1-}" in
   ""|-h|--help)
-    printf '%s\\n' 'Usage: vibe64-helper <group> [arguments]
-
-Groups:
-  preview      Preview lifecycle, opening a page in the Preview pane, browser inspection, screenshots and logs
-  playwright   Managed project browser test suites
-  env          Project environment settings
-  staging      Staging status, and how this session reaches staging itself (ssh staging)
-  database     Database refresh, overview and diagram operations
-  github       GitHub view refresh
-  pages        Publish, update and list pages everyone on the project can open
-  session      Session status, Update, Save, setup retry, rename, and listing and messaging project sessions
-  plan         Read and maintain the current plan and archived plans
-  training     Validate, bundle and pin local teaching content
-  spec         Exact Vibe64 contracts: Stack sections and command protocols
-
-Use vibe64-helper <group> --help for that group.
-Commands use the current managed session and its access checks.'
+    printf '%s\\n' ${shellQuote(helperUsage(hostGroups))}
     exit 0
     ;;
-  preview|playwright|env|staging|database|github|pages|session|plan|training|spec)
+  ${VIBE64_HELPER_GROUP_NAMES.join("|")})
     command_group=$1
     shift
     ;;
-  *)
+${hostGroups.length ? `  ${hostGroups.map(({ name }) => name).join("|")})
+    case "$0" in */*) exec "\${0%/*}/${HELPER_GROUP_CLIENT_NAME}" "$@" ;; esac
+    exec ./${HELPER_GROUP_CLIENT_NAME} "$@"
+    ;;
+` : ""}  *)
     printf '%s\\n' 'Unknown Vibe64 helper group. Use vibe64-helper --help.' >&2
     exit 2
     ;;
@@ -95,5 +112,7 @@ exec "$command_path" "$@"
 }
 
 export {
+  HELPER_GROUP_CLIENT_NAME,
+  VIBE64_HELPER_GROUP_NAMES,
   prepareAgentHelperCommand
 };

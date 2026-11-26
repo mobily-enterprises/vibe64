@@ -119,6 +119,7 @@ function logRoutingTiming(logger, event) {
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
  * @param {object | null} dependencies.runtimeProfile the server's runtime profile, or none
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks a host's saved values to link, or none
+ * @param {import("./types.js").HelperCommandGroup[]} [dependencies.helperCommandGroups] a host's own vibe64-helper groups
  */
 function createService({
   actions,
@@ -140,7 +141,8 @@ function createService({
   conversationTurns,
   runCodexGitGatewayCommand,
   runtimeProfile,
-  savedEnvValueLinks
+  savedEnvValueLinks,
+  helperCommandGroups = []
 }) {
   const previewDiagnostics = createPreviewDiagnosticRecorder({ logger });
 
@@ -226,6 +228,7 @@ function createService({
     handPlanToSenior: (sessionId, input, options) => assistantRouting.handPlanToSenior(sessionId, input, options),
     runCodexGitGatewayCommand,
     savedEnvValueLinks,
+    helperCommandGroups,
     sendAgentMessage: (sessionId, message, options) => assistant.sendAgentMessage(sessionId, message, options),
     sessionAccess,
     state,
