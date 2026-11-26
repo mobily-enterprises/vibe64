@@ -88,10 +88,14 @@ function exactFields(value, fields, label) {
   }
 }
 
+// A host's guidance, its own commands' lines among them, in UTF-8 bytes: genesisHostContextRegistry.unit.test.js keeps
+// every session combination with guidance this long 2 KiB under Genesis's bound.
+const VIBE64_HOST_GUIDANCE_MAX_BYTES = 1280;
+
 function normalizedSessionInput(input) {
   exactFields(input, ["conversationKind", "scope", "session", "hostGuidance"], "Vibe64 session context");
   if (input.hostGuidance !== undefined &&
-      (typeof input.hostGuidance !== "string" || Buffer.byteLength(input.hostGuidance, "utf8") > 1024)) {
+      (typeof input.hostGuidance !== "string" || Buffer.byteLength(input.hostGuidance, "utf8") > VIBE64_HOST_GUIDANCE_MAX_BYTES)) {
     throw new TypeError("Vibe64 host guidance must be bounded text supplied by the host.");
   }
   if (!VIBE64_CONVERSATION_KINDS.includes(input.conversationKind)) {
