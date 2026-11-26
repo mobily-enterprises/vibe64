@@ -3,6 +3,7 @@ import {
   commandResult
 } from "../result.js";
 import { startCaptureProcess } from "./captureProcess.js";
+import { COMMAND_SPAWNER_FAILED } from "./commandSpawner.js";
 import {
   drainProcessGroup,
   processGroupMembers
@@ -81,7 +82,7 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
       outputEncoding,
       timeout
     });
-    processGroupId = Number(subprocess.pid);
+    processGroupId = Number(await subprocess.started);
     if (process.platform !== "win32" && Number.isSafeInteger(processGroupId) && processGroupId > 0) {
       const live = { ending: false, processGroupId, startedAt: Date.now() };
       liveCaptures.add(live);
@@ -115,7 +116,8 @@ async function runCaptureCommand(command = "", args = [], options = {}) {
     outcome = commandResult({
       code: result.timedOut === true
         ? "vibe64_command_capture_timed_out"
-        : result.code ? "vibe64_command_capture_failed" : "",
+        : result.code === COMMAND_SPAWNER_FAILED ? result.code
+          : result.code ? "vibe64_command_capture_failed" : "",
       error: exitCode === 0 ? "" : result.shortMessage,
       exitCode,
       output: result.all || (exitCode === 0 ? "" : result.shortMessage),

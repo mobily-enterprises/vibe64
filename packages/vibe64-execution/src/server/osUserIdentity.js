@@ -1,11 +1,9 @@
-import { execFile as execFileCallback } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
-const execFile = promisify(execFileCallback);
+import { execFileCommand } from "./engines/commandSpawner.js";
 
 const NON_LOGIN_SHELLS = new Set([
   "/bin/false",
@@ -73,8 +71,10 @@ function parseDscacheutilUsers(text = "") {
 }
 
 async function commandOutput(execFileFn, command, args) {
+  // The account tools run with the server's own environment, as they always have.
   const result = await execFileFn(command, args, {
-    encoding: "utf8"
+    encoding: "utf8",
+    env: process.env
   });
   return String((typeof result === "string" ? result : result?.stdout) || "");
 }
@@ -166,7 +166,7 @@ async function passwdFileUser(username, files) {
 }
 
 async function resolveOsUser(username = "", {
-  execFileFn = execFile,
+  execFileFn = execFileCommand,
   platform = process.platform,
   readFileFn = readFile,
   statFn = stat,
@@ -207,7 +207,7 @@ function osUserNotFound(username) {
 }
 
 async function listOsUsers({
-  execFileFn = execFile,
+  execFileFn = execFileCommand,
   platform = process.platform
 } = {}) {
   const users = platform === "darwin"

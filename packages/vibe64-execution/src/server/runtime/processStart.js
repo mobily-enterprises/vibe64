@@ -1,11 +1,8 @@
-import { execFile as execFileCallback } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import process from "node:process";
-import { promisify } from "node:util";
 
+import { execFileCommand } from "../engines/commandSpawner.js";
 import { linuxProcessStat, processEnded } from "./processEnded.js";
-
-const execFile = promisify(execFileCallback);
 
 /**
  * A process's group, start time in clock ticks, state letter and thread count from /proc/<pid>/stat
@@ -46,7 +43,7 @@ function psEnv() {
  * reads /proc; macOS asks ps.
  */
 async function readProcessStart(pid, {
-  execFileFn = execFile,
+  execFileFn = execFileCommand,
   platform = process.platform,
   readFileFn = readFile
 } = {}) {
@@ -115,7 +112,7 @@ async function readLinuxProcessStatText(name, readFileFn) {
  * answer for the group, which counts zombies, decides then.
  */
 async function processGroupHasLiveMember(groupId, {
-  execFileFn = execFile,
+  execFileFn = execFileCommand,
   platform = process.platform,
   readFileFn = readFile,
   readdirFn = readdir

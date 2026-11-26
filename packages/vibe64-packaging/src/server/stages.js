@@ -3,7 +3,6 @@
 // Stage 2 hands the exact bytes and caller-supplied credentials (private temporary
 // files or stdin, always removed) to a destination. Stage 3 reads the published
 // version back; a target succeeds only then.
-import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import {
@@ -11,6 +10,8 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+
+import { spawnCommand as spawnFiniteCommand } from "@local/vibe64-execution/server";
 
 import { canonicalJson, sha256 } from "./canonical.js";
 import { publishError } from "./errors.js";
@@ -86,32 +87,52 @@ function buildStageEnvironment({ baseEnvironment, declared = [], home, cacheDire
 
 /**
  * Runs Vibe64's own pinned tools (signing, upload, toolchain setup) without a
- * shell, with exactly the given environment. The project's own code never runs
- * through this: Stage 1 goes through the command gateway (projectCommands.js).
+ * shell, with exactly the given environment, through the editor's command
+ * spawner. The project's own code never runs through this: Stage 1 goes
+ * through the command gateway (projectCommands.js). An abort sends SIGTERM and
+ * answers at once, as Node's spawn `signal` option does.
  */
 function spawnCommand({ command, args, cwd, env, stdin = null, signal }) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, env, signal, stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"] });
+    if (signal?.aborted) {
+      resolve({ ok: false, exitCode: null, stdout: "", stderr: "", error: "The operation was aborted" });
+      return;
+    }
+    const child = spawnFiniteCommand(command, args, {
+      cwd,
+      env,
+      input: stdin,
+      stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"]
+    });
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk) => {
+    child.on("stdout", (chunk) => {
       stdout = tail(stdout + chunk);
     });
-    child.stderr.on("data", (chunk) => {
+    child.on("stderr", (chunk) => {
       stderr = tail(stderr + chunk);
     });
     // A command can exit without reading its input (Git refusing a directory that
     // is not a repository); writing it then fails with EPIPE, and the exit status
     // and stderr say what happened. Any other write failure fails the run.
     let inputError = null;
-    child.stdin?.on("error", (error) => {
+    child.on("input-error", (error) => {
       if (error.code !== "EPIPE") inputError = error;
     });
-    child.on("error", (error) => resolve({ ok: false, exitCode: null, stdout, stderr, error: error.message }));
-    child.on("close", (exitCode) => resolve(inputError
+    const abort = () => {
+      child.kill("SIGTERM");
+      resolve({ ok: false, exitCode: null, stdout, stderr, error: "The operation was aborted" });
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    const done = (result) => {
+      signal?.removeEventListener("abort", abort);
+      resolve(result);
+    };
+    child.on("error", (error) => done({ ok: false, exitCode: null, stdout, stderr, error: error.message }));
+    child.spawned.catch((error) => done({ ok: false, exitCode: null, stdout, stderr, error: error.message }));
+    child.on("close", (exitCode) => done(inputError
       ? { ok: false, exitCode, stdout, stderr, error: inputError.message }
       : { ok: exitCode === 0, exitCode, stdout, stderr }));
-    if (stdin) child.stdin.end(stdin);
   });
 }
 

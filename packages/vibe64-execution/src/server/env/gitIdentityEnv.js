@@ -1,9 +1,10 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { statSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 
+import { spawnCommand } from "../engines/commandSpawner.js";
 import {
   firstText,
   normalizeText,
@@ -147,7 +148,10 @@ function gitConfigReadOptions(cwd, env) {
 
 /**
  * Exit 1 means no user.name or user.email is set. Any other failure yields
- * null values; `transient` marks a read that never finished, as below.
+ * null values; `transient` marks a read that never finished, as below. This
+ * read starts git itself, as one of the few long-lived or synchronous starters
+ * commandSpawner.js lists: a terminal's environment is built synchronously and
+ * cannot wait for the spawner's reply.
  */
 function readGitConfigIdentitySync(cwd, env) {
   const result = spawnSync("git", GIT_CONFIG_IDENTITY_ARGS, { ...gitConfigReadOptions(cwd, env), encoding: "utf8" });
@@ -156,28 +160,29 @@ function readGitConfigIdentitySync(cwd, env) {
 }
 
 /**
- * The same read without holding the server's thread. `transient` marks a read
- * that never finished (git missing, a spawn error, the timeout), which a memo
- * must not keep.
+ * The same read without holding the server's thread, started by the command
+ * spawner. `transient` marks a read that never finished (git missing, a spawn
+ * error, the timeout), which a memo must not keep.
  */
 function readGitConfigIdentity(cwd, env) {
   return new Promise((resolve) => {
-    let stdout = "";
+    const stdout = [];
     let settled = false;
+    const { stdio, timeout, ...options } = gitConfigReadOptions(cwd, env);
+    const child = spawnCommand("git", GIT_CONFIG_IDENTITY_ARGS, { ...options, stdio });
+    const timer = setTimeout(() => child.kill("SIGTERM"), timeout);
     const settle = (outcome) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timer);
       resolve(outcome);
     };
-    const child = spawn("git", GIT_CONFIG_IDENTITY_ARGS, gitConfigReadOptions(cwd, env));
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-    });
+    child.on("stdout", (chunk) => stdout.push(chunk));
     child.once("error", () => settle({ transient: true, values: null }));
-    child.once("close", (status, signal) => settle(signal
-      ? { transient: true, values: null }
-      : { transient: false, values: status === 0 || status === 1 ? gitConfigIdentityValues(stdout) : null }));
+    child.once("close", (status, signal) => {
+      const values = status === 0 || status === 1 ? gitConfigIdentityValues(Buffer.concat(stdout).toString("utf8")) : null;
+      settle(signal ? { transient: true, values: null } : { transient: false, values });
+    });
   });
 }
 

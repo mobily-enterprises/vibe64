@@ -48,14 +48,7 @@ const DIRECT_EXECUTION_ALLOWLIST = new Map([
     "child_process import": { count: 1, reason: "SQLite connections isolate synchronous native code from the server event loop." },
     "fork call": { count: 1, reason: "A fixed IPC worker allows cancellation of native SQLite queries." }
   }],
-  ...[
-    "packages/vibe64-packaging/bin/vibe64-publish.js",
-    "packages/vibe64-publishing/src/server/credentialBroker.js"
-  ].map((filePath) => [filePath, { "child_process import": { count: 1, reason: PUBLISHING_TOOLS } }]),
-  ["packages/vibe64-packaging/src/server/stages.js", {
-    "child_process import": { count: 1, reason: PUBLISHING_TOOLS },
-    "spawn call": { count: 1, reason: "Packaging stages spawn Vibe64's pinned signing, upload and toolchain tools with an exact environment." }
-  }]
+  ["packages/vibe64-packaging/bin/vibe64-publish.js", { "child_process import": { count: 1, reason: PUBLISHING_TOOLS } }]
 ]);
 
 const ENV_POLICY_PATTERNS = Object.freeze([
