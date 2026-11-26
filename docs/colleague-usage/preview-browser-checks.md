@@ -34,7 +34,10 @@ a test target leaves that target in Preview for the agent's next run: the
 previous Preview returns when the agent's turn ends, or first when the agent
 ensures Preview for a live check or you press **Restart**. If cleanup fails, ask
 the coding agent to recover that existing run before another check; if only
-bringing your app back failed, **Restart** starts it again. **Test Preview**
+bringing your app back failed (the workspace had no room for it, say),
+**Restart** starts it again, and the end of the agent's next turn tries too.
+A Vibe64 restart while the test target waits brings back your own target, with
+its settings, not the test target. **Test Preview**
 identifies the test environment while it is selected. Colleague can explain the
 sequence and offer coding-agent assistance through the existing chat controls.
 While a suite runs in the background, the coding agent waits on its existing

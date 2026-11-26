@@ -35,13 +35,20 @@ directory. Keep `TMPDIR` short for control sockets; fixture source placement
 and socket placement are independent.
 
 The target id is project-defined; `test-app` is an example, not a reserved name.
+Each such target is a test server the project declares: Vibe64 starts it with
+the project's own Run command and its own disposable data, so it is the
+project's harness, not a bypass of it. Specs create the data they need in their
+fixtures, and tests that write never use the person's development target.
 Vibe64 waits for that target, creates browser login state using its declared
 Preview identity command, and supplies `PLAYWRIGHT_BASE_URL` to the suite.
 The login state is created through Preview and then moved to the address the
 suite tests, so its cookies reach the application; Preview's own cookie stays
 behind.
-It restores the previously running target after success, failure, timeout or
-assistant cancellation. If Preview was stopped, it stops the test target again.
+A run that tested leaves the test target up and restores the previously running
+target when the agent's turn ends or Preview is next started, restarted or
+stopped, so a repeated run does not wait for the person's app in between; a run
+refused, timed out or cancelled restores it at once. If Preview was stopped, it
+stops the test target again.
 Cancellation waits for the managed command and its child processes to stop before
 restoring Preview. Failed cleanup or restoration keeps the run visible and blocks
 a replacement suite until recovery succeeds.

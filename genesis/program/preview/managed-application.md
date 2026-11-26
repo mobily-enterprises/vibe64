@@ -191,6 +191,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `tests/server/previewPreparation.integration.test.js`
 - `tests/server/previewRestartPrepare.integration.test.js`
 - `tests/server/turnEndPreviewRestore.unit.test.js`
+- `tests/server/previewTestTarget.integration.test.js`
 - `tests/client/vibe64OutputControls.vitest.js`
 - `tests/client/vibe64OutputControlsSurface.vitest.js`
 - `tests/server/launchPreviewCrossSiteCookies.unit.test.js`
@@ -424,7 +425,13 @@ both sockets from its supplied environment, retaining those exact paths across
 the listener, browser worker and command wrappers. Fixture source paths can
 therefore remain separate from the short private socket directory.
 `vibe64-helper playwright --target <id> test ...` and `npm-run <script>` temporarily
-select an available web target through the same output controller. The server
+select an available web target through the same output controller. Each such
+target is a test server the project's Stack declares, started by the project's
+own Run command with its own disposable data: the agent's instructions and
+`vibe64-helper playwright --help` say so, and that `PLAYWRIGHT_BASE_URL` points
+the specs at it, so an agent does not mistake it for a bypass of the project's
+harness; specs create their data in fixtures, and tests that write never use the
+person's development target. The server
 holds the session's target selection while the existing managed runner obtains
 its URL and native application identity and executes the suite. Before the
 command ends it stops the test Preview when there was no running target, and
@@ -435,18 +442,34 @@ app's whole start. The command returns once its tests and cleanup end, and the
 run waits as `restore_pending` (`outputTargetPreviewTests.js`), its test target
 still serving, until the agent's turn ends (the turn publication's
 `restorePreviewAfterTurn`), which starts the previous target again with its
-parameters, or until a request starts, restarts, stops or closes Preview
-(`handPreviewBack`), which puts the person's saved target back and then does
-what it asked. A start or Restart that names no target starts the person's own
-over the still-running test target, with its parameters (a record with no process
-and no Stop reads as stale and is cleared, so the test target is not stopped
-first). Stop marks Preview stopped, closes the test target and keeps the person's
-target for the next Start. A request that finds nothing waiting takes no lock. A run still testing when a turn ends restores
-as it finishes. The next test run takes a waiting run's restore over and starts
-its own target afresh (`restartPreview`), never reusing the last run's server and
-data. Failures and cancellation use the same cleanup, and a cleanup failure
-still keeps the command waiting and makes it fail; a later restore that fails
-shows as `restore_failed` until a Preview start or restart takes over. One
+parameters, or until a request starts, restarts, stops or closes Preview,
+which puts the person's saved target back and then does what it asked. A start
+or Restart that names no target starts the person's own over the still-running
+test target, with its parameters, as the run's restore (`startOverTestTarget`;
+a record with no process and no Stop reads as stale and is cleared, so the test
+target is not stopped first). The run owns Preview, as `restoring`, until that
+start ends: a refused start (capacity, say) leaves the restore waiting as
+`restore_failed`, and a start that kept the test target running (a page whose
+view of the run was out of date) leaves it `restore_pending`, so the test
+target never runs without its run. Stop and closing the terminal take the
+Preview back first (`handPreviewBack`): Stop marks Preview stopped, closes the
+test target and keeps the person's target for the next Start; a Stop that meets
+a start taking the Preview back ends that restore and answers at once, as it
+does for any start. Closing the terminal while a restore waits drops the
+person's saved target with the record, as closing any Preview does. A request
+that finds nothing waiting takes no lock. A waiting restore is also written in
+the session's record (`output_target_preview_restore`: the test target it waits
+over and the person's saved target), so a server restart cannot leave the test
+target as the person's Preview: the after-restart recovery that clears a record
+with no process (`launchPreviewStatus.js`) puts the person's saved target back
+instead, when the record names that test target, and the first status read or
+start after the restart starts the person's target with its parameters. A run
+still testing when a turn ends restores as it finishes. The next test run takes
+a waiting run's restore over and starts its own target afresh
+(`restartPreview`), never reusing the last run's server and data. Failures and
+cancellation use the same cleanup, and a cleanup failure still keeps the
+command waiting and makes it fail; a later restore that fails shows as
+`restore_failed`, and the next turn's end, start or restart tries it again. One
 command owns the entire suite: several tests share one startup.
 `vibe64-helper playwright status` reads the current run ID, target, phase, start
 time and elapsed time. `cancel <run-id>` cancels only that run and waits for

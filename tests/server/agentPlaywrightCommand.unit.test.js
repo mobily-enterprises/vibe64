@@ -1094,6 +1094,15 @@ test("managed Playwright help works without matching runtimes or an installed pr
       env: { ...process.env, ...fixture.prepared.env }
     });
     assert.match(result.stdout, /Usage:/u);
+    // A target is the project's own test server, not a bypass of its harness: an agent that read PLAYWRIGHT_BASE_URL
+    // as one fell back to a manual check.
+    for (const words of [
+      "each target is a test server the project's genesis/stack.md Outputs declare",
+      "the project's own Run command and its own disposable data",
+      "PLAYWRIGHT_BASE_URL points the specs at it, so the project's own harness is what runs",
+      "A spec that needs data creates it in its fixtures.",
+      "Tests that write never use the person's own development target"
+    ]) assert.ok(result.stdout.includes(words), words);
     assert.equal(result.stderr, "");
     assert.equal(fixture.managedCommands.length, 0);
   } finally {

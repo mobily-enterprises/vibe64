@@ -14,7 +14,11 @@ import {
   launchIsReady,
   normalizeOpenTarget,
   outputTargetFromMetadata,
-  previewStopState
+  previewRestoreFromMetadata,
+  previewStopState,
+  savedTargetMetadata,
+  writePreviewRestore,
+  writeSavedOutputTarget
 } from "./outputTargetMetadata.js";
 import {
   launchTerminalIsRunning,
@@ -285,9 +289,19 @@ async function missingLaunchPreviewStatus({
   const recovery = staleLaunchRecovery({
     canRestart: Boolean(lastOutputTarget?.id)
   });
+  // A finished browser test's restore that waited over this record's test target when the server restarted hands
+  // the person's saved target back (outputTargetPreviewTests.js). The read this status belongs to sees it too, so a
+  // start reading the record starts the person's target with its parameters.
+  const waitingRestore = previewRestoreFromMetadata(context.session?.metadata || {});
+  const handedBack = waitingRestore?.testTargetId === lastOutputTarget?.id ? waitingRestore.target : null;
   let metadataCleared = false;
   try {
     metadataCleared = await clearLaunchMetadata(context.store, sessionId);
+    if (handedBack) {
+      await writeSavedOutputTarget(context.store, sessionId, handedBack);
+      Object.assign(context.session.metadata, savedTargetMetadata(handedBack));
+    }
+    if (waitingRestore) await writePreviewRestore(context.store, sessionId, null);
   } catch (error) {
     vibe64SessionDebugLog("server.outputTargetTerminal.restartReconcile.clearMetadata.error", {
       error: vibe64SessionDebugError(error),
@@ -316,7 +330,7 @@ async function missingLaunchPreviewStatus({
   });
   return {
     activeTerminal: null,
-    lastOutputTarget: null,
+    lastOutputTarget: handedBack ? outputTargetFromMetadata(savedTargetMetadata(handedBack)) : null,
     openTarget: null,
     preview: normalizeLaunchPreview({
       canRestart: recovery.canRestart,

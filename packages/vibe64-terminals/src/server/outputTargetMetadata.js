@@ -21,6 +21,9 @@ const OUTPUT_METADATA = Object.freeze({
 const OUTPUT_METADATA_NAMES = Object.freeze(Object.values(OUTPUT_METADATA));
 const PREVIEW_STOPPED_METADATA = "output_target_preview_stopped";
 const PREVIEW_STOP_ERROR_METADATA = "output_target_preview_stop_error";
+// The restore a finished browser test leaves waiting for the agent's turn to end (outputTargetPreviewTests.js): the test
+// target it waits over and the person's saved target, as JSON, so a server restart hands that target back.
+const PREVIEW_RESTORE_METADATA = "output_target_preview_restore";
 
 function normalizeOpenTarget(value = {}) {
   return {
@@ -86,6 +89,57 @@ async function writePreviewStopState(store, sessionId, { stopped, error = "" }) 
     await store.writeMetadataValue(sessionId, PREVIEW_STOPPED_METADATA, stopped ? "true" : "false");
     await store.writeMetadataValue(sessionId, PREVIEW_STOP_ERROR_METADATA, String(error || ""));
   });
+}
+
+/**
+ * The record of a saved target: its id, label and parameters.
+ * @param {{ id: string, label?: string, outputParameters?: object }} target
+ */
+function savedTargetMetadata(target) {
+  return {
+    [OUTPUT_METADATA.id]: target.id,
+    [OUTPUT_METADATA.label]: target.label || target.id,
+    [OUTPUT_METADATA.parameters]: JSON.stringify(target.outputParameters || {})
+  };
+}
+
+/**
+ * Makes a target the session's saved target, with its label and parameters.
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {{ id: string, label?: string, outputParameters?: object }} target
+ */
+async function writeSavedOutputTarget(store, sessionId, target) {
+  await store.mutateSession(sessionId, async () => {
+    for (const [name, value] of Object.entries(savedTargetMetadata(target))) {
+      await store.writeMetadataValue(sessionId, name, value);
+    }
+  });
+}
+
+/**
+ * The restore a finished browser test left waiting, or null.
+ * @param {Record<string, string>} [metadata]
+ * @returns {{ testTargetId: string, target: { id: string, label: string, outputParameters: object } } | null}
+ */
+function previewRestoreFromMetadata(metadata = {}) {
+  try {
+    const restore = JSON.parse(metadata[PREVIEW_RESTORE_METADATA] || "null");
+    return restore?.testTargetId && restore.target?.id ? restore : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Records the restore a finished browser test leaves waiting, or, given null, removes it.
+ * @param {Vibe64SessionStore} store
+ * @param {string} sessionId
+ * @param {{ testTargetId: string, target: { id: string, label: string, outputParameters: object } } | null} restore
+ */
+async function writePreviewRestore(store, sessionId, restore) {
+  if (restore) await store.writeMetadataValue(sessionId, PREVIEW_RESTORE_METADATA, JSON.stringify(restore));
+  else await store.deleteMetadataValue(sessionId, PREVIEW_RESTORE_METADATA);
 }
 
 /**
@@ -186,7 +240,11 @@ export {
   normalizeOpenTarget,
   OUTPUT_METADATA,
   outputTargetFromMetadata,
+  previewRestoreFromMetadata,
   previewStopState,
+  savedTargetMetadata,
   writeLaunchMetadata,
-  writePreviewStopState
+  writePreviewRestore,
+  writePreviewStopState,
+  writeSavedOutputTarget
 };
