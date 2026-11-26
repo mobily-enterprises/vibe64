@@ -310,7 +310,8 @@ the server runs nothing and is answered 503 with `Connection: close`,
 tells the page it may send it again, writes included; every answer sent while
 stopping closes its connection. The runtime terminals and capability features
 stop together, then Fastify closes. Requests in flight, and the commands
-running when the stop began, have 600 ms: then those connections close and
+running when the stop began, have 350 ms (`STOP_DRAIN_MS`), which leaves most
+of the stop's second for a loaded machine: then those connections close and
 those commands' process groups end (`endCaptures`: SIGTERM, then SIGKILL).
 Before it exits the server ends every command it started that still runs, so
 none outlives it. At 850 ms (`DEFAULT_SHUTDOWN_TIMEOUT_MS`) whatever still runs

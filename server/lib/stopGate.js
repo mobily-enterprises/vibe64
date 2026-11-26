@@ -8,8 +8,10 @@ import { endCaptures } from "@local/vibe64-execution/server";
 // connection too, so the page's next request reaches the next server.
 
 const STOPPING_HEADER = "x-vibe64-stopping";
-// How long requests in flight, and the commands running as the stop began, have before they are ended.
-const STOP_DRAIN_MS = 600;
+// How long requests in flight, and the commands running as the stop began, have before they are ended. With the
+// commands' grace after it the stop's own schedule takes about 440 ms of its one second, leaving the rest for a loaded
+// machine: with 600 a busy editor stopped in about 690 ms alone and in over a second on a starved CPU.
+const STOP_DRAIN_MS = 350;
 // How long an ended command's process group has after SIGTERM before SIGKILL, and after SIGKILL.
 const STOP_COMMAND_GRACE_MS = 75;
 
