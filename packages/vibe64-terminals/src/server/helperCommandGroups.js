@@ -117,10 +117,10 @@ function untilCancelled(start, signal) {
  * @param {HelperCommandGroup[]} dependencies.groups
  * @param {Function} dependencies.runInSessionProject the session command's own binding check and source
  * @param {Function} dependencies.requestTurn who the session's current request acts for, and its turn
- * @param {(sessionId: string, signal: AbortSignal) => { signal: AbortSignal, end: () => void }} dependencies.trackRun
- *   a run session close also cancels
+ * @param {ReturnType<typeof import("./sessionCommandRuns.js").createSessionCommandRuns>} dependencies.sessionRuns the
+ *   session's command runs, which its close cancels
  */
-function createHelperGroupRunner({ groups, runInSessionProject, requestTurn, trackRun }) {
+function createHelperGroupRunner({ groups, runInSessionProject, requestTurn, sessionRuns }) {
   const byName = new Map(groups.map((group) => [group.name, group]));
 
   /**
@@ -129,7 +129,7 @@ function createHelperGroupRunner({ groups, runInSessionProject, requestTurn, tra
    * @param {{ signal: AbortSignal, stdout: (chunk: string | Uint8Array) => void, stderr: (chunk: string | Uint8Array) => void }} caller
    */
   async function run(sessionId, fields, { signal, stdout, stderr }) {
-    const tracked = trackRun(sessionId, signal);
+    const tracked = sessionRuns.track(sessionId, signal);
     try {
       return await runInSessionProject(sessionId, async ({ binding, store, sourceRoot }) => {
         const group = byName.get(typeof fields?.group === "string" ? fields.group : "");
@@ -321,7 +321,8 @@ request.end(body);
  */
 async function writeHelperGroupClient(wrapperHostDir, controlFilePath, groups) {
   if (groups.length) {
-    await writeExecutableFileIfChanged(path.join(wrapperHostDir, HELPER_GROUP_CLIENT_NAME), helperGroupClientSource(controlFilePath, groups));
+    const client = helperGroupClientSource(controlFilePath, groups);
+    await writeExecutableFileIfChanged(path.join(wrapperHostDir, HELPER_GROUP_CLIENT_NAME), client);
   }
 }
 

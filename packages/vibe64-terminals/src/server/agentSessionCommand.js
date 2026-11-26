@@ -316,7 +316,7 @@ function createAgentSessionCommandService({
     };
   }
   const requestActor = async (store, sessionId, binding) => (await requestTurn(store, sessionId, binding)).actor;
-  const helperGroups = createHelperGroupRunner({ groups: helperCommandGroups, runInSessionProject, requestTurn, trackRun: sessionRuns.track });
+  const helperGroups = createHelperGroupRunner({ groups: helperCommandGroups, runInSessionProject, requestTurn, sessionRuns });
 
   async function listProject(sessionId, input) {
     return runSessionCommand(sessionId, "listProject", input, async ({ binding, store }) => {
