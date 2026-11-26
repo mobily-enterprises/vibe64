@@ -28,6 +28,7 @@ import {
 } from "./writeExecutableFileIfChanged.js";
 import { createAgentCommandProjectBinding } from "./agentCommandProjectBinding.js";
 import { offersStagingEnvironment } from "./stagingEnvironment.js";
+import { NO_PRODUCTION_ENVIRONMENT, offersProductionEnvironment } from "./productionEnvironment.js";
 import { stagingStatusPayload, humanStagingStatus } from "./agentStagingStatus.js";
 import { offersSavedValueLinks } from "./savedEnvValueLinks.js";
 import {
@@ -39,12 +40,15 @@ import {
   assertRecordEditable,
   ENV_SCOPE_ALL,
   ENV_SCOPE_DEVELOPMENT,
+  ENV_SCOPE_PRODUCTION,
   ENV_SCOPE_STAGING,
   humanStatus,
   mutationPayload,
+  notStoredFailure,
   parseCommandArgs,
   recordForKey,
   scopeStatus,
+  unavailableProductionStatus,
   unavailableStagingStatus,
   validateParsedCommand
 } from "./agentEnvCommandText.js";
@@ -54,10 +58,22 @@ import { commandLineFailure } from "./commandFailure.js";
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 /** @typedef {import("./types.js").StagingEnvironmentProvider} StagingEnvironmentProvider */
+/** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
 /** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 
 const AGENT_ENV_COMMAND_NAME = "vibe64-env";
+// The fields an Env command request carries: the wrapper's arguments and stdin, and the session's identity the
+// socket checks. Any other is refused, never ignored (agentEnvCommandText.js refuseUnreadInput).
+const REQUEST_FIELDS = Object.freeze(["args", "generationId", "sessionId", "stdin", "token"]);
+
+/** A request field the command does not read, refused before anything runs, or null. @param {object} input */
+function unreadRequestFields(input = {}) {
+  const unread = Object.keys(input).filter((name) => !REQUEST_FIELDS.includes(name));
+  if (unread.length === 0) return null;
+  const message = `The Env command does not read ${unread.join(", ")}: nothing changed. A request takes args and stdin.`;
+  return commandLineFailure(message, "vibe64_agent_env_command_input_unknown", { exitCode: 2 });
+}
 const AGENT_ENV_COMMAND_SOCKET_NAME = "env-command.sock";
 const AGENT_ENV_COMMAND_CONTRACT_VERSION = "1";
 const AGENT_ENV_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
@@ -105,12 +121,15 @@ const commandServers = createSessionCommandServers({
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {StagingEnvironmentProvider} dependencies.stagingEnvironmentProvider a host's staging Env values
+ * @param {ProductionEnvironmentProvider} [dependencies.productionEnvironmentProvider] a host's Production Env, which
+ *   the command writes and lists by name, never reading a value back
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks a host's saved values to link
  */
 function createAgentEnvCommandService({
   logger,
   project,
   stagingEnvironmentProvider,
+  productionEnvironmentProvider = NO_PRODUCTION_ENVIRONMENT,
   savedEnvValueLinks
 }) {
   // The person whose request prepared this agent; a host's saved values
@@ -218,35 +237,72 @@ function createAgentEnvCommandService({
     }
   });
 
+  // The host's Production Env: every entry in it is the project's own, and its records never carry a value. The
+  // person whose request prepared the agent is the one the host lets change it, or refuses.
+  const productionEnvironment = Object.freeze({
+    isUserValueRecord: (record = null) => Boolean(record),
+    async readRecords({ actor = null, projectSlug = "" } = {}) {
+      const result = assertOperationResult(
+        await productionEnvironmentProvider.readRecords({ actor, projectSlug }),
+        "Production Env could not be read."
+      );
+      return Array.isArray(result?.records) ? result.records : [];
+    },
+    async removeVariable({ actor = null, key = "", projectSlug = "", sessionId = "" } = {}) {
+      assertOperationResult(
+        await productionEnvironmentProvider.removeVariable({ actor, key, projectSlug, sessionId }),
+        `Production Env ${key} could not be removed.`
+      );
+    },
+    // readable-check: allow setter-seam - not a slot: setVariable saves one Production Env variable
+    async setVariable({ actor = null, key = "", projectSlug = "", secret = false, services = null, sessionId = "", value = "" } = {}) {
+      assertOperationResult(
+        await productionEnvironmentProvider.setVariable({ actor, key, projectSlug, secret, services, sessionId, value }),
+        `Production Env ${key} could not be saved.`
+      );
+    }
+  });
+
   function environmentForScope(scope = "") {
     if (scope === ENV_SCOPE_DEVELOPMENT) {
       return developmentEnvironment;
     }
+    if (scope === ENV_SCOPE_PRODUCTION) {
+      return offersProductionEnvironment(productionEnvironmentProvider) ? productionEnvironment : null;
+    }
     return offersStagingEnvironment(stagingEnvironmentProvider) ? stagingEnvironment : null;
   }
 
-  async function statusResult(parsed = {}, sessionId = "", projectSlug = "") {
+  const unavailableStatus = (scope) => (scope === ENV_SCOPE_PRODUCTION ? unavailableProductionStatus() : unavailableStagingStatus());
+
+  function unavailableFailure(scope = "") {
+    return commandLineFailure(
+      unavailableStatus(scope).reason,
+      `vibe64_agent_env_command_${scope === ENV_SCOPE_PRODUCTION ? "production" : "staging"}_unavailable`
+    );
+  }
+
+  async function statusResult(parsed = {}, sessionId = "", projectSlug = "", actor = null) {
+    // All scopes: Production's only where the host offers one, so an installation without it reads as before.
     const scopes = parsed.scope === ENV_SCOPE_ALL
-      ? [ENV_SCOPE_DEVELOPMENT, ENV_SCOPE_STAGING]
+      ? [ENV_SCOPE_DEVELOPMENT, ENV_SCOPE_STAGING,
+          ...(offersProductionEnvironment(productionEnvironmentProvider) ? [ENV_SCOPE_PRODUCTION] : [])]
       : [parsed.scope];
     const statuses = [];
     for (const scope of scopes) {
       const environment = environmentForScope(scope);
       if (!environment) {
-        statuses.push(unavailableStagingStatus());
+        statuses.push(unavailableStatus(scope));
         continue;
       }
       statuses.push(scopeStatus(
         scope,
-        await environment.readRecords({ projectSlug, sessionId }),
+        await environment.readRecords({ actor, projectSlug, sessionId }),
         environment.isUserValueRecord
       ));
     }
-    if (parsed.scope === ENV_SCOPE_STAGING && statuses[0]?.available === false) {
-      return commandLineFailure(
-        statuses[0].reason,
-        "vibe64_agent_env_command_staging_unavailable"
-      );
+    if (parsed.scope !== ENV_SCOPE_ALL && parsed.scope !== ENV_SCOPE_DEVELOPMENT && statuses[0]?.available === false) {
+      return unavailableFailure(parsed.scope);
     }
     const payload = {
       ok: true,
@@ -350,23 +406,30 @@ function createAgentEnvCommandService({
     const key = normalizeRuntimeConfigKey(parsed.key);
     const environment = environmentForScope(parsed.scope);
     if (!environment) {
-      return commandLineFailure(
-        unavailableStagingStatus().reason,
-        "vibe64_agent_env_command_staging_unavailable"
-      );
+      return unavailableFailure(parsed.scope);
     }
-    const previousRecords = await environment.readRecords({ projectSlug, sessionId });
+    const previousRecords = await environment.readRecords({ actor, projectSlug, sessionId });
     const previous = recordForKey(previousRecords, key);
     assertRecordEditable(previous, parsed.scope, key);
     const secret = parsed.secret || previous?.secret === true || runtimeConfigKeyLooksSecret(key);
     const value = envValueWithoutFinalLineEnding(stdin);
+    const production = parsed.scope === ENV_SCOPE_PRODUCTION;
+    if (production && secret && value.length === 0) {
+      return commandLineFailure(
+        `A Production secret needs a value, and stdin was empty, so ${key} was not changed. Pipe a value you generate ` +
+          `(openssl rand -hex 32 | vibe64-helper env set production ${key} --secret); a credential the person holds, ` +
+          "they type into the Production Env form on the Deploy page.",
+        "vibe64_agent_env_command_production_secret_empty"
+      );
+    }
     await environment.setVariable({
       actor,
       key,
       projectSlug,
       secret,
       sessionId,
-      value
+      value,
+      ...(production ? { services: parsed.services } : {})
     });
     return mutationPayload({
       action: "set",
@@ -383,21 +446,19 @@ function createAgentEnvCommandService({
     const key = normalizeRuntimeConfigKey(parsed.key);
     const environment = environmentForScope(parsed.scope);
     if (!environment) {
-      return commandLineFailure(
-        unavailableStagingStatus().reason,
-        "vibe64_agent_env_command_staging_unavailable"
-      );
+      return unavailableFailure(parsed.scope);
     }
-    const previousRecords = await environment.readRecords({ projectSlug, sessionId });
+    const previousRecords = await environment.readRecords({ actor, projectSlug, sessionId });
     const previous = recordForKey(previousRecords, key);
     assertRecordEditable(previous, parsed.scope, key);
-    const stored = environment.isUserValueRecord(previous);
-    if (stored) {
-      await environment.removeVariable({ actor, key, projectSlug, sessionId });
+    // A name the Env doesn't store (a misspelt one among them) is refused, never answered as a removal that changed nothing.
+    if (!environment.isUserValueRecord(previous)) {
+      return notStoredFailure(parsed.scope, key);
     }
+    await environment.removeVariable({ actor, key, projectSlug, sessionId });
     return mutationPayload({
       action: "remove",
-      changed: stored,
+      changed: true,
       created: false,
       key,
       scope: parsed.scope
@@ -472,7 +533,7 @@ function createAgentEnvCommandService({
   async function execute(parsed = {}, input = {}, binding = {}) {
     const projectSlug = toText(binding.projectSlug);
     if (parsed.command === "status") {
-      return statusResult(parsed, toText(input.sessionId), projectSlug);
+      return statusResult(parsed, toText(input.sessionId), projectSlug, binding.actor || null);
     }
     if (parsed.command === "staging") {
       return stagingStatusResult(parsed, binding, toText(input.sessionId));
@@ -498,7 +559,7 @@ function createAgentEnvCommandService({
     const sessionId = toText(input.sessionId);
     let result;
     try {
-      const validation = validateParsedCommand(parsed);
+      const validation = unreadRequestFields(input) || validateParsedCommand(parsed, { stdin: input.stdin });
       result = validation || await projectBinding.run(
         sessionId,
         (binding) => execute(parsed, input, binding)

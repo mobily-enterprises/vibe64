@@ -29,6 +29,7 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/agentEnvCommandText.js`
 - `packages/vibe64-terminals/src/server/agentStagingStatus.js`
 - `packages/vibe64-terminals/src/server/stagingEnvironment.js`
+- `packages/vibe64-terminals/src/server/productionEnvironment.js`
 - `packages/vibe64-terminals/src/server/savedEnvValueLinks.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionStatus.js`
@@ -217,8 +218,35 @@ Project agents receive the managed `vibe64-helper env` command. It reads configu
 metadata without exposing values and delegates explicit development mutations
 to the project Env service. A host may provide a Staging Env provider as the
 optional `vibe64.terminals.staging-environment` capability; public/local
-Vibe64 otherwise reports staging as unavailable. `production` and `prod` are no
-scope: each is refused with the usage error of any unknown scope. A staging `set` or
+Vibe64 otherwise reports staging as unavailable. A host that deploys to
+production may provide its Production Env as the optional
+`vibe64.terminals.production-environment` capability (`readRecords`,
+`setVariable`, `removeVariable`); without one, `production` writes and status say
+the installation has no Production Env, and `status all` lists only development
+and staging. `prod` is no scope. With one, `env set production <KEY> [--secret]
+[--services=<id>,<id>]` and `env remove production <KEY>` write it and
+`env status production` lists each entry's name, whether it is secret, its
+services and its change since the last Deploy to production (`change`), never a
+value: `env get production` and `env export production` are refused
+(`vibe64_agent_env_command_production_unreadable`), so no production value comes
+back to an agent. `services` is null when not given (the host keeps an entry's
+own, or gives a new one to the public service). An empty Production secret is
+refused (`vibe64_agent_env_command_production_secret_empty`). A change reaches
+Production only when the person deploys from the host's Plan, which lists it;
+every reply says so. In every scope a value given as an argument
+(`--secret=<value>`, `--value=<value>`, or after the KEY) is refused before
+anything is read or written, so a value is only ever stdin and never appears in
+a command line or transcript. Each operation reads only what `OPERATION_INPUTS`
+(`agentEnvCommandText.js`) names: its arguments, its options and, for `set`
+alone, stdin. An option, an argument past its own or a value on stdin it doesn't
+read is refused (`vibe64_agent_env_command_input_unknown`, never repeating an
+argument's text or what follows an option's `=`), as is a missing or empty
+argument (`vibe64_agent_env_command_input_missing`) and a request field other
+than `args`, `stdin` and the session's identity; each refusal names what the
+operation takes, the way the plan helper's `refuseUnreadInput` refuses its fields.
+`env remove` of a name the scope doesn't store is refused
+(`vibe64_agent_env_command_key_not_stored`) instead of answering a removal that
+changed nothing. A staging or production `set` or
 `remove` carries the bound session's `actor`, the person whose request prepared
 the agent (as saved-value links do), so the host applies that person's
 permission; a host refusal reaches the agent as the host words it. The same provider's

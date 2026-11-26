@@ -482,16 +482,214 @@ test("agent Env refuses system-managed values and unavailable staging writes", a
   assert.equal(staging.ok, false);
   assert.equal(staging.code, "vibe64_agent_env_command_staging_unavailable");
   assert.doesNotMatch(staging.stderr, /attempted-staging/u);
-  // production and prod are no Env scope: refused as any unknown scope.
-  for (const [args, message] of [[["set", "production", "API_TOKEN"], "set requires an explicit development or staging scope."],
-    [["status", "prod"], "Status accepts only an optional development, staging, or all scope."],
-    [["get", "production", "API_TOKEN"], "get reads one staging value: env get staging <KEY>."]]) {
-    const refused = await command.run({ args, sessionId: "guard-session", stdin: "attempted-production" });
+  // Without a host's Production Env, production writes say so; prod is no scope; production is never read back.
+  const production = await command.run({ args: ["set", "production", "API_TOKEN"], sessionId: "guard-session", stdin: "attempted-production" });
+  assert.equal(production.ok, false);
+  assert.equal(production.code, "vibe64_agent_env_command_production_unavailable");
+  assert.doesNotMatch(production.stderr, /attempted-production/u);
+  const prod = await command.run({ args: ["status", "prod"], sessionId: "guard-session" });
+  assert.equal(prod.exitCode, 2);
+  assert.equal(prod.code, "vibe64_agent_env_command_usage");
+  assert.equal(prod.stderr.split("\n")[0], "Status accepts only an optional development, staging, production or all scope.");
+  const read = await command.run({ args: ["get", "production", "API_TOKEN"], sessionId: "guard-session" });
+  assert.equal(read.exitCode, 2);
+  assert.equal(read.code, "vibe64_agent_env_command_production_unreadable");
+  assert.deepEqual(project.state.saves, []);
+});
+
+function createProductionProvider({ records = [], refuse = null } = {}) {
+  const state = { reads: [], records: [...records], removes: [], sets: [] };
+  return {
+    state,
+    async readRecords(input = {}) {
+      state.reads.push(input);
+      // A value a host wrongly answered is still never printed.
+      return { ok: true, records: state.records.map((record) => ({ ...record, value: "host-answered-production-value" })) };
+    },
+    async removeVariable(input = {}) {
+      if (refuse) return refuse;
+      state.removes.push(input);
+      state.records = state.records.filter((record) => record.key !== input.key);
+      return { ok: true };
+    },
+    async setVariable(input = {}) {
+      if (refuse) return refuse;
+      state.sets.push(input);
+      state.records = [...state.records.filter((record) => record.key !== input.key), {
+        change: "added",
+        editable: true,
+        key: input.key,
+        owner: "user",
+        secret: input.secret === true,
+        services: input.services || ["web"],
+        source: "production_env",
+        valuePresent: true
+      }];
+      return { ok: true };
+    }
+  };
+}
+
+test("agent Env production writes reach the host's Production Env by stdin alone, and never print a value", async () => {
+  const project = createProjectService();
+  const productionEnvironmentProvider = createProductionProvider();
+  const command = createAgentEnvCommandService({ logger: silentLogger,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    productionEnvironmentProvider, project
+  });
+  const actor = { id: 7, role: "owner" };
+  await runWithProjectRequestContext({ slug: "demo", vibe64User: actor }, () => command.bindSession("production-session"));
+  const generated = "generated-production-secret-0123456789";
+
+  const secret = await command.run({
+    args: ["set", "production", "APP_KEY", "--secret"],
+    sessionId: "production-session",
+    stdin: `${generated}\n`
+  });
+  const plain = await command.run({
+    args: ["set", "production", "PUBLIC_ORIGIN", "--services=web,worker", "--json"],
+    sessionId: "production-session",
+    stdin: "https://example.test"
+  });
+  const status = await command.run({ args: ["status", "production", "--json"], sessionId: "production-session" });
+  const all = await command.run({ args: ["status", "all"], sessionId: "production-session" });
+  const removed = await command.run({ args: ["remove", "production", "PUBLIC_ORIGIN"], sessionId: "production-session" });
+
+  assert.equal(secret.ok, true);
+  assert.match(secret.stdout, /Created production Env APP_KEY\.\nStored by Vibe64 outside Git; the value was not printed\.\n/u);
+  assert.match(secret.stdout, /reaches Production only when the person deploys to production; the Deploy page's Plan lists the change/u);
+  assert.equal(plain.ok, true);
+  assert.deepEqual(productionEnvironmentProvider.state.sets, [
+    { actor, key: "APP_KEY", projectSlug: "demo", secret: true, services: null, sessionId: "production-session", value: generated },
+    { actor, key: "PUBLIC_ORIGIN", projectSlug: "demo", secret: false, services: ["web", "worker"], sessionId: "production-session",
+      value: "https://example.test" }
+  ]);
+  const records = JSON.parse(status.stdout).scopes.production.records;
+  assert.deepEqual(records.map((record) => [record.key, record.secret, record.services, record.change]), [
+    ["APP_KEY", true, ["web"], "added"],
+    ["PUBLIC_ORIGIN", false, ["web", "worker"], "added"]
+  ]);
+  assert.equal(records.some((record) => Object.hasOwn(record, "value")), false);
+  assert.match(all.stdout, /Production Env:\n {2}APP_KEY — configured, secret, editable, goes to web, added since the last Deploy to production/u);
+  assert.match(removed.stdout, /Removed production Env PUBLIC_ORIGIN\./u);
+  assert.deepEqual(productionEnvironmentProvider.state.removes, [
+    { actor, key: "PUBLIC_ORIGIN", projectSlug: "demo", sessionId: "production-session" }
+  ]);
+  for (const result of [secret, plain, status, all, removed]) {
+    assert.doesNotMatch(`${result.stdout}${result.stderr || ""}`, /generated-production-secret|host-answered-production-value|example\.test/u);
+  }
+  assert.ok(productionEnvironmentProvider.state.reads.every((read) => read.actor === actor && read.projectSlug === "demo"));
+});
+
+test("agent Env never reads production back, takes values on stdin only and reports the host's refusal", async () => {
+  const project = createProjectService();
+  const productionEnvironmentProvider = createProductionProvider();
+  const command = createAgentEnvCommandService({ logger: silentLogger,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    productionEnvironmentProvider, project
+  });
+  await command.bindSession("guard-production");
+  const run = (args, stdin = "") => command.run({ args, sessionId: "guard-production", stdin });
+
+  for (const args of [["get", "production", "APP_KEY"], ["export", "production"]]) {
+    const refused = await run(args);
+    assert.equal(refused.exitCode, 2);
+    assert.equal(refused.code, "vibe64_agent_env_command_production_unreadable");
+    assert.match(refused.stderr, /Production values are never read back/u);
+  }
+  // A value given as an argument is refused before anything is read or written, for every scope.
+  for (const args of [["set", "production", "APP_KEY", "--secret=argument-production-value"],
+    ["set", "production", "APP_KEY", "argument-production-value"],
+    ["set", "development", "APP_KEY", "--value=argument-production-value"]]) {
+    const refused = await run(args);
     assert.equal(refused.exitCode, 2);
     assert.equal(refused.code, "vibe64_agent_env_command_usage");
-    assert.equal(refused.stderr.split("\n")[0], message);
+    assert.match(refused.stderr, /^A value goes in on stdin only, never as an argument/u);
+    assert.doesNotMatch(refused.stderr, /argument-production-value/u);
   }
+  const empty = await run(["set", "production", "APP_KEY", "--secret"], "\n");
+  assert.equal(empty.code, "vibe64_agent_env_command_production_secret_empty");
+  for (const [args, stdin] of [[["set", "development", "APP_KEY", "--services=web"], "value"],
+    [["set", "production", "APP_KEY", "--services="], "value"], [["link", "production", "APP_KEY", "saved", "field"], ""]]) {
+    const refused = await run(args, stdin);
+    assert.equal(refused.exitCode, 2, args.join(" "));
+    assert.equal(refused.code, "vibe64_agent_env_command_usage");
+  }
+  assert.deepEqual(productionEnvironmentProvider.state.sets, []);
   assert.deepEqual(project.state.saves, []);
+
+  const owner = "Only the workspace owner can change the Production Env: the people who may deploy to production.";
+  const memberCommand = createAgentEnvCommandService({ logger: silentLogger,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    productionEnvironmentProvider: createProductionProvider({ refuse: { ok: false, code: "vibe64_owner_required", error: owner } }),
+    project
+  });
+  await memberCommand.bindSession("member-production");
+  const refused = await memberCommand.run({ args: ["set", "production", "APP_KEY", "--secret"], sessionId: "member-production",
+    stdin: "member-production-value" });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.code, "vibe64_owner_required");
+  assert.equal(refused.stderr, `${owner}\n`);
+});
+
+test("every agent Env operation refuses an option, argument, stdin or request field it doesn't read, and a missing argument, naming what it takes, and changes nothing", async () => {
+  const project = createProjectService({
+    records: [{
+      editable: true, key: "OLD_VALUE", owner: "user", requiredFor: [], scope: "dev", secret: false, source: "user",
+      value: "old", valuePresent: true
+    }]
+  });
+  const productionEnvironmentProvider = createProductionProvider();
+  const command = createAgentEnvCommandService({ logger: silentLogger,
+    stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT, savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
+    productionEnvironmentProvider, project
+  });
+  await command.bindSession("unread-session");
+  const run = (args, stdin = "") => command.run({ args, sessionId: "unread-session", stdin });
+  const first = (result) => result.stderr.split("\n")[0];
+
+  // What an operation doesn't read: a misspelt option among them, named without what follows its =, and an extra
+  // argument or stdin by what it is, never its text.
+  for (const [args, stdin, words] of [
+    [["set", "development", "APP_KEY", "--secrt"], "kept-private", "env set does not read --secrt: nothing changed. It takes "
+      + "<development|staging|production> <KEY> [--secret] [--services=<id>,<id> (production)] [--json], and the value on stdin."],
+    [["set", "production", "APP_KEY", "--service=web"], "kept-private", "env set does not read --service=: nothing changed."],
+    [["status", "development", "--secret"], "", "env status does not read --secret: nothing changed. It takes "
+      + "[<development|staging|production|all>] [--json]."],
+    [["remove", "development", "OLD_VALUE", "kept-private"], "", "env remove does not read an argument after <KEY>: nothing "
+      + "changed. It takes <development|staging|production> <KEY> [--json]."],
+    [["remove", "development", "OLD_VALUE"], "kept-private", "env remove does not read a value on stdin: nothing changed."],
+    [["saved", "kept-private", "kept-private"], "", "env saved does not read 2 arguments after saved: nothing changed. It "
+      + "takes [--json]."],
+    [["export", "staging", "--all"], "", "env export does not read --all: nothing changed. It takes staging [--json]."]
+  ]) {
+    const refused = await run(args, stdin);
+    assert.deepEqual([refused.ok, refused.exitCode, refused.code], [false, 2, "vibe64_agent_env_command_input_unknown"],
+      args.join(" "));
+    assert.ok(first(refused).startsWith(words), `${args.join(" ")}: ${first(refused)}`);
+    assert.doesNotMatch(refused.stderr + refused.error, /kept-private|=web/u);
+  }
+  // A missing or empty argument, named among what the operation takes.
+  for (const [args, words] of [
+    [["set", "development"], "env set takes <development|staging|production> <KEY>"],
+    [["remove"], "<development|staging|production> and <KEY> are missing, so nothing changed."],
+    [["link", "development", "API_KEY", "saved-id"], "<field-id> is missing, so nothing changed."],
+    [["get", "staging", ""], "env get takes staging <KEY> [--json]: <KEY> is missing, so nothing changed."]
+  ]) {
+    const refused = await run(args, args[0] === "set" ? "value" : "");
+    assert.deepEqual([refused.ok, refused.exitCode, refused.code], [false, 2, "vibe64_agent_env_command_input_missing"],
+      args.join(" "));
+    assert.ok(first(refused).includes(words), `${args.join(" ")}: ${first(refused)}`);
+  }
+  // A request field the command doesn't read: a value sent as `value` instead of on stdin is refused, not saved empty.
+  const misnamed = await command.run({ args: ["set", "development", "APP_KEY"], sessionId: "unread-session", value: "kept-private" });
+  assert.deepEqual([misnamed.ok, misnamed.code], [false, "vibe64_agent_env_command_input_unknown"]);
+  assert.equal(misnamed.error, "The Env command does not read value: nothing changed. A request takes args and stdin.");
+  assert.deepEqual(project.state.saves, [], "nothing changed");
+  assert.deepEqual(productionEnvironmentProvider.state.sets, []);
+  // What each operation reads still runs.
+  assert.equal((await run(["status", "development", "--json"])).exitCode, 0);
+  assert.equal((await run(["remove", "development", "OLD_VALUE", "--json"])).exitCode, 0);
 });
 
 test("agent Env refuses a stale session binding after the project identity changes", async () => {
@@ -545,7 +743,10 @@ test("agent Env removes only stored user values", async () => {
   });
 
   assert.match(removed.stdout, /Removed development Env OLD_VALUE/u);
-  assert.match(unchanged.stdout, /was not stored; no change/u);
+  // A name the Env doesn't store (a misspelt one) is refused, never answered as a removal that changed nothing.
+  assert.deepEqual([unchanged.ok, unchanged.exitCode, unchanged.code], [false, 1, "vibe64_agent_env_command_key_not_stored"]);
+  assert.equal(unchanged.stderr, "Development Env MISSING_VALUE is not stored, so nothing changed: env remove takes a name the "
+    + "development Env stores (vibe64-helper env status development lists them).\n");
   assert.equal(project.state.saves.length, 1);
   assert.deepEqual(project.state.saves[0].values, {
     OLD_VALUE: {

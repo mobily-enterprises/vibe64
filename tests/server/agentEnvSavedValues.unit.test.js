@@ -78,7 +78,10 @@ test("saved lists names, descriptions and fields, never values, for the bound pe
   assert.equal(json.provider, "Test vault");
   assert.deepEqual(json.entries[0].fields.map((field) => field.id), ["apiKey", "region"]);
   assert.deepEqual(vault.calls[0][1], { actor: { username: "teammate", role: "member" }, projectSlug: "demo", sessionId: "saved-session" });
-  assert.equal((await run(command, ["saved", "extra"])).code, "vibe64_agent_env_command_usage");
+  // An argument saved doesn't read is refused, naming what it takes.
+  const extra = await run(command, ["saved", "extra"]);
+  assert.equal(extra.code, "vibe64_agent_env_command_input_unknown");
+  assert.equal(extra.error, "env saved does not read an argument after saved: nothing changed. It takes [--json].");
 });
 
 test("link and unlink go to the host with the bound person; its refusal is reported", async () => {
@@ -94,8 +97,14 @@ test("link and unlink go to the host with the bound person; its refusal is repor
   assert.equal(refused.stderr, "Only the owner can link keys in Staging.\n");
   const unlinked = await run(command, ["unlink", "development", "PAYMENTS_KEY"]);
   assert.equal(unlinked.stdout, "Unlinked development Env PAYMENTS_KEY; it is now an ordinary empty row.\n");
-  assert.equal((await run(command, ["link", "development", "PAYMENTS_KEY"])).code, "vibe64_agent_env_command_usage");
-  assert.equal((await run(command, ["unlink", "development", "PAYMENTS_KEY", "--secret"])).code, "vibe64_agent_env_command_usage");
+  // A missing argument, and an option unlink doesn't read, are refused, naming what each takes.
+  const missing = await run(command, ["link", "development", "PAYMENTS_KEY"]);
+  assert.equal(missing.code, "vibe64_agent_env_command_input_missing");
+  assert.equal(missing.error, "env link takes <development|staging> <KEY> <saved-id> <field-id> [--json]: <saved-id> and "
+    + "<field-id> are missing, so nothing changed.");
+  const unread = await run(command, ["unlink", "development", "PAYMENTS_KEY", "--secret"]);
+  assert.equal(unread.code, "vibe64_agent_env_command_input_unknown");
+  assert.equal(unread.error, "env unlink does not read --secret: nothing changed. It takes <development|staging> <KEY> [--json].");
 });
 
 test("status shows a linked row with its provenance and set refuses it", async () => {
