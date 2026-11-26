@@ -458,5 +458,6 @@ export {
   GIT_COMMITTER_NAME_ENV,
   gitIdentityEnv,
   gitIdentityEnvSync,
+  globalGitConfigPaths,
   isFallbackGitIdentityEmail
 };

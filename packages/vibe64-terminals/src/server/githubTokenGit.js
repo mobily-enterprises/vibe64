@@ -13,7 +13,7 @@
 //   the command could run, or a TLS setting under which another program could
 //   read its traffic (githubTokenConfigRefusal).
 
-import { normalizeText } from "@local/vibe64-execution/server";
+import { normalizeText } from "@local/vibe64-execution/server/normalize";
 import { commandFailure } from "./commandFailure.js";
 import { parseGitInvocation } from "./codexGitCommandOperations.js";
 

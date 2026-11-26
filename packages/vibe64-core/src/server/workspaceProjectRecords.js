@@ -274,9 +274,29 @@ function createWorkspaceProjectRecords({
     };
   }
 
+  // Catalogue reads of one project that have not started yet, by slug and deleting admission. Every call made before
+  // such a read starts shares it, and it starts on the event loop's next turn, so each caller's answer still comes
+  // from a read made after it called, never one from before a change to the project. A realtime publish authorizes
+  // each candidate socket at once (JSKIT realtimeDelivery's Promise.all over candidates, through the host's
+  // authorizeEvent), so its N sockets read their project once instead of N times.
+  const unstartedReads = new Map();
+
   async function readWorkspaceProject(input = {}) {
     const scope = catalogueOrPracticeScope();
+    if (scope) return readWorkspaceProjectNow(input, scope);
+    const key = JSON.stringify([projectSlugFromInput(input), input.allowDeleting === true]);
+    let read = unstartedReads.get(key);
+    if (!read) {
+      read = new Promise((resolve) => setImmediate(resolve)).then(() => {
+        unstartedReads.delete(key);
+        return readWorkspaceProjectNow(input, null);
+      });
+      unstartedReads.set(key, read);
+    }
+    return structuredClone(await read);
+  }
 
+  async function readWorkspaceProjectNow(input, scope) {
     const slug = projectSlugFromInput(input);
     const projectContextRoot = paths.projectContextRootForSlug(slug);
     if (scope) await readWorkspaceProjectState({ slug });

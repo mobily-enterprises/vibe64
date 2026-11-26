@@ -11,7 +11,8 @@ import {
   normalizeRepositoryMode,
   sessionRepositoryProject
 } from "@local/vibe64-core/server/projectRepository";
-import { checkpointRefs, vibe64Host, writeGitWorktreeTree } from "@local/vibe64-execution/server";
+import { checkpointRefs, writeGitWorktreeTree } from "@local/vibe64-execution/server/gitTurnCheckpoint";
+import { vibe64Host } from "@local/vibe64-execution/server/hostProfile";
 import { parseGitNameStatusZ } from "./gitRecords.js";
 import {
   commandProject,
@@ -252,13 +253,15 @@ async function changedPathsBetween(runCommand, context, baseCommit, tree, option
     .sort((left, right) => left.localeCompare(right));
 }
 
-async function countCommitsBetween(runCommand, context, fromCommit, toCommit, options = {}) {
-  const count = Number(await gitOutput(runCommand, context, [
-    "rev-list",
-    "--count",
-    `${fromCommit}..${toCommit}`
-  ], options));
-  return Number.isSafeInteger(count) && count >= 0 ? count : 0;
+/**
+ * How many commits the session has that the saved version lacks (`ahead`) and the saved version has that the session
+ * lacks (`behind`), from one `rev-list --left-right --count`: its left side is the saved version's.
+ */
+async function countAheadBehind(runCommand, context, canonicalCommit, sessionHead, options = {}) {
+  const args = ["rev-list", "--left-right", "--count", `${canonicalCommit}...${sessionHead}`];
+  const [behind, ahead] = (await gitOutput(runCommand, context, args, options)).split(/\s+/u).map(Number);
+  const count = (value) => Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  return { ahead: count(ahead), behind: count(behind) };
 }
 
 async function commitTree(runCommand, context, commit, options = {}) {
@@ -715,7 +718,7 @@ export {
   commitIsAncestor,
   commitTree,
   conflictWorktreeTree,
-  countCommitsBetween,
+  countAheadBehind,
   createVirtualCommit,
   deleteOperationRef,
   derivedArtifactsKeptProgress,

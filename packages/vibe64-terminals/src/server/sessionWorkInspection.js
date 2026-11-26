@@ -2,7 +2,8 @@
 
 import { sessionRepositoryDestination } from "@local/vibe64-core/server/projectRepository";
 import { repositoryUpdateRelationship, repositoryUpdateStrategy } from "@local/vibe64-core/shared";
-import { runVibe64Command, writeGitWorktreeTree } from "@local/vibe64-execution/server";
+import { runVibe64Command } from "./managedCommandRunner.js";
+import { writeGitWorktreeTree } from "@local/vibe64-execution/server/gitTurnCheckpoint";
 import {
   DEFAULT_CHANGE_DIFF_LINE_LIMIT,
   DEFAULT_CHANGE_FILE_LIMIT,
@@ -15,7 +16,7 @@ import {
 } from "./gitRecords.js";
 import {
   commandProject,
-  countCommitsBetween,
+  countAheadBehind,
   git,
   gitOutput,
   observedCanonicalCommit,
@@ -211,7 +212,7 @@ async function inspectSessionWorkDirect({
       project
     })
   ]);
-  const [headTree, ahead, behind, comparison] = await Promise.all([
+  const [headTree, { ahead, behind }, comparison] = await Promise.all([
     gitOutput(runCommand, context, [
       "rev-parse",
       `${sessionHead}^{tree}`
@@ -219,14 +220,7 @@ async function inspectSessionWorkDirect({
       commandOptions,
       project
     }),
-    countCommitsBetween(runCommand, context, canonicalCommit, sessionHead, {
-      commandOptions,
-      project
-    }),
-    countCommitsBetween(runCommand, context, sessionHead, canonicalCommit, {
-      commandOptions,
-      project
-    }),
+    countAheadBehind(runCommand, context, canonicalCommit, sessionHead, { commandOptions, project }),
     sessionWorkComparison(runCommand, context, {
       baseCommit: context.baseCommit,
       canonicalCommit,

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import childProcess, { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
-import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -1087,6 +1087,48 @@ test("Studio project context resolves GitHub capability from explicit target rem
   });
 });
 
+test("a local project's GitHub remote and branch come from Git once while its Git files stay the same", async (t) => {
+  await withTemporaryRoot(async (root) => {
+    const target = path.join(root, "local-target");
+    await createGitProject(target, { origin: "git@github.com:example/first.git" });
+    await runGit(target, ["symbolic-ref", "HEAD", "refs/heads/trunk"]);
+    const context = createStudioProjectContext({ explicitTargetRoot: target, env: {}, home: root });
+    const spawned = [];
+    const spawn = childProcess.spawn;
+    t.mock.method(childProcess, "spawn", function countedSpawn(...args) {
+      spawned.push(args);
+      return spawn.apply(this, args);
+    });
+    syncBuiltinESMExports();
+    try {
+      const list = async (listings) => {
+        const before = spawned.length;
+        let listed;
+        for (let index = 0; index < listings; index += 1) listed = await context.listProjects();
+        return { project: listed.currentProject, spawns: spawned.length - before };
+      };
+      const first = await list(1);
+      assert.equal(first.project.githubRepository.fullName, "example/first");
+      assert.equal(first.project.repository.defaultBranch, "trunk");
+      assert.ok(first.spawns > 0, "the first listing asks Git");
+      const few = await list(2);
+      const many = await list(20);
+      assert.equal(many.spawns, few.spawns, "Git runs as often for 20 listings as for 2");
+      assert.equal(few.spawns, 0);
+      assert.equal(many.project.githubRepository.fullName, "example/first");
+
+      await runGit(target, ["remote", "set-url", "origin", "https://github.com/example/second.git"]);
+      await runGit(target, ["symbolic-ref", "HEAD", "refs/heads/feature"]);
+      const changed = await list(1);
+      assert.equal(changed.project.githubRepository.fullName, "example/second");
+      assert.equal(changed.project.repository.defaultBranch, "feature");
+    } finally {
+      t.mock.restoreAll();
+      syncBuiltinESMExports();
+    }
+  });
+});
+
 test("Studio project context does not admit unregistered GitHub folders", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
@@ -1293,6 +1335,54 @@ test("Studio project context reads project records and ignores source config as 
         fullName: "example/wrong-source-config"
       }
     }, null, 2)}\n`);
+  });
+});
+
+test("concurrent reads of a catalogue project share one read made after they all called, as a realtime publish's sockets do", async (t) => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const context = createStudioProjectContext({ explicitProjectsRoot: projectsRoot, env: {}, home: root });
+    const recordPath = context.projectRecordPathForSlug("shop");
+    const writeRecord = async (fullName) => {
+      await writeTestFile(`${recordPath}.next`, `${JSON.stringify({
+        repository: { defaultBranch: "main", github: { fullName }, mode: PROJECT_REPOSITORY_MODE_GITHUB }
+      })}\n`);
+      await rename(`${recordPath}.next`, recordPath);
+    };
+    await mkdir(path.join(projectsRoot, "shop"), { recursive: true });
+    await writeRecord("example/first");
+    let recordReads = 0;
+    const original = fs.promises.readFile;
+    t.mock.method(fs.promises, "readFile", (file, ...rest) => {
+      if (path.resolve(String(file)) === recordPath) recordReads += 1;
+      return original(file, ...rest);
+    });
+    syncBuiltinESMExports();
+    try {
+      const deliver = async (sockets) => {
+        const before = recordReads;
+        const reads = await Promise.all(Array.from({ length: sockets }, () => context.readWorkspaceProject({ slug: "shop" })));
+        return { names: [...new Set(reads.map(({ project }) => project.githubRepository.fullName))], reads: recordReads - before };
+      };
+      const few = await deliver(2);
+      const many = await deliver(20);
+      assert.ok(few.reads > 0);
+      assert.equal(many.reads, few.reads, "20 sockets read the project as often as 2");
+      assert.deepEqual(many.names, ["example/first"]);
+
+      // A change made before a call is what that call sees, even while an earlier call's read is under way.
+      await writeRecord("example/second");
+      assert.deepEqual((await deliver(5)).names, ["example/second"]);
+      const earlier = context.readWorkspaceProject({ slug: "shop" });
+      await writeRecord("example/third");
+      assert.equal((await context.readWorkspaceProject({ slug: "shop" })).project.githubRepository.fullName, "example/third");
+      await earlier;
+      const shared = await Promise.all([1, 2].map(() => context.readWorkspaceProject({ slug: "shop" })));
+      assert.notEqual(shared[0].project, shared[1].project, "each caller gets its own copy");
+    } finally {
+      t.mock.restoreAll();
+      syncBuiltinESMExports();
+    }
   });
 });
 

@@ -1,6 +1,7 @@
 // What an agent's Git command does, the GitHub token and commit author it needs, and how its result is logged.
 
-import { USER_CREDENTIAL_SCOPE, normalizeText } from "@local/vibe64-execution/server";
+import { USER_CREDENTIAL_SCOPE } from "@local/vibe64-execution/server/credentialHomes";
+import { normalizeText } from "@local/vibe64-execution/server/normalize";
 import { logOperationalEvent, sanitizeLogText } from "@local/vibe64-core/server/logging";
 import { commandFailure } from "./commandFailure.js";
 

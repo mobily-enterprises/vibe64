@@ -3,12 +3,9 @@
 import crypto from "node:crypto";
 import { PROJECT_REPOSITORY_MODE_LOCAL_SOURCE } from "@local/vibe64-core/server/projectRepository";
 import { repositoryUpdateRelationship, repositoryUpdateStrategy } from "@local/vibe64-core/shared";
-import {
-  createGitTurnCheckpoint,
-  executionCleanupRequired,
-  runVibe64Command,
-  writeGitWorktreeTree
-} from "@local/vibe64-execution/server";
+import { runVibe64Command } from "./managedCommandRunner.js";
+import { createGitTurnCheckpoint, writeGitWorktreeTree } from "@local/vibe64-execution/server/gitTurnCheckpoint";
+import { executionCleanupRequired } from "@local/vibe64-execution/server/result";
 import { incomingFileCount, incomingVersionsBetween } from "./sessionNewerSaved.js";
 import {
   assertBranch,
@@ -18,7 +15,7 @@ import {
   commitIsAncestor,
   commitTree,
   conflictWorktreeTree,
-  countCommitsBetween,
+  countAheadBehind,
   createVirtualCommit,
   derivedArtifactsKeptProgress,
   git,
@@ -184,21 +181,12 @@ async function checkSessionUpdatesDirect({
       { commandOptions, project }
     )).slice(0, 100)
   } : null;
-  const [ahead, behind, canonicalInSession, canonicalTree] = await Promise.all([
-    countCommitsBetween(runCommand, context, canonicalCommit, sessionHead, {
-      commandOptions,
-      project
-    }),
-    countCommitsBetween(runCommand, context, sessionHead, canonicalCommit, {
-      commandOptions,
-      project
-    }),
-    commitIsAncestor(runCommand, context, canonicalCommit, sessionHead, {
-      commandOptions,
-      project
-    }),
+  const [{ ahead, behind }, canonicalTree] = await Promise.all([
+    countAheadBehind(runCommand, context, canonicalCommit, sessionHead, { commandOptions, project }),
     commitTree(runCommand, context, canonicalCommit, { commandOptions, project })
   ]);
+  // The saved version is in the session exactly when the session lacks none of its commits.
+  const canonicalInSession = behind === 0;
   const relationship = repositoryUpdateRelationship(ahead, behind);
   // The newer saved versions and how many files they change, for the message a session behind main is given.
   const [incoming, fileCount] = behind > 0

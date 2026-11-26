@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { access, lstat, stat } from "node:fs/promises";
+import { access, lstat, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { isDeepStrictEqual } from "node:util";
 
-import { runVibe64Command } from "@local/vibe64-execution/server";
+import { globalGitConfigPaths, runVibe64Command } from "@local/vibe64-execution/server";
 
 import { pathInsideOrEqual } from "./core.js";
 import { PRACTICE_SLUG_PATTERN, normalizeProjectTraining } from "./learningSpace.js";
@@ -222,8 +222,11 @@ async function selectedProjectRecord({
     fallbackMode: sourceRoot ? PROJECT_REPOSITORY_MODE_LOCAL_SOURCE : ""
   });
   if (sourceRoot && repositoryFields.repositoryMode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
-    const branch = await runGit(sourceRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
-    if (branch || await runGit(sourceRoot, ["rev-parse", "--is-inside-work-tree"]) === "true") {
+    const branch = await gitAnswer("branch", sourceRoot, async (git) => {
+      const checkedOut = await git(sourceRoot, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+      return checkedOut || await git(sourceRoot, ["rev-parse", "--is-inside-work-tree"]) === "true" ? checkedOut : null;
+    });
+    if (branch !== null) {
       repositoryFields.repository = { ...repositoryFields.repository, defaultBranch: branch };
     }
   }
@@ -475,7 +478,7 @@ async function projectMetadataWithGitRemote(projectPath = "", options = {}) {
   if (projectRepositoryView(metadata).repository) {
     return metadata;
   }
-  const githubRepository = await githubRepositoryFromGitRemotes(projectPath);
+  const githubRepository = await gitAnswer("github", projectPath, (git) => githubRepositoryFromGitRemotes(projectPath, git));
   if (!githubRepository) {
     return metadata;
   }
@@ -495,26 +498,93 @@ async function projectMetadataWithGitRemote(projectPath = "", options = {}) {
   return derivedMetadata;
 }
 
-async function githubRepositoryFromGitRemotes(projectPath = "") {
-  const insideGit = await runGit(projectPath, ["rev-parse", "--is-inside-work-tree"]);
+// Every request reads its project's record, so what Git answers about a local project's folder (its GitHub remote,
+// its checked-out branch) is kept while the files Git answers from stay the same: the folder's .git, the repository's
+// HEAD and config (a linked worktree's shared one), and the global and system config. Git replaces each of those
+// files when it changes it. A folder without its own .git, a config that includes other files, or an answer from a Git
+// that did not finish by itself (a timeout, a signal, a refused start) is asked again next time.
+const GIT_ANSWER_LIMIT = 64;
+const gitAnswers = new Map();
+
+async function gitAnswer(kind, root, ask) {
+  const key = `${kind}\0${normalizeRoot(root)}`;
+  const files = await gitAnswerFiles(root).catch(() => null);
+  const identity = files ? await fileIdentities(files).catch(() => "") : "";
+  const cached = gitAnswers.get(key);
+  if (identity && cached?.identity === identity) return structuredClone(cached.answer);
+  let finished = true;
+  const answer = await ask((cwd, args) => runGit(cwd, args, () => {
+    finished = false;
+  }));
+  if (identity && finished && !(await configIncludesFiles(files))) {
+    gitAnswers.delete(key);
+    gitAnswers.set(key, { answer: structuredClone(answer), identity });
+    if (gitAnswers.size > GIT_ANSWER_LIMIT) gitAnswers.delete(gitAnswers.keys().next().value);
+  }
+  return answer;
+}
+
+/** The files Git reads to answer about a folder with its own .git, or null for any other folder. */
+async function gitAnswerFiles(root) {
+  const dotGit = path.join(normalizeRoot(root), ".git");
+  const entry = await lstat(dotGit);
+  let gitDirectory = dotGit;
+  if (entry.isFile()) {
+    const pointer = /^gitdir:[\t ]*(.+?)[\t ]*$/mu.exec(await readFile(dotGit, "utf8"));
+    if (!pointer) return null;
+    gitDirectory = path.resolve(path.dirname(dotGit), pointer[1]);
+  } else if (!entry.isDirectory()) {
+    return null;
+  }
+  const commonDirectory = await readFile(path.join(gitDirectory, "commondir"), "utf8").then(
+    (text) => path.resolve(gitDirectory, text.trim()),
+    (error) => {
+      if (error?.code === "ENOENT") return gitDirectory;
+      throw error;
+    }
+  );
+  const configs = [path.join(commonDirectory, "config"), ...globalGitConfigPaths(process.env), "/etc/gitconfig"];
+  return { configs, others: [dotGit, path.join(gitDirectory, "HEAD")] };
+}
+
+// A .git folder changes its own times with every lock file Git writes, so it counts by which folder it is.
+async function fileIdentities({ configs, others }) {
+  return (await Promise.all([...others, ...configs].map((file) => stat(file, { bigint: true }).then(
+    (info) => info.isDirectory()
+      ? `${info.dev}:${info.ino}`
+      : `${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`,
+    (error) => {
+      if (error?.code === "ENOENT") return "-";
+      throw error;
+    }
+  )))).join("|");
+}
+
+async function configIncludesFiles({ configs }) {
+  const texts = await Promise.all(configs.map((file) => readFile(file, "utf8").catch(() => "")));
+  return texts.some((text) => /^[\t ]*\[[\t ]*include(?:If)?\b/imu.test(text));
+}
+
+async function githubRepositoryFromGitRemotes(projectPath = "", git = runGit) {
+  const insideGit = await git(projectPath, ["rev-parse", "--is-inside-work-tree"]);
   if (insideGit !== "true") {
     return null;
   }
 
-  const originUrl = await runGit(projectPath, ["remote", "get-url", "origin"]);
+  const originUrl = await git(projectPath, ["remote", "get-url", "origin"]);
   const originRepository = githubRepositoryFromRemoteUrl(originUrl);
   if (originRepository) {
     return originRepository;
   }
 
-  const remoteNames = (await runGit(projectPath, ["remote"]))
+  const remoteNames = (await git(projectPath, ["remote"]))
     .split(/\r?\n/u)
     .map((remoteName) => remoteName.trim())
     .filter(Boolean)
     .filter((remoteName) => remoteName !== "origin");
   const githubRepositories = [];
   for (const remoteName of remoteNames) {
-    const repository = githubRepositoryFromRemoteUrl(await runGit(projectPath, ["remote", "get-url", remoteName]));
+    const repository = githubRepositoryFromRemoteUrl(await git(projectPath, ["remote", "get-url", remoteName]));
     if (repository && !githubRepositories.some((existing) => existing.fullName === repository.fullName)) {
       githubRepositories.push(repository);
     }
@@ -564,11 +634,14 @@ function gitCommandOutput(result = {}) {
   return String(result.stdout || result.output || "").trim();
 }
 
-async function runGit(cwd = "", args = []) {
+/** Git's output, or "" when it failed; `unfinished` hears of a Git that did not end by itself with an exit code. */
+async function runGit(cwd = "", args = [], unfinished = () => {}) {
   try {
     const result = await runGitCommand(cwd, args);
+    if (result.timedOut || result.signal || result.code) unfinished();
     return result.ok ? gitCommandOutput(result) : "";
   } catch {
+    unfinished();
     return "";
   }
 }

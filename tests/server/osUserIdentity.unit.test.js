@@ -81,8 +81,8 @@ test("local OS identity stays fresh without spawning a process, including after 
 });
 
 test("a workspace account in the extra users database resolves without a fork, its files read once until they change", async () => {
-  // A host keeps its workspace accounts in libnss-extrausers ("passwd: files extrausers"); the account is not in
-  // /etc/passwd. Each request resolves it, so a fork per lookup ran about 20 times a second on a busy workspace.
+  // A host keeps its workspace accounts in libnss-extrausers ("passwd: files extrausers"), not in /etc/passwd: each
+  // request resolves the account, so a fork per lookup ran about 20 times a second on a busy workspace.
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-os-identity-"));
   try {
     const files = {
@@ -92,7 +92,7 @@ test("a workspace account in the extra users database resolves without a fork, i
     };
     await writeFile(files["/etc/nsswitch.conf"], "passwd:         files extrausers\ngroup:          files extrausers\n");
     await writeFile(files["/etc/passwd"], "root:x:0:0:root:/root:/bin/bash\n");
-    await writeFile(files["/var/lib/extrausers/passwd"], "v64d_shop:x:2001:2001:Shop:/home/v64d_shop:/bin/bash\n");
+    await writeFile(files["/var/lib/extrausers/passwd"], "shop_owner:x:2001:2001:Shop:/home/shop_owner:/bin/bash\n");
     let spawns = 0;
     const reads = {};
     const options = {
@@ -104,19 +104,19 @@ test("a workspace account in the extra users database resolves without a fork, i
       statFn: (file, statOptions) => stat(files[file], statOptions),
       execFileFn: async () => {
         spawns += 1;
-        return { stdout: "v64d_shop:x:2001:2001:Shop:/home/v64d_shop:/bin/bash\n" };
+        return { stdout: "shop_owner:x:2001:2001:Shop:/home/shop_owner:/bin/bash\n" };
       }
     };
     for (const count of [1, 200]) {
-      const users = await Promise.all(Array.from({ length: count }, () => resolveOsUser("v64d_shop", options)));
-      assert.ok(users.every((user) => user.uid === 2001 && user.home === "/home/v64d_shop"));
+      const users = await Promise.all(Array.from({ length: count }, () => resolveOsUser("shop_owner", options)));
+      assert.ok(users.every((user) => user.uid === 2001 && user.home === "/home/shop_owner"));
     }
     assert.equal(spawns, 0, "no lookup forks getent");
     assert.deepEqual(reads, { "/etc/nsswitch.conf": 1, "/etc/passwd": 1, "/var/lib/extrausers/passwd": 1 },
       "201 lookups read each file once");
     // useradd --extrausers replaces the file: the next lookup reads the new one, once.
     await writeFile(`${files["/var/lib/extrausers/passwd"]}.new`,
-      "v64d_shop:x:2001:2001:Shop:/home/v64d_shop:/bin/bash\nada:x:2002:2002:Ada:/home/ada:/bin/bash\n");
+      "shop_owner:x:2001:2001:Shop:/home/shop_owner:/bin/bash\nada:x:2002:2002:Ada:/home/ada:/bin/bash\n");
     await rename(`${files["/var/lib/extrausers/passwd"]}.new`, files["/var/lib/extrausers/passwd"]);
     assert.equal((await resolveOsUser("ada", options)).uid, 2002);
     assert.equal((await resolveOsUser("ada", options)).uid, 2002);

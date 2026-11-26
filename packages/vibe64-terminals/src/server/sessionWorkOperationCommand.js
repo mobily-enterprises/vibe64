@@ -1,5 +1,6 @@
 import { AppError } from "@jskit-ai/kernel/server/runtime";
-import { configureVibe64Host, runCaptureCommand } from "@local/vibe64-execution/server";
+import { runCaptureCommand } from "@local/vibe64-execution/server/capture";
+import { configureVibe64Host } from "@local/vibe64-execution/server/hostProfile";
 import {
   applySessionWorkUpdateDirect,
   captureSessionWorkUpdateCheckpointDirect,

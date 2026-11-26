@@ -2,7 +2,7 @@
 // failed Update puts the session back without losing a file written meanwhile.
 import { lstat, mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
-import { writeGitWorktreeTree } from "@local/vibe64-execution/server";
+import { writeGitWorktreeTree } from "@local/vibe64-execution/server/gitTurnCheckpoint";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { parseGitNameStatusZ } from "./gitRecords.js";
 import {

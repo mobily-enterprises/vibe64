@@ -82,6 +82,7 @@ export {
 } from "./env/loginToolEnv.js";
 export {
   GIT_IDENTITY_COMMANDS,
+  globalGitConfigPaths,
   isFallbackGitIdentityEmail
 } from "./env/gitIdentityEnv.js";
 export {
