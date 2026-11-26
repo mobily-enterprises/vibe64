@@ -58,7 +58,8 @@ function createSessionPullRequests({ logger, project, publishSessionChanged, ter
     component: "vibe64.session_pull_request",
     heldAs: "creating",
     logger,
-    notFollowed: PULL_REQUEST_NOT_FOLLOWED
+    notFollowed: PULL_REQUEST_NOT_FOLLOWED,
+    scopeNames: ["sessionId"]
   });
 
   /**

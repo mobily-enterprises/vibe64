@@ -12,7 +12,6 @@ import {
   readWorktreeGitFact,
   RECOVERY_ARTIFACT_ROOT,
   RECOVERY_BRANCH_BUNDLE_ARTIFACT,
-  RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT,
   RECOVERY_PATCH_ARTIFACT,
   RECOVERY_UNTRACKED_ARTIFACT,
   RECOVERY_UNTRACKED_LIST_ARTIFACT,
@@ -28,7 +27,6 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 const SESSION_RECOVERY_ARTIFACTS = Object.freeze({
   branchBundle: RECOVERY_BRANCH_BUNDLE_ARTIFACT,
-  checkpointBundle: RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT,
   patch: RECOVERY_PATCH_ARTIFACT,
   root: RECOVERY_ARTIFACT_ROOT,
   untracked: RECOVERY_UNTRACKED_ARTIFACT,
@@ -48,9 +46,9 @@ function connectedCopyRecoveryArtifacts(name) {
 }
 
 /**
- * Recovery of a session's source before it is archived: its uncommitted work,
- * branch and checkpoints as bundles and artifacts, and the details saved for
- * restoring them.
+ * Recovery of a session's source before it is archived: its uncommitted work
+ * and branch as artifacts, and the details saved for restoring them. Its turn
+ * checkpoints go to Project Backups (`backUpCheckpoints`).
  * @param {object} request
  * @param {string} [request.artifactsRoot]
  * @param {object} [request.session]
@@ -212,34 +210,76 @@ async function writeBranchBundle({ artifact, artifactsRoot, baseCommit, worktree
   return artifact;
 }
 
-async function writeCheckpointRecoveryBundle({
-  artifactsRoot = "",
-  session = {},
-  worktreePath = ""
-} = {}) {
-  if (metadataValue(session, "source_kind") !== "session_clone") {
-    return metadataValue(session, "source_recovery_checkpoint_bundle_artifact");
-  }
-  return writeCheckpointBundle({ artifacts: SESSION_RECOVERY_ARTIFACTS, artifactsRoot, sessionId: session.sessionId, worktreePath });
+/**
+ * The Project Backups file of a session's turn checkpoints, named after the
+ * session (and the connected copy, for a copy's) so a person can tell whose it is.
+ * @param {object} session
+ * @param {string} [copyName]
+ */
+function checkpointBackupFileName(session = {}, copyName = "") {
+  const slug = (value = "") => toText(value).toLowerCase().normalize("NFKD")
+    .replace(/[^a-z0-9]+/gu, "-").slice(0, 48).replace(/^-+|-+$/gu, "");
+  const sessionId = toText(session.sessionId);
+  const name = slug(recoverySessionName(session));
+  const parts = [name === slug(sessionId) ? "" : name, sessionId, slug(copyName)].filter(Boolean);
+  return `session-checkpoints-${parts.join("-")}.bundle`;
 }
 
 /**
- * The worktree's turn checkpoints as a bundle proven to restore them exactly, or "" when it has none.
+ * A repository's turn checkpoints as one bundle in the project's Project
+ * Backups. It holds only what the base commit's history lacks, so it takes the
+ * checkpoints' own size, not the repository's, and is proven to restore every
+ * checkpoint exactly from that history and the bundle alone. It never fails the
+ * caller: archive and renewal go on without it, with the reason recorded.
+ * @param {object} request
+ * @param {string} request.artifactsRoot where the restore proof runs
+ * @param {string} request.baseCommit the commit the session last took from its main
+ * @param {string} request.fileName
+ * @param {string} request.sessionId
+ * @param {Vibe64SessionStore} request.store whose project's Project Backups receive it
+ * @param {string} request.worktreePath
+ * @returns {Promise<{ checkpointBackup: string, checkpointBackupError: string }>}
  */
-async function writeCheckpointBundle({ artifacts, artifactsRoot, sessionId, worktreePath }) {
+async function backUpCheckpoints({ artifactsRoot, baseCommit, fileName, sessionId, store, worktreePath }) {
+  let backupPath = "";
+  try {
+    const backupsRoot = toText(store.paths().projectBackupsRoot);
+    if (backupsRoot) {
+      await store.prepareProjectFileAreas();
+      backupPath = path.join(backupsRoot, fileName);
+    }
+    const written = await writeCheckpointBackup({ artifactsRoot, backupPath, baseCommit, sessionId, worktreePath });
+    return { checkpointBackup: written ? fileName : "", checkpointBackupError: "" };
+  } catch (error) {
+    if (backupPath) await rm(backupPath, { force: true }).catch(() => {});
+    return {
+      checkpointBackup: "",
+      checkpointBackupError: toText(error?.message) || "The session's turn checkpoints could not be backed up."
+    };
+  }
+}
+
+/**
+ * Writes the bundle and its proof within one SNAPSHOT_TIMEOUT_MS, or throws why not.
+ * @returns {Promise<boolean>} whether the worktree had checkpoints to back up
+ */
+async function writeCheckpointBackup({ artifactsRoot, backupPath, baseCommit, sessionId, worktreePath }) {
+  const deadline = Date.now() + SNAPSHOT_TIMEOUT_MS;
+  const timeLeft = () => {
+    const left = deadline - Date.now();
+    if (left < 1) throw new Error(`Backing up the session's turn checkpoints took longer than ${SNAPSHOT_TIMEOUT_MS / 1000} s.`);
+    return left;
+  };
   const refRoot = checkpointRefRoot(sessionId);
   const refsResult = await runGit(worktreePath, [
     "for-each-ref",
     "--format=%(objectname) %(refname)",
     `${refRoot}/`
   ], {
-    timeout: 15_000
+    timeout: Math.min(15_000, timeLeft())
   });
   if (!refsResult.ok) {
-    throw vibe64Error(
-      `Cannot inspect session checkpoints before archive: ${refsResult.output}`,
-      "vibe64_worktree_archive_checkpoint_refs_failed"
-    );
+    throw new Error(`Cannot read the session's turn checkpoints: ${refsResult.output}`);
   }
   const refs = String(refsResult.stdout || "")
     .split("\n")
@@ -253,101 +293,119 @@ async function writeCheckpointBundle({ artifacts, artifactsRoot, sessionId, work
       };
     });
   if (refs.length < 1) {
-    return "";
+    return false;
   }
   if (refs.some(({ commit, ref }) => !commit || !ref.startsWith(`${refRoot}/`))) {
-    throw vibe64Error(
-      "Session checkpoint refs are not valid durable Git refs.",
-      "vibe64_worktree_archive_checkpoint_refs_invalid"
-    );
+    throw new Error("Session checkpoint refs are not valid durable Git refs.");
   }
-
-  const recoveryRoot = path.join(artifactsRoot, artifacts.root);
-  const bundlePath = path.join(artifactsRoot, artifacts.checkpointBundle);
-  await mkdir(recoveryRoot, {
-    recursive: true
-  });
+  if (!backupPath) {
+    throw new Error("This project has no Project Backups folder for the session's turn checkpoints.");
+  }
+  // Restore starts from the project's own history, which has the base commit:
+  // the bundle leaves out everything that history already holds.
+  const base = baseCommit
+    ? toText((await runGit(worktreePath, ["rev-parse", "--verify", "--quiet", `${baseCommit}^{commit}`], {
+      timeout: Math.min(15_000, timeLeft())
+    })).stdout)
+    : "";
+  await mkdir(path.dirname(backupPath), { recursive: true });
+  const allowedRoots = [artifactsRoot, path.dirname(backupPath)];
   const bundleResult = await runGit(worktreePath, [
     "bundle",
     "create",
-    bundlePath,
-    ...refs.map(({ ref }) => ref)
+    backupPath,
+    ...refs.map(({ ref }) => ref),
+    ...(base ? ["--not", base] : [])
   ], {
-    allowedRoots: [artifactsRoot],
-    timeout: SNAPSHOT_TIMEOUT_MS
+    allowedRoots,
+    timeout: timeLeft()
   });
   if (!bundleResult.ok) {
-    throw vibe64Error(
-      `Cannot snapshot session checkpoints before archive: ${bundleResult.output}`,
-      "vibe64_worktree_archive_checkpoint_bundle_failed"
-    );
+    throw new Error(`Cannot bundle the session's turn checkpoints: ${bundleResult.output}`);
   }
-  const verifyResult = await runGit(worktreePath, [
-    "bundle",
-    "verify",
-    bundlePath
-  ], {
-    allowedRoots: [artifactsRoot],
-    timeout: SNAPSHOT_TIMEOUT_MS
+  const verifyResult = await runGit(worktreePath, ["bundle", "verify", backupPath], {
+    allowedRoots,
+    timeout: timeLeft()
   });
   if (!verifyResult.ok) {
-    throw vibe64Error(
-      `Session checkpoint bundle could not be validated: ${verifyResult.output}`,
-      "vibe64_worktree_archive_checkpoint_bundle_invalid"
-    );
+    throw new Error(`The session's checkpoint bundle could not be validated: ${verifyResult.output}`);
   }
+  await proveCheckpointRestore({ artifactsRoot, backupPath, base, refs, timeLeft, worktreePath });
+  return true;
+}
 
+/**
+ * Unbundles the bundle into an empty repository that sees the worktree's
+ * objects (Git alternates) only for the prerequisites it names, checks that it
+ * lists every checkpoint at its exact commit, then, with those objects out of
+ * sight again, that its own pack holds every object the checkpoints need beyond
+ * the base commit's history. A fetch would prove nothing here: seeing every
+ * object through the alternates, it skips the bundle's pack. All of it reads the
+ * checkpoints' own objects and the base commit's tree, never the history.
+ */
+async function proveCheckpointRestore({ artifactsRoot, backupPath, base, refs, timeLeft, worktreePath }) {
+  const recoveryRoot = path.join(artifactsRoot, RECOVERY_ARTIFACT_ROOT);
+  await mkdir(recoveryRoot, { recursive: true });
   const verificationRoot = await mkdtemp(path.join(recoveryRoot, ".checkpoint-restore-"));
+  const allowedRoots = [artifactsRoot, path.dirname(backupPath)];
+  const inVerification = (args) => runGit(worktreePath, ["--git-dir", verificationRoot, ...args], {
+    allowedRoots,
+    timeout: timeLeft()
+  });
   try {
     const initResult = await runGit(worktreePath, ["init", "--bare", verificationRoot], {
-      allowedRoots: [artifactsRoot],
-      timeout: 15_000
+      allowedRoots,
+      timeout: Math.min(15_000, timeLeft())
     });
     if (!initResult.ok) {
-      throw vibe64Error(
-        `Cannot initialize checkpoint restore verification: ${initResult.output}`,
-        "vibe64_worktree_archive_checkpoint_restore_init_failed"
-      );
+      throw new Error(`Cannot initialize checkpoint restore verification: ${initResult.output}`);
     }
-    const fetchResult = await runGit(worktreePath, [
-      "--git-dir",
-      verificationRoot,
-      "fetch",
-      bundlePath,
-      ...refs.map(({ ref }) => `${ref}:${ref}`)
-    ], {
-      allowedRoots: [artifactsRoot],
-      timeout: SNAPSHOT_TIMEOUT_MS
-    });
-    if (!fetchResult.ok) {
-      throw vibe64Error(
-        `Session checkpoint bundle could not be restored: ${fetchResult.output}`,
-        "vibe64_worktree_archive_checkpoint_restore_failed"
-      );
+    const alternatesPath = path.join(verificationRoot, "objects", "info", "alternates");
+    if (base) {
+      const objectsResult = await runGit(worktreePath, ["rev-parse", "--path-format=absolute", "--git-path", "objects"], {
+        timeout: Math.min(15_000, timeLeft())
+      });
+      const objectsRoot = toText(objectsResult.stdout);
+      if (!objectsResult.ok || !path.isAbsolute(objectsRoot)) {
+        throw new Error(`Cannot find the session's Git objects for checkpoint restore verification: ${objectsResult.output}`);
+      }
+      await mkdir(path.dirname(alternatesPath), { recursive: true });
+      await writeFile(alternatesPath, `${objectsRoot}\n`, "utf8");
+      // A ref at the base keeps Git's connectivity checks to the checkpoints' own objects.
+      const baseResult = await inVerification(["update-ref", "refs/vibe64-restore/base", base]);
+      if (!baseResult.ok) {
+        throw new Error(`Cannot mark the base commit for checkpoint restore verification: ${baseResult.output}`);
+      }
     }
-    const restored = await runGit(worktreePath, [
-      "--git-dir",
-      verificationRoot,
-      "for-each-ref",
-      "--format=%(objectname) %(refname)",
-      `${refRoot}/`
-    ], {
-      allowedRoots: [artifactsRoot],
-      timeout: 15_000
-    });
-    if (!restored.ok) {
-      throw vibe64Error(
-        `Session checkpoint restore verification could not run: ${restored.output}`,
-        "vibe64_worktree_archive_checkpoint_restore_verify_failed"
-      );
+    const unbundled = await inVerification(["bundle", "unbundle", backupPath]);
+    if (!unbundled.ok) {
+      throw new Error(`The session's checkpoint bundle could not be restored: ${unbundled.output}`);
     }
-    const restoredRefs = restored.stdout.split("\n").map(toText).filter(Boolean).sort();
+    const restoredRefs = unbundled.stdout.split("\n").map(toText).filter(Boolean).sort();
     const expectedRefs = refs.map(({ commit, ref }) => `${commit} ${ref}`).sort();
     if (restoredRefs.join("\n") !== expectedRefs.join("\n")) {
-      throw vibe64Error(
-        "Session checkpoint bundle did not restore the exact checkpoint refs.",
-        "vibe64_worktree_archive_checkpoint_restore_mismatch"
-      );
+      throw new Error("The session's checkpoint bundle did not restore the exact checkpoint refs.");
+    }
+    const needed = await inVerification([
+      "rev-list",
+      "--objects",
+      ...refs.map(({ commit }) => commit),
+      ...(base ? ["--not", base] : [])
+    ]);
+    if (!needed.ok) {
+      throw new Error(`Checkpoint restore verification could not list the checkpoints' objects: ${needed.output}`);
+    }
+    await rm(alternatesPath, { force: true });
+    const held = await inVerification(["cat-file", "--batch-all-objects", "--batch-check=%(objectname)"]);
+    if (!held.ok) {
+      throw new Error(`Checkpoint restore verification could not list the bundle's objects: ${held.output}`);
+    }
+    const heldObjects = new Set(held.stdout.split("\n").map(toText).filter(Boolean));
+    const missing = needed.stdout.split("\n")
+      .map((line) => toText(line).split(" ")[0])
+      .filter((objectId) => objectId && !heldObjects.has(objectId));
+    if (missing.length) {
+      throw new Error(`The session's checkpoint bundle lacks ${missing.length} objects its checkpoints need.`);
     }
   } finally {
     await rm(verificationRoot, {
@@ -355,14 +413,14 @@ async function writeCheckpointBundle({ artifacts, artifactsRoot, sessionId, work
       recursive: true
     });
   }
-  return artifacts.checkpointBundle;
 }
 
 function recoveryDetailsFromSession(session = {}) {
   return {
     branch: metadataValue(session, "source_recovery_branch"),
     branchBundleArtifact: metadataValue(session, "source_recovery_bundle_artifact"),
-    checkpointBundleArtifact: metadataValue(session, "source_recovery_checkpoint_bundle_artifact"),
+    checkpointBackup: metadataValue(session, "source_recovery_checkpoint_backup"),
+    checkpointBackupError: metadataValue(session, "source_recovery_checkpoint_backup_error"),
     dirty: metadataValue(session, "source_recovery_dirty") === "yes",
     head: metadataValue(session, "source_recovery_head"),
     patchArtifact: metadataValue(session, "source_recovery_patch_artifact"),
@@ -408,18 +466,25 @@ async function saveSessionSourceRecovery({
       worktreePath
     })
     : metadataValue(session, "source_recovery_bundle_artifact");
-  const checkpointBundleArtifact = worktreeIsGitWorktree
-    ? await writeCheckpointRecoveryBundle({
+  const checkpoints = worktreeIsGitWorktree && metadataValue(session, "source_kind") === "session_clone"
+    ? await backUpCheckpoints({
       artifactsRoot: session.artifactsRoot,
-      session,
+      baseCommit: metadataValue(session, "base_commit"),
+      fileName: checkpointBackupFileName(session),
+      sessionId: session.sessionId,
+      store,
       worktreePath
     })
-    : metadataValue(session, "source_recovery_checkpoint_bundle_artifact");
+    : {
+        checkpointBackup: metadataValue(session, "source_recovery_checkpoint_backup"),
+        checkpointBackupError: metadataValue(session, "source_recovery_checkpoint_backup_error")
+      };
   const archivedAt = new Date().toISOString();
   const details = {
     branch,
     branchBundleArtifact,
-    checkpointBundleArtifact,
+    checkpointBackup: checkpoints.checkpointBackup,
+    checkpointBackupError: checkpoints.checkpointBackupError,
     dirty: dirtyArtifacts.dirty,
     head,
     patchArtifact: dirtyArtifacts.patchArtifact,
@@ -433,7 +498,8 @@ async function saveSessionSourceRecovery({
     source_recovery_base_commit: metadataValue(session, "base_commit"),
     source_recovery_branch: details.branch,
     source_recovery_bundle_artifact: details.branchBundleArtifact,
-    source_recovery_checkpoint_bundle_artifact: details.checkpointBundleArtifact,
+    source_recovery_checkpoint_backup: details.checkpointBackup,
+    source_recovery_checkpoint_backup_error: details.checkpointBackupError,
     source_recovery_default_branch: metadataValue(session, "source_default_branch") || metadataValue(session, "base_branch"),
     source_recovery_dirty: details.dirty ? "yes" : "no",
     source_recovery_head: details.head,
@@ -452,9 +518,10 @@ async function saveSessionSourceRecovery({
 
 /**
  * Recovery of each connected copy before the session's source goes: its
- * uncommitted work, commits since its recorded base and its checkpoints, below
- * recovery/connected/<name>/, recorded in connected_copies_recovery. A copy
- * whose folder is gone keeps its earlier record.
+ * uncommitted work and commits since its recorded base, below
+ * recovery/connected/<name>/, and its turn checkpoints in Project Backups,
+ * recorded in connected_copies_recovery. A copy whose folder is gone keeps its
+ * earlier record.
  * @param {{ session: object, store: Vibe64SessionStore }} request
  */
 async function saveConnectedCopiesRecovery({ session = {}, store } = {}) {
@@ -486,10 +553,12 @@ async function saveConnectedCopiesRecovery({ session = {}, store } = {}) {
         baseCommit: copy.baseCommit,
         worktreePath: copy.path
       }),
-      checkpointBundleArtifact: await writeCheckpointBundle({
-        artifacts,
+      ...await backUpCheckpoints({
         artifactsRoot: session.artifactsRoot,
+        baseCommit: copy.baseCommit,
+        fileName: checkpointBackupFileName(session, copy.name),
         sessionId: session.sessionId,
+        store,
         worktreePath: copy.path
       }),
       dirty: dirty.dirty,

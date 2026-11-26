@@ -14,8 +14,10 @@ import { currentProjectScopeKey } from "./projectRequestContext.js";
  * @param {string} options.heldAs the held answer's flag, such as `creating`
  * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} options.logger
  * @param {{ code: string, error: string }} options.notFollowed
+ * @param {string[]} options.scopeNames the log lines' names for the leading scope parts, such as `sessionId`; a
+ *   part without a name is not logged
  */
-function createHeldRequests({ component, heldAs, logger, notFollowed }) {
+function createHeldRequests({ component, heldAs, logger, notFollowed, scopeNames }) {
   const held = createHeldWork({ component, logger });
 
   /**
@@ -38,7 +40,11 @@ function createHeldRequests({ component, heldAs, logger, notFollowed }) {
       return operation.result;
     }
     if (!operation && repeat === true) return { ...notFollowed, ok: false };
-    const answer = await held.run(key, controls => work(request, controls));
+    const fields = {
+      ...Object.fromEntries(scopeNames.map((name, index) => [name, normalizeText(scope[index])])),
+      requestId: normalizeText(requestId)
+    };
+    const answer = await held.run(key, controls => work(request, controls), fields);
     if (answer.settled) return answer.result;
     return { ok: true, [heldAs]: true, requestId, waitingFor: answer.waitingFor };
   }

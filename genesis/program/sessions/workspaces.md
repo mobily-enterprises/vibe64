@@ -189,7 +189,8 @@ linked or changed for them.
 Archiving saves each copy's recovery beside the source's: Runtime's
 `saveConnectedCopiesRecovery` records `connected_copies_recovery`, with each
 copy's branch bundle, worktree patch and untracked-file archive under
-`recovery/connected/<name>/`, then removes the `connected` folder with the
+`recovery/connected/<name>/`, and its turn checkpoints in Project Backups (see
+the checkpoint backup below), then removes the `connected` folder with the
 source. Renewal requires every copy clean, saved and current, because the
 renewal rules read the session's own inspection and update check, which include
 the copies. It keeps their recovery, stages the `connected` folder beside the
@@ -850,10 +851,37 @@ activating successor keeps its predecessor visible and refuses with a message
 naming both ways out, Retry or Cancel renewal; once cancellation discards the
 successor, Archive proceeds normally. Archiving cannot leave a hidden successor
 as the project's only reserved session.
-Before removing source, archive restores the checkpoint bundle into a temporary
-repository and compares every checkpoint name and commit in one Git read. A
-failed verification command is reported separately from a ref mismatch; both
-preserve the original source for Retry.
+Archive and renewal back up the session's turn checkpoints to the project's
+Project Backups, never to the session archive, and never wait or fail on them.
+Runtime's `backUpCheckpoints` (`sessionSourceRecovery.js`) writes one Git bundle
+per repository, `session-checkpoints-<session name>-<session id>.bundle` (a
+connected copy's adds `-<copy name>`), holding only what the session's
+`base_commit` history lacks (`git bundle create <checkpoint refs> --not <base>`),
+so its time and size follow the checkpoints' own objects, not the repository's
+history; the same 60 s `SNAPSHOT_TIMEOUT_MS` bounds all of its commands
+together. Before source removal it proves the bundle: a temporary bare repository
+under the session's `recovery/` artifacts borrows the worktree's objects through
+Git alternates, with the base commit as its one ref, fetches every checkpoint
+ref from the bundle and compares each name and commit in one Git read; then,
+with the alternates removed, it checks that the repository's own objects hold
+every object `rev-list --objects <refs> --not <base>` names. A restore therefore
+needs only a clone of the project, which has the base commit, and the bundle:
+`git fetch <bundle> 'refs/vibe64/checkpoints/*:refs/vibe64/checkpoints/*'`. A
+session without a usable base commit bundles its whole history, within the same
+limit. Any failure removes the unproven bundle and records why in
+`source_recovery_checkpoint_backup_error` (a copy's in its
+`connected_copies_recovery` entry, as `checkpointBackupError`); the archive
+removes the source and completes, its result lists the failures
+(`checkpointBackupFailures`), Runtime logs each as
+`vibe64.session_archive.checkpoint_backup_failed`, and the page's archive
+success says the session was archived without its turn checkpoints, and why.
+`source_recovery_checkpoint_backup` names the file that was written. Renewal's
+recovery proof does not include the checkpoints: the successor starts from main
+without them. Nothing restores them automatically; an archived session comes
+back without its old turn checkpoints, and Project Backups deletes the file 14
+days after it was written, like any backup. Archives made before this change
+keep their `recovery/checkpoints.bundle` artifact and
+`source_recovery_checkpoint_bundle_artifact`.
 
 The repository authority check supplies the handover's source identity from
 project configuration and the verified Git commit. Renewal does not infer it

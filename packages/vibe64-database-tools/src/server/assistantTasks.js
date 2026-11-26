@@ -356,7 +356,8 @@ function createDatabaseAssistantTasks({
     component: "vibe64.database_assistant",
     heldAs: "answering",
     logger,
-    notFollowed: QUESTION_NOT_FOLLOWED
+    notFollowed: QUESTION_NOT_FOLLOWED,
+    scopeNames: ["sessionId"]
   });
 
   /**

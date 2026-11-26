@@ -246,7 +246,8 @@ function createSessionCreation({
     component: "vibe64.session_creation",
     heldAs: "creating",
     logger,
-    notFollowed: CREATION_NOT_FOLLOWED
+    notFollowed: CREATION_NOT_FOLLOWED,
+    scopeNames: []
   });
 
   /**

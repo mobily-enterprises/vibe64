@@ -2,6 +2,7 @@ import { rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { pathExists, vibe64Error } from "@local/vibe64-core/server/core";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
@@ -12,7 +13,6 @@ import {
   metadataValue,
   readWorktreeGitFact,
   RECOVERY_BRANCH_BUNDLE_ARTIFACT,
-  RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT,
   recoveryWorktreePath,
   removeEmptySessionSourceFolder,
   removeSessionOwnedWorktreeDirectory,
@@ -52,7 +52,7 @@ function connectedCopiesStagePath(session, renewalId) {
 
 /**
  * Renewal needs every connected copy saved, like the source: the successor copies them again from
- * their mains. Their checkpoints are kept as recovery evidence first.
+ * their mains. Their recovery, and their checkpoints in Project Backups, are kept first.
  * @param {{ session: object, store: Vibe64SessionStore }} request
  */
 async function prepareRenewalConnectedCopies({ session, store }) {
@@ -64,7 +64,39 @@ async function prepareRenewalConnectedCopies({ session, store }) {
       );
     }
   }
-  await saveConnectedCopiesRecovery({ session, store });
+  return saveConnectedCopiesRecovery({ session, store });
+}
+
+/**
+ * Each repository whose turn checkpoints could not go to Project Backups, and why: the source as
+ * "source", a connected copy by its name.
+ * @param {{ checkpointBackupError?: string }} source
+ * @param {Record<string, { checkpointBackupError?: string }>} connected
+ */
+function checkpointBackupFailures(source = {}, connected = {}) {
+  return [["source", source], ...Object.entries(connected)]
+    .filter(([, details]) => toText(details?.checkpointBackupError))
+    .map(([repository, details]) => ({ repository, error: toText(details.checkpointBackupError) }));
+}
+
+/**
+ * A turn checkpoint backup that failed never fails archive or renewal; each is logged here and
+ * recorded in the session's recovery.
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger | null} logger
+ * @param {string} sessionId
+ * @param {Array<{ repository: string, error: string }>} [failures]
+ */
+function logCheckpointBackupFailures(logger, sessionId, failures = []) {
+  if (!logger) return;
+  for (const { repository, error } of failures) {
+    logOperationalEvent(logger, "warn", {
+      component: "vibe64.session_archive",
+      error,
+      event: "vibe64.session_archive.checkpoint_backup_failed",
+      repository,
+      sessionId
+    }, "The session's turn checkpoints were not backed up; it went on without them.");
+  }
 }
 
 /**
@@ -82,6 +114,11 @@ async function moveConnectedCopies(from, to) {
   return true;
 }
 
+/**
+ * Renewal's proof that the staged source is the saved one its recovery describes. The turn
+ * checkpoints are not part of it: the successor starts from main without them, and their Project
+ * Backups file, or the reason there is none, is recorded beside this recovery.
+ */
 async function validateCleanRenewalRecovery({
   details = {},
   session = {},
@@ -118,12 +155,6 @@ async function validateCleanRenewalRecovery({
   await validateRecoveryBundle({
     artifact: details.branchBundleArtifact,
     expectedArtifact: RECOVERY_BRANCH_BUNDLE_ARTIFACT,
-    session,
-    worktreePath
-  });
-  await validateRecoveryBundle({
-    artifact: details.checkpointBundleArtifact,
-    expectedArtifact: RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT,
     session,
     worktreePath
   });
@@ -171,7 +202,7 @@ async function prepareRenewalSessionSource({
     readWorktreeGitFact(sourcePath, ["rev-parse", "--verify", "HEAD"]),
     readWorktreeGitFact(sourcePath, ["branch", "--show-current"])
   ]);
-  await prepareRenewalConnectedCopies({ session, store });
+  const connected = await prepareRenewalConnectedCopies({ session, store });
   if (
     existingDetails.recoverySaved === true &&
     sameResolvedPath(existingDetails.recoverySourcePath, sourcePath) &&
@@ -194,12 +225,9 @@ async function prepareRenewalSessionSource({
       staged: false
     };
   }
-  await Promise.all([
-    RECOVERY_BRANCH_BUNDLE_ARTIFACT,
-    RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT
-  ].map((relativePath) => rm(path.join(session.artifactsRoot, relativePath), {
+  await rm(path.join(session.artifactsRoot, RECOVERY_BRANCH_BUNDLE_ARTIFACT), {
     force: true
-  })));
+  });
   const details = await saveSessionSourceRecovery({
     session,
     store,
@@ -220,6 +248,7 @@ async function prepareRenewalSessionSource({
   }
   return {
     changed: true,
+    checkpointBackupFailures: checkpointBackupFailures(details, connected),
     prepared: true,
     renewalId: assertSessionRenewalId(renewalId),
     sessionId: toText(session.sessionId),
@@ -481,6 +510,7 @@ async function archiveSessionSource({
   });
   return {
     ...removal,
+    checkpointBackupFailures: checkpointBackupFailures(recovery, connected),
     dirty: recovery.dirty || Object.values(connected).some(copy => copy.dirty),
     worktreePath
   };
@@ -488,6 +518,7 @@ async function archiveSessionSource({
 
 export {
   archiveSessionSource,
+  logCheckpointBackupFailures,
   commitRenewalSessionSourceStage,
   prepareRenewalSessionSource,
   restoreRenewalSessionSourceStage,
