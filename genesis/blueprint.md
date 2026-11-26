@@ -844,6 +844,20 @@ mode must be selected before offering Start or Resume. Background helpers use
 their own Quick helper or Explain & check role.
 When the service shuts down, pending routing is cancelled and its helper cleanup
 finishes before the assistant processes close. Restart does not send that request.
+A host can give five minutes' notice of a planned restart through a notice file
+it names in the editor's settings. Until then every open editor shows the
+restart's time, a countdown and its reason, and the work a restart must not cut
+(Save, Update, Preview starts, Publish to staging, Deploy to production, the
+AI's own commit, push and rebase) is refused with a message naming that time,
+while work already running goes on.
+Every running chat is told to wind down and write where it is in its plan, and a
+turn that starts in the window is told first. Helper turns such as prompt
+suggestions are not told and end with the restart. Once the editor is back, the
+chats that were working continue on their own with what the restart stopped,
+and each open editor shows one calm green message, **Restarted for an update at
+HH:MM. Nothing was lost.**, with **Reload** only when the editor's page itself
+changed. A notice withdrawn before its time tells the chats the restart didn't
+happen.
 Custom AI controls open from Chat mode. Failed saves remain visible in that
 dialog and can be retried. Model changes wait for the active turn to
 finish. An idle paused goal permits Custom, Senior or Junior changes within its

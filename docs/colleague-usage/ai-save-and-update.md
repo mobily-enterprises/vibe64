@@ -7,6 +7,11 @@ This guide also says what the AI's Git does with your GitHub sign-in. The Save
 and Update controls themselves are in [Review, Save and work with
 GitHub](github-work.md).
 
+During the five minutes before a host's planned restart, Save and Update are
+paused for you and for the AI alike, and so are the AI's own Git commit, push
+and rebase; the AI is told to wait. See [A planned restart of the
+workspace](planned-restarts.md).
+
 ## Save or Update while the AI works
 
 Update and Save can run while the AI works; Save asks first because it includes

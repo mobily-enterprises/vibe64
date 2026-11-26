@@ -36,6 +36,10 @@ was resumed. The workspace owner can see what happened.** Members cannot open th
 Crashes page or acknowledge; the server refuses with "Only the workspace owner can
 see and acknowledge crashes."
 
+A restart the host announced beforehand is not a crash: it shows a green
+**Restarted for an update at 07:40. Nothing was lost.** message instead, and no
+red banner. See [A planned restart of the workspace](planned-restarts.md).
+
 ## The Crashes page
 
 **Crashes** lists every recorded crash, newest first. Each shows its message,
