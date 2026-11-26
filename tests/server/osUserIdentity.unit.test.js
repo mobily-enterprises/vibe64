@@ -81,8 +81,8 @@ test("local OS identity stays fresh without spawning a process, including after 
 });
 
 test("a workspace account in the extra users database resolves without a fork, its files read once until they change", async () => {
-  // A host keeps its workspace accounts in libnss-extrausers ("passwd: files extrausers"); the account is not in
-  // /etc/passwd. Each request resolves it, so a fork per lookup ran about 20 times a second on a busy workspace.
+  // A host keeps its workspace accounts in libnss-extrausers ("passwd: files extrausers"), not in /etc/passwd: each
+  // request resolves the account, so a fork per lookup ran about 20 times a second on a busy workspace.
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-os-identity-"));
   try {
     const files = {
