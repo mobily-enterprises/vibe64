@@ -52,7 +52,7 @@ test("projections copy only declared values of the declared type", () => {
 });
 
 test("the work tool says which pins Save would record, as the session's answer names them", () => {
-  const pin = { fullName: "example/mercbot", commit: "b".repeat(40) };
+  const pin = { fullName: "example/shop", commit: "b".repeat(40) };
   // After Update moved a composition copy: work to save with no changed file, the pin is why.
   assert.deepEqual(tools.sessionWork.transformResult({ ok: true, changedPaths: [], pinsToRecord: [pin], unsaved: true }).pinsToRecord, [pin]);
   assert.equal(Object.hasOwn(tools.sessionWork.transformResult({ ok: true, pinsToRecord: [], unsaved: false }), "pinsToRecord"), false);

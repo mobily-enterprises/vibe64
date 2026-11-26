@@ -82,8 +82,8 @@ test("public sources read no private workspace variable", () => {
 });
 
 // Public Vibe64 is the editor every host runs, so its files speak of a machine, a workspace and a host, never of one
-// hosting platform's machines, customers, repositories, accounts or pages. Each term is written here so it never
-// matches itself, beside the neutral word that replaces it.
+// hosting platform's machines, customers, repositories, accounts or pages, nor of a private project by name. Each term
+// is written here so it never matches itself, beside the neutral word that replaces it.
 const PLATFORM_TERMS = [
   { term: /\bV[P]S\b/u, neutral: "machine (\"a machine restart\")" },
   { term: /\b[Tt]enants?\b/u, neutral: "workspace, or the person or team it is for" },
@@ -92,7 +92,9 @@ const PLATFORM_TERMS = [
   // A hosting platform's own repositories; npm's --prefer-online and systemd's network-online.target are not.
   { term: /(?<!prefer|network)-o[n]line\b/u, neutral: "a host's own repository" },
   { term: /\bv64d[_]/u, neutral: "the workspace's own account (DAEMON_USERNAME_PREFIX, in the helper alone)" },
-  { term: /\bKeys (?:&|and) a[c]counts\b|\bkeys-(?:and)-accounts\b|\/api\/vibe64\/k[e]ys\b/u, neutral: "the host's own pages" }
+  { term: /\bKeys (?:&|and) a[c]counts\b|\bkeys-(?:and)-accounts\b|\/api\/vibe64\/k[e]ys\b/u, neutral: "the host's own pages" },
+  // A private project, in any case: its environment variables and its slugs too.
+  { term: /m[e]rcbot/iu, neutral: "an example project (\"shop\")" }
 ];
 // Integrations keep their provider's own word for a customer (Microsoft directory IDs, Workday and Xero, multi-customer
 // apps), as does the voice access token API; Genesis's Agent Skills, synced verbatim into .agents/skills, keep its

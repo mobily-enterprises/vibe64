@@ -2611,7 +2611,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const view = await createView({
       workState: {
         changedPaths: [],
-        pinsToRecord: [{ commit, fullName: "example/mercbot" }],
+        pinsToRecord: [{ commit, fullName: "example/shop" }],
         unsaved: true,
         updateAvailable: false,
         updateStatusPending: false
@@ -2619,7 +2619,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
     expect(view.saveWorkDisabled.value).toBe(false);
     expect(view.saveWorkTitle.value).toBe(
-      `Review changes and choose where to commit them. Save pins example/mercbot at ${commit.slice(0, 12)} in vibe64.connections.lock.json.`
+      `Review changes and choose where to commit them. Save pins example/shop at ${commit.slice(0, 12)} in vibe64.connections.lock.json.`
     );
     await view.requestSaveWork();
     expect(view.saveWorkConfirmOpen.value).toBe(true);

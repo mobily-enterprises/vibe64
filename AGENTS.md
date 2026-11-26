@@ -177,9 +177,11 @@ verification.
   [`docs/managed-session-filesystem-contract.md`](docs/managed-session-filesystem-contract.md).
 - Public Vibe64 is every host's editor and names no hosting platform: no
   platform's system folders, workspace variables, machines, customers,
-  repositories, accounts or pages. Say a machine ("a machine restart"), a
-  workspace and a host. `tests/server/hostNeutrality.unit.test.js` refuses the
-  platform words and names the neutral one for each.
+  repositories, accounts or pages, and no private project by name, not even as
+  a test fixture (use an example project such as `shop`). Say a machine ("a
+  machine restart"), a workspace and a host.
+  `tests/server/hostNeutrality.unit.test.js` refuses those words and names the
+  neutral one for each.
 - Never deploy unless the user explicitly requests deployment.
 
 ## Deployment Terminology
