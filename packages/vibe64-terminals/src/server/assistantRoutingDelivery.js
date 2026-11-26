@@ -36,6 +36,7 @@ import {
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { PLAN_CHECK_LABEL, planCheckStart, rememberPlanCheckStart } from "./assistantPlanCheck.js";
 import { MAIN_CHAT_NOTE_TURN_METADATA_KEY } from "./mainChatNote.js";
+import { runWithoutActionRequest } from "@local/vibe64-core/server/projectRequestContext";
 
 // The refusals of an automatic step that mean only that another turn or message came first: a turn still running, a
 // question or approval pending, or the conversation changed since the step was decided. The step is owed, not dropped
@@ -45,6 +46,19 @@ const FOLLOWUP_OVERTAKEN_CODES = Object.freeze([
   "vibe64_assistant_routing_question_pending",
   "vibe64_assistant_routing_continuation_changed"
 ]);
+
+/**
+ * What started a follow-up turn Vibe64 sends by itself, as its session timeline line names it in place of a request:
+ * its step (the plan check, the whole-project checks, a pass, a resume after an interruption, or the request's next
+ * stage: planning, implementation or Senior's review).
+ * @param {object} state the routing request being delivered
+ * @param {{ planCheck: boolean, checks: boolean, pass: object | null }} step
+ */
+function followupTimelineTrigger(state, { planCheck, checks, pass }) {
+  const name = planCheck ? "plan-check" : checks ? "whole-checks" : pass ? "pass"
+    : state.followup?.resume === true ? "resume" : state.stage || "implementation";
+  return `follow-up:${name}`;
+}
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("./types.js").AssistantRoutingState} AssistantRoutingState */
@@ -93,6 +107,11 @@ function createAssistantRoutingDelivery({
     }
   }
 
+  /**
+   * Delivers the request's turn: the person's message, or its follow-up (`followup`). A follow-up Vibe64 sends by
+   * itself runs without any request and names its step in its timeline line; one the person's Continue sends
+   * (`context.continuedByPerson`) is theirs, under their request.
+   */
   async function deliver(sessionId, context, state, followup = false, inspectionOnly = false) {
     if (!routingState.allowAuto && state.mode === "auto") {
       throw failure("Auto is available in Main chat only. Cancel this request and choose Senior or Junior.", "vibe64_assistant_routing_auto_delivery_unavailable");
@@ -286,7 +305,8 @@ function createAssistantRoutingDelivery({
     await store.writeMetadataValue(sessionId, VIBE64_ASSISTANT_SELECTION_METADATA, serializeVibe64AssistantSelection(selection));
     records.mark(state.messageId, "selection-saved");
     const { onPromptSending = doNothing } = context;
-    const result = await dispatch(sessionId, {
+    const automatic = followup && context.continuedByPerson !== true;
+    const sent = (sendContext) => dispatch(sessionId, {
       ...(followup ? {} : state.input),
       messageId,
       message,
@@ -319,7 +339,11 @@ function createAssistantRoutingDelivery({
         state.status = "waiting";
         await records.save(context, state);
       }
-    }, selectedContext);
+    }, sendContext);
+    const timelineTrigger = automatic ? followupTimelineTrigger(state, { planCheck, checks, pass }) : "";
+    const result = automatic
+      ? await runWithoutActionRequest(() => sent({ ...selectedContext, timelineTrigger }))
+      : await sent(selectedContext);
     records.mark(state.messageId, "dispatched");
     if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.", result?.code || "vibe64_assistant_routing_delivery_unconfirmed");
     // A Cancel that arrived during dispatch stops the turn this message started.

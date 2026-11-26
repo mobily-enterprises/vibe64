@@ -323,7 +323,8 @@ function createAssistantRoutingAdmission({
         }
         try {
           await decisions.admitMigratedRequest(context, state);
-          direct = await delivery.deliver(sessionId, context, state, Boolean(state.followup));
+          // The person's Continue sends the follow-up: it is theirs, under their request.
+          direct = await delivery.deliver(sessionId, { ...context, continuedByPerson: true }, state, Boolean(state.followup));
         } catch (error) {
           state.delivery = state.attemptedMessageId ? "uncertain" : "pending";
           state.status = "waiting";

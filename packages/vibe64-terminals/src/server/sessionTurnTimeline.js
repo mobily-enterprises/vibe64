@@ -34,9 +34,15 @@ function turnIdOf(result) {
   return result?.turnId || result?.turn?.id || result?.codexAgentTurn?.turnId || "";
 }
 
-/** The request that asked, as "METHOD route", or "background" when Vibe64 asked by itself. */
-function timelineTrigger() {
-  return timelineRequestTrigger(currentProjectActionRequestMeta()?.request) || "background";
+/**
+ * What asked: a follow-up turn Vibe64 sends by itself names its step (`context.timelineTrigger`, such as
+ * `follow-up:review`); otherwise the request that asked, as "METHOD route", or "background" when Vibe64 asked by
+ * itself.
+ * @param {{ timelineTrigger?: string }} [context] the provider call's context
+ */
+function timelineTrigger(context = {}) {
+  return String(context.timelineTrigger || "").trim() ||
+    timelineRequestTrigger(currentProjectActionRequestMeta()?.request) || "background";
 }
 
 /**
@@ -46,7 +52,8 @@ function timelineTrigger() {
  * (an assistant scope) are not the session's.
  * @template T
  * @param {string} method
- * @param {{ assistantScope?: object | null, providerId?: string, routingConversationId?: string, runtime?: { stateRoot?: string } | null, sessionId?: string, vibe64User?: object | null }} context
+ * @param {{ assistantScope?: object | null, providerId?: string, routingConversationId?: string, runtime?: { stateRoot?: string } | null, sessionId?: string, timelineTrigger?: string, vibe64User?: object | null }} context
+ *   timelineTrigger: what started a follow-up turn Vibe64 sends by itself, recorded in place of the request
  * @param {Record<string, any>} input
  * @param {() => Promise<T>} operation
  * @returns {Promise<T>}
@@ -64,7 +71,7 @@ async function withSessionTurnTimeline(method, context, input, operation) {
     message: input?.messageId,
     by: timelineActor(context.vibe64User),
     reason: input?.reason,
-    trigger: timelineTrigger(),
+    trigger: timelineTrigger(context),
     ...fields
   }, { projectRuntimeRoot: context.runtime?.stateRoot || undefined });
   const refused = kind === "turn" && requested === "started" ? "refused" : requested;

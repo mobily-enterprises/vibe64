@@ -51,10 +51,16 @@ answers **No timeline for session …**.
 - **Turns**: a message that started a turn or joined the running one, a
   message that was not sent (with its error code), the turn running, and how it ended:
   finished, failed, interrupted, cancelled, stopped at its deadline, or Vibe64
-  losing sight of it. **Cancel requested** and **Stop requested** say who asked,
-  why (such as `cancel-message`) and through which request; `via background`
-  means Vibe64 asked by itself. Each line names the chat (**Main chat**, a **temporary
-  chat** or an **AI task window**) and the AI engine.
+  losing sight of it. **Turn started**, **Cancel requested** and **Stop
+  requested** say who asked, why (such as `cancel-message`) and what asked:
+  the request (`via POST …`; your own message names its send route, also when
+  it waited for a running turn), or a step Vibe64 took by itself: `via
+  follow-up:plan-check`, `follow-up:review`, `follow-up:implementation`,
+  `follow-up:planning`, `follow-up:pass`, `follow-up:whole-checks` or
+  `follow-up:resume`. `via background` means Vibe64 asked by itself otherwise.
+  A turn never names a request that only read the session (`via GET …`), such
+  as an open page refreshing it. Each line names the chat (**Main chat**, a
+  **temporary chat** or an **AI task window**) and the AI engine.
 - **Conversations**: temporary chats and AI tasks opened and closed, and an
   AI engine session closed, for example when the session's AI changes.
 - **AI engine processes**: a Claude Code process started, stopped by Vibe64
