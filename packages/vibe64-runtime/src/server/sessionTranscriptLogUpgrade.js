@@ -33,14 +33,16 @@ function createSessionTranscriptLogUpgrade({ recordFiles, prepareSessionStateUpg
    * again from its old file, which the previous release may have written to
    * since; publishedEarlier says whether a new file is still exactly what an
    * earlier run published.
-   * @param {{ temporaryRoot: string, apply: boolean, publishedEarlier: (filePath: string, contents: string) => Promise<boolean> }} options
+   * `stage: false` (a standalone check) converts and compares every chat but repacks no archive.
+   * @param {{ temporaryRoot: string, apply: boolean, stage?: boolean, publishedEarlier: (filePath: string, contents: string) => Promise<boolean> }} options
    * @returns {Promise<{ updates: object[], chats: number, perTurnLayouts: number }>}
    */
-  async function prepareChatTranscriptLogUpgrade({ temporaryRoot, apply, publishedEarlier }) {
+  async function prepareChatTranscriptLogUpgrade({ temporaryRoot, apply, stage = true, publishedEarlier }) {
     let chats = 0;
     let perTurnLayouts = 0;
     const updates = await prepareSessionStateUpgrade({
       temporaryRoot,
+      stage,
       async inspectSession(sessionPaths, { checkedPath, inventory, readRegularText }) {
         await checkedPath(sessionPaths.sessionRoot, true);
         const scopes = [sessionPaths];

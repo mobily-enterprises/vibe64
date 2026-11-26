@@ -284,10 +284,13 @@ function createSessionStateUpgrades({
 
   /**
    * Stage through the session/archive owner, which the offline publisher backs up. `finishArchive` runs before repacking.
+   * With `stage: false` (a standalone check, whose preparation nothing publishes) each archive's records are read and
+   * inspected as for an apply, refusing what an apply refuses, but no changed archive is finished or repacked: its update is
+   * `{ filePath, unstaged: true }`, which the publisher counts and never publishes.
    */
   async function prepareSessionStateUpgrade({
     temporaryRoot, inspectSession, transformRenewal, transformArchiveRecord, preparedRenewalsOnly = false, finishArchive = null,
-    archives = true
+    archives = true, stage = true
   }) {
     const relativeScratch = path.relative(state.normalizedStateRoot, temporaryRoot || state.normalizedStateRoot);
     if (!path.isAbsolute(temporaryRoot || "") || typeof inspectSession !== "function" ||
@@ -357,14 +360,11 @@ function createSessionStateUpgrades({
           const changes = await inspect(sessionPaths, record);
           const nextArchiveRecord = transformArchiveRecord ? await transformArchiveRecord({ record: parsed, sessionPaths }) : null;
           if (nextArchiveRecord) archiveRecords.sessionArchiveRecordFromJson(nextArchiveRecord, { archivePath: filePath, metadataPath });
-          if (!changes.length) {
-            if (nextArchiveRecord) {
-              updates.push({
-                filePath: metadataPath,
-                original: rawRecord,
-                contents: `${JSON.stringify(nextArchiveRecord, null, 2)}\n`
-              });
-            }
+          const recordUpdates = nextArchiveRecord
+            ? [{ filePath: metadataPath, original: rawRecord, contents: `${JSON.stringify(nextArchiveRecord, null, 2)}\n` }]
+            : [];
+          if (!changes.length || !stage) {
+            updates.push(...(changes.length ? [{ filePath, unstaged: true }] : []), ...recordUpdates);
             return;
           }
           for (const change of changes) {
@@ -384,14 +384,7 @@ function createSessionStateUpgrades({
           });
           if (!result.ok) throw new Error(`Cannot stage upgraded archive for ${sessionId}.`);
           await archiveRecords.validateSessionArchive(replacementPath);
-          updates.push({ filePath, replacementPath });
-          if (nextArchiveRecord) {
-            updates.push({
-              filePath: metadataPath,
-              original: rawRecord,
-              contents: `${JSON.stringify(nextArchiveRecord, null, 2)}\n`
-            });
-          }
+          updates.push({ filePath, replacementPath }, ...recordUpdates);
         }, { temporaryRoot });
       }
     };

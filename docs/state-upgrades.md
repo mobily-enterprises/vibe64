@@ -58,6 +58,53 @@ each completed script atomically and durably in
 synced to disk, so a power cut never leaves an empty ledger.
 Completed entries are never run again during normal deployment.
 
+An apply reads the state an upgrade converts once, not once to check and again
+to apply, when the upgrade names its inputs (below): its check keeps what it
+prepared, and its apply publishes that while nothing below the inputs has
+changed since. Each pending upgrade still gets its check before the first one
+changes anything, so a record any of them refuses stops the apply with nothing
+changed.
+
+### Inputs: one read per apply
+
+`publishStateUpgradeFiles` (Core's `stateUpgradeFiles.js`) takes `inputs`, an
+async function giving the folders of the state the upgrade's preparation reads
+and nothing outside them, and the runner gives each upgrade of an apply a
+`plan`, the same for its check and its apply, in the context it passes `run`
+(an owner that hands the context on, as `{ ...context }`, passes it on too).
+Its check then keeps its preparation (the updates, their originals' digests and
+the files it staged) with a fingerprint of the inputs: one `lstat` of each
+entry below them, never following a link, its path, type and mode, device and
+inode, size, and modification and change times to the nanosecond. Its apply
+takes the fingerprint again. Unchanged, it publishes the check's preparation,
+reporting `Publishing the N state file(s) the check prepared: nothing it read
+has changed since.`; changed (an earlier upgrade of the same apply wrote
+there), it discards it and prepares again (`What the check read has changed
+since ...: preparing again.`). Either way the apply verifies each file it
+changes against the digest the check read, backs it up and stages both sides
+before the first change, as before. A preparation that accepted, for the check,
+a state an apply refuses returns `{ updates, reusable: false }` instead of the
+updates, and its apply prepares as an apply. Whatever the check kept goes when
+its apply ends, or when the apply stops. A standalone `--check` keeps nothing.
+
+`prepareUpdates(temporaryRoot, { stage })` is told whether what it prepares
+may be published: `stage` is false only for a check that keeps nothing (a
+standalone `--check`, such as a host's start step runs before its apply). Such
+a check still reads and inspects every record an apply would, and refuses what
+an apply refuses, but need not build a replacement it would only discard: the
+session helper (`prepareSessionStateUpgrade`, `stage: false`) repacks no
+archive and returns `{ filePath, unstaged: true }` for each archive that would
+change, which the publisher counts in `N state file(s) to change` and refuses
+in any preparation it publishes (`A state upgrade left a file unstaged for a
+preparation that is published.`).
+
+`20261124-chat-transcript-log` and `20261125-agent-run-history` name each
+project's sessions folder (`projectSessionRoots.js`); every other upgrade
+prepares twice, as each did before. With both pending, the agent-run upgrade
+prepares again in the apply, since the chat upgrade's apply has just written
+below the same folders; it reads agent runs alone, seconds at most. An upgrade
+that reads every chat or session names its inputs.
+
 ## New installations: the baseline
 
 A missing ledger reads as "nothing applied". That is right only for a legacy
@@ -2168,7 +2215,11 @@ file changed. A chat still in the per-turn layout is
 `20261002-session-conversations`'s, which runs first.
 
 Check is read-only and reports, per project, how many chats it would convert.
-A rerun after it finished changes nothing. Nothing reads or converts an old
+A standalone check converts and compares every chat, archived ones included,
+but repacks no archive (`stage: false`, above); an apply's own check repacks
+each archive that changes and keeps that preparation, which its apply
+publishes while nothing in the projects' sessions folders has changed, so an
+apply reads every chat once. A rerun after it finished changes nothing. Nothing reads or converts an old
 record at run time: opening or writing an unconverted chat refuses with
 `vibe64_conversation_upgrade_required`.
 

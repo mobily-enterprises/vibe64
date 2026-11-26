@@ -28,6 +28,8 @@ so the same command works without a source checkout in the relocated runtime.
 - `packages/vibe64-core/src/server/stateUpgrades/20260923-routing-v2.js`
 - `packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js`
 - `packages/vibe64-core/src/server/stateUpgrades.js`
+- `packages/vibe64-core/src/server/stateUpgradeFiles.js`
+- `tests/server/stateUpgradePlan.unit.test.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20260923-codex-login-id.js`
 - `tests/server/stateUpgrades.unit.test.js`
 - `docs/state-upgrades.md`
@@ -71,7 +73,14 @@ retains private backups, and rejects unsupported upgrade history. Errors stop
 activation; interrupted scripts must be safe to retry. A new installation
 records its baseline (`--baseline`, or the server's first start of an empty
 state root) so its current-format state is never replayed through history;
-existing state without a ledger is refused for inspection. Ordinary application
+existing state without a ledger is refused for inspection. An apply checks every
+pending upgrade before the first changes anything; an upgrade whose owner names
+its inputs (`publishStateUpgradeFiles`'s `inputs` in
+`packages/vibe64-core/src/server/stateUpgradeFiles.js`) then publishes what its
+check prepared while an lstat fingerprint of those folders is unchanged, so the
+chat and agent-run upgrades read every session once per apply instead of twice,
+and a standalone check, whose preparation nothing publishes, repacks no archive
+(`tests/server/stateUpgradePlan.unit.test.js`). Ordinary application
 reads and startup do not backfill old metadata. The first upgrade supplies a
 Vibe64-local login identity for existing Codex connections without changing
 native credentials or canonical project content. See `docs/state-upgrades.md`

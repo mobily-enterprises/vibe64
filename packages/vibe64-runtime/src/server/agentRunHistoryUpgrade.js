@@ -1,6 +1,7 @@
 import path from "node:path";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState";
 import { publishStateUpgradeFiles, stateUpgradeRunBackupRoots } from "@local/vibe64-core/server/stateUpgradeFiles";
+import { projectSessionRoots } from "./projectSessionRoots.js";
 import { createVibe64SessionStore } from "./sessionStore.js";
 
 /**
@@ -24,6 +25,7 @@ async function upgradeAgentRunHistory(context) {
   return publishStateUpgradeFiles({
     ...context,
     backupRoot,
+    inputs: () => projectSessionRoots(context.systemRoot),
     async prepareUpdates(temporaryRoot) {
       const updates = [];
       for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {
