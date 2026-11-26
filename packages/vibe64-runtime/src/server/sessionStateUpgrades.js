@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { isMissingPathError, isPlainObject } from "@local/vibe64-core/server/core";
+import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { explicitPathIsManagedSessionSource } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   assertValidVibe64SessionId,
@@ -374,8 +375,10 @@ function createSessionStateUpgrades({
               continue;
             }
             await mkdir(path.dirname(change.filePath), { recursive: true, mode: 0o700 });
+            // Replaced whole, never written in place: a session file's readers reuse what they read while its folder
+            // is unchanged, and only a rename or a removal changes the folder.
             if (change.replacementPath) await rename(change.replacementPath, change.filePath);
-            else await writeFile(change.filePath, change.contents, { mode: 0o600 });
+            else await writeFileAtomic(change.filePath, change.contents, { durable: false, fileMode: 0o600 });
           }
           if (finishArchive) await finishArchive(sessionPaths);
           const replacementPath = path.join(temporaryRoot, `${randomUUID()}.tar.gz`);
