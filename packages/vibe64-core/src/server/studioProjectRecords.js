@@ -513,7 +513,9 @@ async function gitAnswer(kind, root, ask) {
   const cached = gitAnswers.get(key);
   if (identity && cached?.identity === identity) return structuredClone(cached.answer);
   let finished = true;
-  const answer = await ask((cwd, args) => runGit(cwd, args, () => { finished = false; }));
+  const answer = await ask((cwd, args) => runGit(cwd, args, () => {
+    finished = false;
+  }));
   if (identity && finished && !(await configIncludesFiles(files))) {
     gitAnswers.delete(key);
     gitAnswers.set(key, { answer: structuredClone(answer), identity });
