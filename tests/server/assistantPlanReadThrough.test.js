@@ -36,14 +36,14 @@ test("a whole Plan or Progress written from a read's first page alone is refused
   const f = await fixture(t);
   await manageWorkPlan(f.context, { operation: "new", text: PLAN }, "senior");
   const empty = await f.readAll();
-  await f.agent({ operation: "progress-write", text: REVIEW, ...empty.pair });
+  await f.agent({ operation: "progress-write", progressText: REVIEW, ...empty.pair });
   const first = await readWorkPlanPage(f.context);
   assert.equal(first.hasMore, true);
   assert.equal(first.readThrough, undefined, "only the last page proves a read went to the end");
   const fromFirstPage = { expectedRevision: first.revision, expectedProgressRevision: first.progressRevision };
   const refused = { code: "vibe64_work_plan_read_through_required",
     message: /replaces the whole Progress, so it needs readThrough.*read every page of Plan and Progress \(follow nextOffset while hasMore\).*Nothing changed\./u };
-  await assert.rejects(f.agent({ operation: "progress-write", text: `${first.progressText}\n## Security\nNo findings.\n`, ...fromFirstPage }),
+  await assert.rejects(f.agent({ operation: "progress-write", progressText: `${first.progressText}\n## Security\nNo findings.\n`, ...fromFirstPage }),
     refused, "a Progress built from page 1 alone would cut the Review tail");
   await assert.rejects(f.agent({ operation: "write", text: first.text.replace("- [ ] Prove", "- [~] Prove"), ...fromFirstPage }),
     { code: "vibe64_work_plan_read_through_required", message: /replaces the whole Plan/u });
@@ -54,7 +54,7 @@ test("a whole Plan or Progress written from a read's first page alone is refused
   const whole = await f.readAll();
   assert.equal(whole.progressText, REVIEW);
   const security = `${whole.progressText}\n## Security\nNo findings.\n`;
-  const written = await f.agent({ operation: "progress-write", text: security, ...whole.pair });
+  const written = await f.agent({ operation: "progress-write", progressText: security, ...whole.pair });
   assert.equal(written.hasMore, true);
   assert.ok(written.readThrough);
   const ticked = await f.agent({ operation: "write", text: whole.text.replace("- [ ] Prove", "- [~] Prove"),
@@ -63,8 +63,8 @@ test("a whole Plan or Progress written from a read's first page alone is refused
   assert.match((await readWorkPlan(f.context)).text, /- \[~\] Prove the move/u);
   // A readThrough from before other writes is stale with its revisions: refused, as any stale write is (the Plan
   // write came last, so the Plan's revision is the first to differ).
-  await assert.rejects(f.agent({ operation: "progress-write", text: `${security}Later.\n`, ...whole.pair }), { code: "vibe64_work_plan_changed" });
-  await assert.rejects(f.agent({ operation: "progress-write", text: `${security}Later.\n`, ...whole.pair, expectedRevision: ticked.revision }),
+  await assert.rejects(f.agent({ operation: "progress-write", progressText: `${security}Later.\n`, ...whole.pair }), { code: "vibe64_work_plan_changed" });
+  await assert.rejects(f.agent({ operation: "progress-write", progressText: `${security}Later.\n`, ...whole.pair, expectedRevision: ticked.revision }),
     { code: "vibe64_work_plan_progress_changed" });
   assert.notEqual(ticked.readThrough, written.readThrough, "each pair has its own readThrough");
 });

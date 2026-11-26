@@ -44,26 +44,26 @@ test("a failing or flaky test on the Leftovers list is refused, naming the fix, 
   const refused = { code: "vibe64_work_plan_leftover_fixable",
     message: /^Progress's Leftovers hold a failing or flaky test: “tests\/e2e\/contacts\.spec\.ts fails now and then on a busy machine \(passes 2 runs in 3\)\.”\. A failing or flaky test is a defect to fix in this session until it passes every run, never a Leftover; .*Fix it, then write Progress without it\. Nothing changed\.$/u };
   for (const role of ["junior", "pass", "review"]) {
-    await assert.rejects(f.agent("progress-write", role, { text: LIVE_LEFTOVERS }), refused, `${role} records the live Leftovers`);
+    await assert.rejects(f.agent("progress-write", role, { progressText: LIVE_LEFTOVERS }), refused, `${role} records the live Leftovers`);
   }
   // The other spellings of the list: a Leftovers: line, bold, a numbered item.
   for (const leftovers of ["**Leftovers:**\n1. The checkout spec is flaky.\n", "Leftovers: the login test failed twice.\n",
     "### Leftovers (need you)\nThe admin suite fails intermittently.\n"]) {
-    await assert.rejects(f.agent("progress-write", "junior", { text: `# Progress\n\n${leftovers}` }), { code: "vibe64_work_plan_leftover_fixable" }, leftovers);
+    await assert.rejects(f.agent("progress-write", "junior", { progressText: `# Progress\n\n${leftovers}` }), { code: "vibe64_work_plan_leftover_fixable" }, leftovers);
   }
   assert.equal((await readWorkPlan(f.context)).progressText, "# Progress\n\n", "nothing was written");
 
   // What needs the person stays; a test outside the list, or quoted in code, is not a Leftover.
-  await f.agent("progress-write", "junior", { text: PERSON_ONLY });
+  await f.agent("progress-write", "junior", { progressText: PERSON_ONLY });
   assert.equal((await readWorkPlan(f.context)).progressText, PERSON_ONLY);
 
   // Progress written another way (before this check) still holds a plan from completing until the test is fixed.
   const current = await readWorkPlan(f.context);
-  await manageWorkPlan(f.context, { operation: "progress-write", text: LIVE_LEFTOVERS, expectedRevision: current.revision,
+  await manageWorkPlan(f.context, { operation: "progress-write", progressText: LIVE_LEFTOVERS, expectedRevision: current.revision,
     expectedProgressRevision: current.progressRevision }, "senior");
   await assert.rejects(f.agent("complete", "senior"), { code: "vibe64_work_plan_leftover_fixable" });
   assert.equal((await readWorkPlan(f.context)).status, "active");
-  await f.agent("progress-write", "senior", { text: LIVE_LEFTOVERS.replace(/- tests\/e2e[\s\S]*?3\)\.\n/u, "") });
+  await f.agent("progress-write", "senior", { progressText: LIVE_LEFTOVERS.replace(/- tests\/e2e[\s\S]*?3\)\.\n/u, "") });
   assert.equal((await f.agent("complete", "senior")).status, "completed");
 });
 

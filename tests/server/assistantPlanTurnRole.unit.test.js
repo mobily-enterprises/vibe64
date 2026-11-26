@@ -41,7 +41,8 @@ async function planCommand(t) {
   // A write as the agent makes one: from a whole read, with its revisions and readThrough.
   const write = async (operation, text) => {
     const read = await plan({ operation: "read" });
-    return plan({ operation, text, expectedRevision: read.revision, expectedProgressRevision: read.progressRevision,
+    return plan({ operation, [operation === "progress-write" ? "progressText" : "text"]: text, expectedRevision: read.revision,
+      expectedProgressRevision: read.progressRevision,
       ...(["write", "progress-write"].includes(operation) ? { readThrough: read.readThrough } : {}),
       ...(operation === "new" ? { archiveCurrent: true } : {}) });
   };

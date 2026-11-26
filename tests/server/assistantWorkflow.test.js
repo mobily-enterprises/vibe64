@@ -77,7 +77,7 @@ test("Senior can reconcile checklist ticks during review and archive the complet
   await manageWorkPlan(f.context, { operation: "new", text: "# FDA controls\n\n- [~] Block invoice\n- [~] Block transaction\n- [~] Block shortcut\n- [~] Allow no FDA\n- [~] Cancel\n- [~] Transfers unchanged\n- [~] Browser verification\n" }, "senior");
   await review(f);
   let plan = await readWorkPlan(f.context);
-  await manageWorkPlan(f.context, { operation: "progress-write", text: "# Progress\n\nVerified blocked and allowed controls in Preview.\n",
+  await manageWorkPlan(f.context, { operation: "progress-write", progressText: "# Progress\n\nVerified blocked and allowed controls in Preview.\n",
     expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
   plan = await readWorkPlan(f.context);
   await manageWorkPlan(f.context, { operation: "write", text: plan.text.replaceAll("- [~]", "- [x]"),
