@@ -3,28 +3,74 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-// commandSpawner.js starts every finite command the editor runs. Only the files below may start processes
-// themselves: they start long-lived processes, once per owner, each needing a terminal, a file descriptor or a
-// channel of its own, or they are not the editor at all. A new direct start anywhere else fails here, instead of
-// quietly growing a second way to start a command.
-const LONG_LIVED_STARTERS = new Map([
-  ["packages/vibe64-execution/src/server/engines/commandExecutor.js", "Where every finite command starts, in the spawner or in a small process."],
-  ["packages/vibe64-execution/src/server/engines/commandSpawner.js", "Starts the command spawner itself, once per editor."],
-  ["packages/vibe64-execution/src/server/engines/terminalSessions.js", "A runtime terminal needs a pseudo-terminal (node-pty), once per terminal."],
-  ["packages/vibe64-execution/src/server/engines/detached.js", "A detached service writes its own log file and outlives its request, once per service; and the reaper holding their groups, once per editor."],
-  ["packages/vibe64-execution/src/server/engines/stdioBridge.js", "An AI engine's stdio bridge, once per engine."],
-  ["packages/vibe64-execution/src/server/env/gitIdentityEnv.js", "The synchronous Git identity read a terminal's environment needs (spawnSync), which cannot wait for the spawner."],
-  ["packages/vibe64-database-tools/src/server/sqliteClient.js", "A SQLite worker with its own IPC channel, once per connection."]
-]);
-const NOT_THE_EDITOR = new Map([
-  ["packages/vibe64-execution/src/host/", "The execution helper: its own program, which the editor runs through sudo."],
-  ["packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js", "The source of a tool an agent runs in its own process."],
-  ["packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerSource.js", "The source of a worker an agent's browser tool runs in its own process."],
-  ["packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js", "A plugin OpenCode loads into its own server process."]
-]);
-const PROCESS_START = /from\s+["'](?:node:)?child_process["']|require\s*\(\s*["'](?:node:)?child_process["']\s*\)|["'](?:@lydell\/)?node-pty["']/u;
+import { parse } from "@typescript-eslint/parser";
 
-async function editorServerFiles() {
+// Every file of the editor and its packages that starts processes itself, with the number of times it uses what it
+// takes from child_process, node-pty or execa (each reference to an imported name, and each dynamic import or require
+// of one of them), and why. The editor's finite commands start in commandExecutor.js, through commandSpawner.js; the
+// rest of the editor starts only long-lived processes, once per owner, and one finite command that cannot wait: the
+// synchronous Git identity read. Programs that are not the editor are listed too. Any other use, a new one in a listed
+// file included, fails here, so a second way to start a command cannot grow unseen. Prose elsewhere points here instead
+// of copying this list.
+const LONG_LIVED = "long-lived, once per owner";
+const FINITE_EXCEPTION = "the one finite exception";
+const NOT_THE_EDITOR = "not the editor";
+const PROCESS_STARTERS = new Map([
+  ["packages/vibe64-execution/src/server/engines/commandExecutor.js", {
+    kind: "where finite commands start",
+    uses: 1,
+    why: "The one spawn() of every finite command, in the editor's spawner or in a small process of its own."
+  }],
+  ["packages/vibe64-execution/src/server/engines/commandSpawner.js", {
+    kind: LONG_LIVED,
+    uses: 1,
+    why: "Starts the command spawner itself, once per editor."
+  }],
+  ["packages/vibe64-execution/src/server/engines/terminalSessions.js", {
+    kind: LONG_LIVED,
+    uses: 1,
+    why: "A runtime terminal needs a pseudo-terminal (node-pty), once per terminal."
+  }],
+  ["packages/vibe64-execution/src/server/engines/detached.js", {
+    kind: LONG_LIVED,
+    uses: 2,
+    why: "A detached service writes its own log file and outlives its request, once per service; and the reaper that holds their process groups, once per editor."
+  }],
+  ["packages/vibe64-execution/src/server/env/gitIdentityEnv.js", {
+    kind: FINITE_EXCEPTION,
+    uses: 1,
+    why: "A terminal's environment is built synchronously, so its Git identity read (spawnSync) cannot wait for the spawner's reply. Its asynchronous read goes through the spawner."
+  }],
+  ["packages/vibe64-database-tools/src/server/sqliteClient.js", {
+    kind: LONG_LIVED,
+    uses: 1,
+    why: "A SQLite worker with its own IPC channel, once per connection, which keeps native queries off the editor's thread and lets them be cancelled."
+  }],
+  ["packages/vibe64-execution/src/server/engines/stdioBridge.js", {
+    kind: NOT_THE_EDITOR,
+    uses: 1,
+    why: "The stdio bridge program an AI engine's conversation runs in (conversationExecution.js starts it through the gateway), which starts the engine."
+  }],
+  ["packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js", {
+    kind: NOT_THE_EDITOR,
+    uses: 1,
+    why: "A plugin OpenCode loads into its own server process, inside that execution's scope, which runs a fixed Node composer with bounded output and a timeout."
+  }],
+  ["packages/vibe64-packaging/bin/vibe64-publish.js", {
+    kind: NOT_THE_EDITOR,
+    uses: 1,
+    why: "The publishing command line, its own program, which runs Vibe64's fixed Git and tool commands without a shell."
+  }],
+  ["packages/vibe64-usage-recording/runtime/php/build.mjs", {
+    kind: NOT_THE_EDITOR,
+    uses: 1,
+    why: "The build script a person runs (node build.mjs) to compile the PHP usage recorder with phpize and make."
+  }]
+]);
+const HOST_HELPER = "The execution helper, its own program, which the editor runs through sudo.";
+const PROCESS_MODULE = /^(?:node:)?child_process$|^(?:@lydell\/)?node-pty$|^execa$/u;
+
+async function editorFiles() {
   const files = ["server.js"];
   async function walk(folder) {
     for (const entry of await readdir(folder, { withFileTypes: true })) {
@@ -34,23 +80,72 @@ async function editorServerFiles() {
     }
   }
   await walk("server");
-  for (const entry of await readdir("packages", { withFileTypes: true })) {
-    if (entry.isDirectory()) await walk(path.join("packages", entry.name, "src")).catch((error) => {
-      if (error.code !== "ENOENT") throw error;
-    });
-  }
+  await walk("packages");
   return files;
 }
 
-test("only the listed long-lived starters start processes themselves; every finite command goes through commandSpawner", async () => {
-  const starters = [];
-  for (const file of await editorServerFiles()) {
-    if (PROCESS_START.test(await readFile(file, "utf8"))) starters.push(file);
+function moduleName(node) {
+  return node?.type === "Literal" && typeof node.value === "string" && PROCESS_MODULE.test(node.value);
+}
+
+// The uses of what a file takes from a process module: every reference to a name it imports from one (calls,
+// aliases and namespace members alike), and every dynamic import or require of one.
+function processUses(source) {
+  const program = parse(source, { ecmaVersion: "latest", range: false, sourceType: "module" });
+  const names = new Set();
+  for (const node of program.body) {
+    if (node.type === "ImportDeclaration" && moduleName(node.source)) {
+      for (const specifier of node.specifiers) names.add(specifier.local.name);
+    }
   }
-  const listed = (file) => LONG_LIVED_STARTERS.has(file) ||
-    [...NOT_THE_EDITOR.keys()].some((entry) => entry.endsWith("/") ? file.startsWith(entry) : file === entry);
-  assert.deepEqual(starters.filter((file) => !listed(file)), [], "start these commands with spawnCommand or execFileCommand");
-  const stale = [...LONG_LIVED_STARTERS.keys(), ...NOT_THE_EDITOR.keys()]
-    .filter((entry) => !starters.some((file) => entry.endsWith("/") ? file.startsWith(entry) : file === entry));
-  assert.deepEqual(stale, [], "these entries no longer start processes: remove them from the list");
+  let uses = 0;
+  const visit = (node, parent, key) => {
+    if (!node || typeof node.type !== "string") return;
+    if (node.type === "ImportDeclaration") return;
+    if (node.type === "ImportExpression" && moduleName(node.source)) uses += 1;
+    if (node.type === "CallExpression" && node.callee.type === "Identifier" && node.callee.name === "require" &&
+      moduleName(node.arguments[0])) uses += 1;
+    const isName = (parent?.type === "MemberExpression" && key === "property" && !parent.computed) ||
+      (["Property", "MethodDefinition", "PropertyDefinition"].includes(parent?.type) && key === "key" && !parent.computed);
+    if (node.type === "Identifier" && names.has(node.name) && !isName) uses += 1;
+    for (const [childKey, value] of Object.entries(node)) {
+      if (childKey === "parent") continue;
+      // A shorthand property's key and value are one reference.
+      if (node.type === "Property" && node.shorthand && childKey === "key") continue;
+      for (const child of Array.isArray(value) ? value : [value]) {
+        if (child && typeof child === "object") visit(child, node, childKey);
+      }
+    }
+  };
+  visit(program, null, "");
+  return uses;
+}
+
+test("every file that starts processes itself is listed with its number of uses and why: a new use anywhere fails", async () => {
+  const found = new Map();
+  for (const file of await editorFiles()) {
+    const source = await readFile(file, "utf8");
+    if (!/child_process|node-pty|execa/u.test(source)) continue;
+    const uses = processUses(source);
+    if (uses > 0) found.set(file, uses);
+  }
+  const listed = (file) => PROCESS_STARTERS.get(file) ||
+    (file.startsWith("packages/vibe64-execution/src/host/") ? { kind: NOT_THE_EDITOR, uses: found.get(file), why: HOST_HELPER } : null);
+  const unlisted = [...found].filter(([file, uses]) => listed(file)?.uses !== uses)
+    .map(([file, uses]) => `${file}: ${uses} use${uses === 1 ? "" : "s"}${listed(file) ? `, listed with ${listed(file).uses}` : ""}`);
+  assert.deepEqual(unlisted, [], "start these commands with spawnCommand or execFileCommand, or list the file with its reason");
+  const stale = [...PROCESS_STARTERS.keys()].filter((file) => !found.has(file));
+  assert.deepEqual(stale, [], "these files no longer start processes: remove them from the list");
+  for (const { kind, why } of PROCESS_STARTERS.values()) {
+    assert.ok([LONG_LIVED, FINITE_EXCEPTION, NOT_THE_EDITOR, "where finite commands start"].includes(kind));
+    assert.ok(why.length > 20);
+  }
+});
+
+test("the count follows the code: a dynamic import, a require, an alias and a namespace member each count, a mention in text does not", () => {
+  assert.equal(processUses(`import { spawn } from "node:child_process"; spawn("a"); const start = spawn;`), 2);
+  assert.equal(processUses(`import * as cp from "child_process"; cp.execFile("a"); cp.spawn("b");`), 2);
+  assert.equal(processUses(`const cp = await import("node:child_process");`), 1);
+  assert.equal(processUses(`const cp = require("child_process");`), 1);
+  assert.equal(processUses(`// child_process spawn\nconst text = "spawn(child_process)"; const o = { spawn: 1 }; o.spawn;`), 0);
 });
