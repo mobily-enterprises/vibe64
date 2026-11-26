@@ -315,10 +315,12 @@ which leaves most of the stop's second for a loaded machine. Then, from the
 drain's own timer, those connections close, the terminals' process groups, sent
 SIGTERM as their closes began with the stop, get SIGKILL
 (`killRuntimeTerminals`; a terminal close's own SIGKILL waits 3 s) and those
-commands' process groups end (`endCaptures`: SIGTERM, then SIGKILL). The drain's
-timer fires before the deadline's on any machine, however starved, so a
-terminal that ignores SIGTERM never outlives the server. Before it exits the
-server ends every command it started that still runs, so none outlives it. At
+commands' process groups end (`endCommands`, every finite command the server
+started: SIGTERM, then SIGKILL). The drain's timer fires before the deadline's
+on any machine, however starved, so a terminal that ignores SIGTERM never
+outlives the server. Before it exits the server ends every command it started
+that still runs, so none outlives it, and however it ends, its command
+spawner then ends any command still running (SIGTERM, then SIGKILL after 3 s). At
 850 ms (`DEFAULT_SHUTDOWN_TIMEOUT_MS`) whatever still runs is ended, the overrun
 is logged and the process exits 1. An overrun is still the
 stop that was asked for, ending what runs on its schedule, so it records no

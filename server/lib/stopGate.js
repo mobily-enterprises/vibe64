@@ -1,5 +1,5 @@
 import { serverStopBegun, VIBE64_SERVER_STOPPING_CODE } from "@local/vibe64-execution/server/serverStop";
-import { endCaptures } from "@local/vibe64-execution/server";
+import { endCommands } from "@local/vibe64-execution/server/commandSpawner";
 import { killTerminalSessionsForNamespacePrefix } from "@local/vibe64-execution/server/terminalSessions";
 
 // The editor's answers while its stop runs. The listener closes as the stop begins (stopAcceptingConnections), but a
@@ -52,7 +52,7 @@ function stopAcceptingConnections(server) {
 
 /** Ends the commands this process started that are still running (those started before `startedBefore`). */
 function endRunningCommands(startedBefore = Infinity) {
-  return endCaptures({
+  return endCommands({
     startedBefore,
     termTimeoutMs: STOP_COMMAND_GRACE_MS,
     killTimeoutMs: STOP_COMMAND_GRACE_MS

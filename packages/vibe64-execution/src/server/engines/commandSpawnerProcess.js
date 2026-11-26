@@ -3,21 +3,23 @@
 //
 // It talks only through what the editor created when it started it, which nothing else holds: the IPC channel, and a
 // pipe (fd 4) it writes each started command's id and pid to. Node opens both close-on-exec, so no command inherits
-// them. It ends when the editor goes: the channel's disconnect. Signals sent to the editor's whole process group (a
-// terminal's Ctrl-C) or cgroup (a service manager's stop) do not end it, so the commands running while the editor
-// stops are still reported until the editor exits. A message it does not know makes it say so on its stderr and exit,
-// so the editor fails the commands it was running.
+// them. It ends when the editor goes, however it goes: the channel's disconnect. It first ends every command still
+// running, as the detached reaper ends a group (SIGTERM, then SIGKILL after END_GRACE_MS), so no command outlives the
+// editor. Signals sent to the editor's whole process group (a terminal's Ctrl-C) or cgroup (a service manager's stop)
+// do not end it, so the commands running while the editor stops are still reported until the editor exits. A message
+// it does not know makes it say so on its stderr and exit, so the editor fails the commands it was running.
 
 import { writeSync } from "node:fs";
 
 import { START_RECORD_BYTES, createCommandExecutor, describeMessage } from "./commandExecutor.js";
 
 const START_RECORDS_FD = 4;
+// The detached reaper's grace: a command gets as long after SIGTERM as an ordinary stop gives it.
+const END_GRACE_MS = 3_000;
 
 for (const signal of ["SIGHUP", "SIGINT", "SIGTERM"]) process.on(signal, () => {});
-process.on("disconnect", () => process.exit(0));
 
-const receive = createCommandExecutor({
+const { endAll, receive } = createCommandExecutor({
   send: (message, onWritten) => process.send(message, onWritten),
   refuse: (message) => {
     process.stderr.write(`Vibe64's command spawner refused a message it does not know (${describeMessage(message)}) and stops.\n`);
@@ -33,3 +35,6 @@ const receive = createCommandExecutor({
   }
 });
 process.on("message", receive);
+process.on("disconnect", () => {
+  void endAll(END_GRACE_MS).finally(() => process.exit(0));
+});

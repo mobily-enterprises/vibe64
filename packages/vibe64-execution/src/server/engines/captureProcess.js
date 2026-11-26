@@ -123,14 +123,13 @@ function capturedText(encoding, limit) {
 }
 
 /**
- * Starts a command (through commandSpawner, which gives it its own process
- * group outside Windows) with its output captured and a timeout. A relative
- * cwd is this process's. stdout, stderr and both interleaved are decoded in
- * outputEncoding; a stream stops being read at maxBuffer characters, and the
- * command then fails. spawned resolves with its pid (undefined when it did not
- * start) and rejects when spawn refused its arguments. completion settles once
- * the command has exited and its output has closed, or at once when it never
- * started, and never rejects.
+ * Starts a command (through commandSpawner, which makes it a session leader,
+ * with its own process group, outside Windows) with its output captured and a
+ * timeout. A relative cwd is this process's. stdout, stderr and both
+ * interleaved are decoded in outputEncoding; a stream stops being read at
+ * maxBuffer characters, and the command then fails. spawned resolves with its
+ * pid, or undefined when it did not start. completion settles once the command
+ * has closed (at once when it never started) and never rejects.
  * @param {string} command
  * @param {string[]} args
  * @param {{ cwd?: string, env?: Record<string, string>, input?: string | Uint8Array | null,
@@ -170,19 +169,11 @@ function startCaptureProcess(command, args, {
   };
   let exited = false;
   let forceKillTimer = null;
-  let settle = () => {};
   // Registered before anything else can throw: an unhandled "error" event
-  // would end the server. A spawn failure arrives here, and so does a
-  // signal the operating system refused.
+  // would end the server. A failed or refused start arrives here, and so does
+  // a signal the operating system refused; "close" follows a start's failure.
   child.on("error", (error) => {
     failure.spawnError ||= error;
-    // A command that never started has no output to wait for.
-    if (child.pid === undefined) settle();
-  });
-  // Nor one spawn refused.
-  child.spawned.catch((error) => {
-    failure.spawnError ||= error;
-    settle();
   });
   const terminate = () => {
     if (exited || !child.kill("SIGTERM") || forceKillTimer) return;
@@ -215,7 +206,7 @@ function startCaptureProcess(command, args, {
     terminate();
   }, timeout) : null;
   const completion = new Promise((resolve) => {
-    settle = (exitCode, signal) => {
+    const settle = (exitCode, signal) => {
       if (exited) return;
       exited = true;
       clearTimeout(timeoutTimer);

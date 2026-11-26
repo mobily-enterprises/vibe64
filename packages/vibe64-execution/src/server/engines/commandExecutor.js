@@ -17,7 +17,7 @@
 //   { type: "stdout" | "stderr", id, chunk }     output, as Buffers
 //   { type: "input-error", id, error }           writing the command's input failed
 //   { type: "exit", id, code, signal }
-//   { type: "close", id, code, signal }          the last message about a command that started
+//   { type: "close", id, code, signal }          the last message about a command spawn() did not refuse
 // It refuses any other message (`refuse`), so the two sides never guess at each other.
 //
 // In the spawner, each command that starts is also recorded (`recordStart`), in the same synchronous step as the
@@ -43,7 +43,9 @@ const SIGNALS = new Set([...Object.keys(constants.signals), ...Object.values(con
  * @param {(message: unknown) => void} channel.refuse called with a message it does not know
  * @param {((id: number, pid: number) => void) | null} channel.recordStart records a started command where the editor
  *   reads it even after this process dies; null where the editor is this process
- * @returns {(message: unknown) => void} receives one message
+ * @returns {{ receive: (message: unknown) => void, endAll: (graceMs: number) => Promise<void> }} receive takes one
+ *   message; endAll ends every command still running, as the detached reaper ends a group: SIGTERM to each one's
+ *   process group, then SIGKILL to the groups still there after graceMs
  */
 function createCommandExecutor({ send: deliver, refuse, recordStart }) {
   const children = new Map();
@@ -93,12 +95,8 @@ function createCommandExecutor({ send: deliver, refuse, recordStart }) {
     }
     children.set(id, child);
     send({ type: "spawn", id, pid: child.pid });
-    child.on("error", (error) => {
-      // A command that never started sends nothing more.
-      const final = child.pid === undefined;
-      if (final) children.delete(id);
-      send({ type: "error", id, error: errorFields(error), final });
-    });
+    // A command that never started gets its close next, as a ChildProcess does.
+    child.on("error", (error) => send({ type: "error", id, error: errorFields(error), final: child.pid === undefined }));
     for (const name of ["stdout", "stderr"]) {
       child[name]?.on("data", (chunk) => send({ type: name, id, chunk }));
       if (pausedBy) child[name]?.pause();
@@ -132,7 +130,7 @@ function createCommandExecutor({ send: deliver, refuse, recordStart }) {
     while (waiting.length > 0 && unreadStarts < START_RECORD_CAP) handle(waiting.shift());
   }
 
-  return function receive(message) {
+  function receive(message) {
     if (message?.type !== "starts-read") {
       waiting.push(message);
     } else if (Number.isSafeInteger(message.count) && message.count > 0 && message.count <= unreadStarts) {
@@ -141,7 +139,43 @@ function createCommandExecutor({ send: deliver, refuse, recordStart }) {
       refuse(message);
     }
     handleWaiting();
-  };
+  }
+
+  async function endAll(graceMs) {
+    const running = [...children.values()].filter((child) => child.pid !== undefined);
+    const signal = (name) => {
+      for (const child of running) signalGroup(child, name);
+    };
+    signal("SIGTERM");
+    const deadline = Date.now() + graceMs;
+    while (running.some(groupRuns) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
+    signal("SIGKILL");
+  }
+
+  return Object.freeze({
+    endAll,
+    receive
+  });
+}
+
+// Each command leads its own process group outside Windows; there, only the command itself can be signalled.
+function signalGroup(child, signal) {
+  try {
+    if (process.platform === "win32") child.kill(signal);
+    else process.kill(-child.pid, signal);
+  } catch {
+    // An ended group needs nothing more.
+  }
+}
+
+function groupRuns(child) {
+  if (process.platform === "win32") return child.exitCode === null && child.signalCode === null;
+  try {
+    process.kill(-child.pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
 }
 
 function knownMessage(message, children) {

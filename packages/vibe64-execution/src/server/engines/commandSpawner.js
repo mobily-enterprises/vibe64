@@ -44,14 +44,25 @@
 // caller, before anything is sent.
 //
 // The spawner's lifecycle. Started at boot, while the editor is small; held only while commands run, as a running
-// command is held, so it never keeps a process alive by itself. The editor's stop needs nothing from it: the stop ends
-// each capture's process group itself, with kill(2), and the spawner ignores SIGHUP, SIGINT and SIGTERM, so it reports
-// the commands still running until the editor exits, which ends it. Each command leads its own process group (outside
-// Windows). When the spawner dies, sends a message the editor does not know, or leaves a spawn or kill unanswered for
-// STUCK_AFTER_MS (the grace a timed-out capture gets before SIGKILL), the editor kills it and sends it nothing more: the
-// next command starts a new spawner. Once its channel and its pipe of start records have both closed, each of its
-// commands fails with vibe64_command_spawner_failed, naming it, and each one's process group is ended as a stop ends
-// one (SIGTERM, then SIGKILL, each signalled only while the group has members) before the command closes.
+// command is held, so it never keeps a process alive by itself. Each command is a session leader (setsid, outside
+// Windows), so it leads its own process group and has no controlling terminal: a terminal's Ctrl-C does not reach it,
+// and it cannot prompt on /dev/tty. The editor's stop needs nothing from the spawner: the stop ends each command's
+// process group itself (endCommands), with kill(2), and the spawner ignores SIGHUP, SIGINT and SIGTERM, so it reports
+// the commands still running until the editor exits. However the editor ends (a stop, a crash, kill -9, Ctrl-C), its
+// end closes the spawner's channel, and the spawner ends each command still running as the detached reaper does
+// (SIGTERM to its process group, then SIGKILL to a group still there after 3 s) and exits: no command outlives the
+// editor. When the spawner dies, sends a message the editor does not know, or leaves a spawn or kill unanswered for
+// STUCK_AFTER_MS, the editor kills it and sends it nothing more: the next command starts a new spawner. Once its
+// channel and its pipe of start records have both closed, each of its commands fails with
+// vibe64_command_spawner_failed, naming it, and each one's process group is ended as a stop ends one (SIGTERM, then
+// SIGKILL, each signalled only while the group has members) before the command closes.
+//
+// Why STUCK_AFTER_MS, 5 s. The spawner answers each spawn and kill as soon as it reads it, in well under a millisecond
+// of its own time; what delays an answer is the machine (a starved CPU, swapping), never the command. 5 s is the grace
+// a timed-out capture already gets between SIGTERM and SIGKILL: a spawner silent that long has stopped. The verdict
+// waits for the editor's own next turn (checkStuck), so an editor that was busy itself does not count its spawner
+// stuck. What a wrong verdict costs: the spawner is killed and every command it was running fails and is ended, which
+// the next command recovers from with a new spawner; a right one stops a caller from waiting for ever.
 //
 // Every started command's pid is in a pipe the editor owns before the spawner does anything else, so a spawner's death
 // never leaves a command the editor cannot end. The spawner writes each start's id and pid there in the same
@@ -88,13 +99,20 @@ const REPORTS = new Set([...ANSWERS, "error", "stdout", "stderr", "input-error",
 
 // Where this process's commands start: its spawner once startCommandSpawner() has run, else the executor in itself.
 let usesSpawner = false;
+// When this process's spawners count as stuck; only tests set another.
+let stuckAfterMs = STUCK_AFTER_MS;
+/**
+ * Every command still running outside Windows, with when it was asked for: the server's stop ends them (endCommands).
+ * @type {Set<{ child: CommandChild, ending: boolean, startedAt: number }>}
+ */
+const liveCommands = new Set();
 /** @type {ReturnType<typeof startSpawner> | ReturnType<typeof startInProcess> | null} */
 let current = null;
 
 /**
  * One finite command. Its events are a ChildProcess's: "spawn", "error" (only while one is listened to), "exit" and
  * "close" with (code, signal), and "stdout" and "stderr" with each chunk as a Buffer, plus "input-error" when writing
- * its input failed. After an "error" from a command that never started, nothing follows.
+ * its input failed. A command that never started, spawn() refusing it included, has one "error" and then "close".
  */
 class CommandChild extends EventEmitter {
   /** @type {number | undefined} */
@@ -103,11 +121,12 @@ class CommandChild extends EventEmitter {
   exitCode = null;
   /** @type {string | null} */
   signalCode = null;
-  /** Resolves with the pid once the command started, with undefined when it did not, and rejects when spawn refused. */
+  /** Resolves with the pid once the command started, with undefined when it did not; it never rejects. */
   spawned;
   #table;
   #id;
   #ended = false;
+  #failedToStart = false;
   #notReading = new Set();
   #spawnedResolvers = Promise.withResolvers();
 
@@ -116,8 +135,6 @@ class CommandChild extends EventEmitter {
     this.#table = table;
     this.#id = id;
     this.spawned = this.#spawnedResolvers.promise;
-    // A caller that never asks for the pid must not see an unhandled rejection.
-    this.spawned.catch(() => {});
   }
 
   /**
@@ -159,11 +176,14 @@ class CommandChild extends EventEmitter {
         this.emit("spawn");
       }
     } else if (message.type === "spawn-refused") {
+      // Node's spawn throws here, so no close comes from it: the command fails as one that never started.
       this.#end();
-      this.#spawnedResolvers.reject(executorError(message.error));
+      this.#spawnedResolvers.resolve(undefined);
+      this.#emitError(executorError(message.error));
+      this.emit("close", null, null);
     } else if (message.type === "error") {
       if (message.final) {
-        this.#end();
+        this.#failedToStart = true;
         this.#spawnedResolvers.resolve(undefined);
       }
       this.#emitError(executorError(message.error));
@@ -182,15 +202,21 @@ class CommandChild extends EventEmitter {
   }
 
   /**
-   * The spawner is gone: the command fails, naming it. One that started leads its own process group, which outlives
-   * the spawner: the group is ended as a stop ends one, and then the command closes.
+   * The spawner is gone: the command fails, naming it, unless it had already failed to start. One that started leads
+   * its own process group, which outlives the spawner: the group is ended as a stop ends one, and then the command
+   * closes.
    */
   fail(reason) {
     const { pid } = this;
     this.#end();
     this.#spawnedResolvers.resolve(pid);
-    this.#emitError(Object.assign(new Error(`Vibe64's command spawner ${reason}.`), { code: COMMAND_SPAWNER_FAILED }));
-    if (pid === undefined) return;
+    if (!this.#failedToStart) {
+      this.#emitError(Object.assign(new Error(`Vibe64's command spawner ${reason}.`), { code: COMMAND_SPAWNER_FAILED }));
+    }
+    if (pid === undefined) {
+      this.emit("close", null, null);
+      return;
+    }
     const ended = process.platform === "win32" ? Promise.resolve() : drainProcessGroup(pid).catch(() => false);
     void ended.then(() => this.emit("close", null, null));
   }
@@ -276,7 +302,7 @@ function commandTable({ send, request, onBusy, onIdle }) {
 function startInProcess() {
   const deliver = (message) => receive(message);
   const table = commandTable({ send: deliver, request: deliver, onBusy: () => {}, onIdle: () => {} });
-  const receive = createCommandExecutor({
+  const { receive } = createCommandExecutor({
     // Like the spawner's answers, the executor's arrive after the caller has had its turn to listen.
     send: (message) => {
       queueMicrotask(() => table.receive(message));
@@ -329,7 +355,7 @@ function startSpawner() {
     send(message);
     if (unanswered === 0) progressAt = performance.now();
     unanswered += 1;
-    watchdog ??= setTimeout(checkStuck, STUCK_AFTER_MS).unref();
+    watchdog ??= setTimeout(checkStuck, stuckAfterMs).unref();
   };
   const table = commandTable({ send, request, onBusy: () => hold(true), onIdle: () => hold(false) });
 
@@ -340,11 +366,11 @@ function startSpawner() {
     setImmediate(() => {
       if (unanswered === 0 || failed || stopReason) return;
       const waited = performance.now() - progressAt;
-      if (waited < STUCK_AFTER_MS) {
-        watchdog = setTimeout(checkStuck, STUCK_AFTER_MS - waited).unref();
+      if (waited < stuckAfterMs) {
+        watchdog = setTimeout(checkStuck, stuckAfterMs - waited).unref();
         return;
       }
-      stop(`did not answer for ${STUCK_AFTER_MS} ms and was stopped`);
+      stop(`did not answer for ${stuckAfterMs} ms and was stopped`);
     });
   }
 
@@ -423,8 +449,15 @@ function startSpawner() {
 /**
  * Sends every later command of this process to a spawner, started now, while the process is small. The editor server
  * calls it at boot. It cannot be undone.
+ * @param {{ stuckAfterMs?: number }} [options] stuckAfterMs, for tests only: when a spawner counts as stuck, in ms
  */
-function startCommandSpawner() {
+function startCommandSpawner({ stuckAfterMs: stuckAfter } = {}) {
+  if (stuckAfter !== undefined) {
+    if (!Number.isSafeInteger(stuckAfter) || stuckAfter <= 0) {
+      throw invalidCall("ERR_INVALID_ARG_VALUE", "A spawner's stuck delay is a positive whole number of ms.");
+    }
+    stuckAfterMs = stuckAfter;
+  }
   if (usesSpawner && current) return;
   usesSpawner = true;
   current = startSpawner();
@@ -443,8 +476,8 @@ function environmentText(env) {
 }
 
 /**
- * Starts a finite command, as Node's spawn would start it in this process, with exactly the environment given, in its
- * own process group (outside Windows). It throws, starting nothing, for a call it cannot carry out.
+ * Starts a finite command, as Node's spawn would start it in this process, with exactly the environment given, as a
+ * session leader (outside Windows). It throws, starting nothing, for a call it cannot carry out.
  * @param {string} command
  * @param {readonly string[]} args
  * @param {{ cwd?: string, env: RuntimeEnv, input?: string | Uint8Array | null, stdio?: ("ignore" | "pipe")[] }} options
@@ -472,7 +505,33 @@ function spawnCommand(command, args, options) {
   const commandOptions = { cwd, detached: process.platform !== "win32", env: environmentText(env), stdio: [...stdio] };
   if (usesSpawner) startCommandSpawner();
   else current ??= startInProcess();
-  return current.start(command, [...args], commandOptions, input);
+  const startedAt = Date.now();
+  const child = current.start(command, [...args], commandOptions, input);
+  if (commandOptions.detached) {
+    const live = { child, ending: false, startedAt };
+    liveCommands.add(live);
+    child.once("close", () => liveCommands.delete(live));
+  }
+  return child;
+}
+
+/**
+ * Ends the commands still running that were asked for before `startedBefore` (epoch ms; all by default), one whose
+ * spawner has not answered yet included: SIGTERM to each one's process group once its pid is known, then SIGKILL to a
+ * group still there after `termTimeoutMs`. Each one's caller gets its command's end as usual, killed by that signal.
+ * The server's stop calls it. Never throws.
+ * @param {{ startedBefore?: number, termTimeoutMs?: number, killTimeoutMs?: number }} [options]
+ * @returns {Promise<{ ended: number, scopeEmpty: boolean }>} `ended` counts the commands no earlier call was ending
+ */
+async function endCommands({ startedBefore = Infinity, termTimeoutMs = 100, killTimeoutMs = 100 } = {}) {
+  const ending = [...liveCommands].filter((live) => live.startedAt < startedBefore);
+  const ended = ending.filter((live) => !live.ending).length;
+  const drained = await Promise.all(ending.map(async (live) => {
+    live.ending = true;
+    const pid = await live.child.spawned;
+    return pid === undefined || drainProcessGroup(pid, { termTimeoutMs, killTimeoutMs }).catch(() => false);
+  }));
+  return { ended, scopeEmpty: drained.every(Boolean) };
 }
 
 /**
@@ -534,11 +593,6 @@ function execFileCommand(command, args, options) {
     child.on("stderr", collect("stderr"));
     child.on("error", (error) => {
       failure ||= error;
-      if (child.pid === undefined) finish(null, null);
-    });
-    child.spawned.catch((error) => {
-      failure ||= error;
-      finish(null, null);
     });
     child.once("close", finish);
   });
@@ -548,6 +602,7 @@ export {
   COMMAND_SPAWNER_FAILED,
   FORCE_KILL_DELAY_MS,
   STUCK_AFTER_MS,
+  endCommands,
   execFileCommand,
   spawnCommand,
   startCommandSpawner

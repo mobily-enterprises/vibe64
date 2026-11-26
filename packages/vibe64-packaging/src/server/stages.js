@@ -129,7 +129,6 @@ function runPackagingTool({ command, args, cwd, env, stdin = null, signal }) {
       resolve(result);
     };
     child.on("error", (error) => done({ ok: false, exitCode: null, stdout, stderr, error: error.message }));
-    child.spawned.catch((error) => done({ ok: false, exitCode: null, stdout, stderr, error: error.message }));
     child.on("close", (exitCode) => done(inputError
       ? { ok: false, exitCode, stdout, stderr, error: inputError.message }
       : { ok: exitCode === 0, exitCode, stdout, stderr }));

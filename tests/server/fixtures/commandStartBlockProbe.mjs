@@ -5,9 +5,9 @@ import { performance } from "node:perf_hooks";
 
 const engines = new URL("../../../packages/vibe64-execution/src/server/engines/", import.meta.url);
 const { startCaptureProcess } = await import(new URL("captureProcess.js", engines).href);
-// The editor's server starts its spawner at boot, while it is small (a build without one has nothing to start).
-const spawner = await import(new URL("commandSpawner.js", engines).href).catch(() => null);
-spawner?.startCommandSpawner();
+// The editor's server starts its spawner at boot, while it is small.
+const { startCommandSpawner } = await import(new URL("commandSpawner.js", engines).href);
+startCommandSpawner();
 
 const targetMB = Number(process.argv[2]);
 const starts = Number(process.argv[3] || 15);
@@ -19,7 +19,7 @@ while (process.memoryUsage().rss < targetMB * 1024 * 1024) {
 }
 globalThis.live = live;
 
-// One start first, so the spawner (where there is one) is up and the command's binary is cached.
+// One start first, so the spawner is up and the command's binary is cached.
 await startCaptureProcess("sh", ["-c", ":"], { env: { PATH: process.env.PATH }, timeout: 10_000 }).completion;
 const blocks = [];
 for (let index = 0; index < starts; index += 1) {

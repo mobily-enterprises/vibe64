@@ -119,8 +119,11 @@ A large project's editor under normal page polling spent 9.8 s of 72 s of
 its main-thread time starting commands. The command also finishes sooner
 through the spawner: 13 ms instead of 17 ms (158 MB) and 37.5 ms (1.5 GB).
 `tests/server/commandSpawnerHeapCost.integration.test.js` keeps the start flat
-across heap sizes: before the spawner it measured 7.8 ms at 156 MB and 27.6 ms
-at 1.5 GB, and through the spawner 1.2 ms and 0.5 ms.
+across heap sizes on every run: a capture started at 1.5 GB of RSS holds the
+main thread under 5 ms (median), and no more than 3 ms longer than at 156 MB.
+Its own figures vary with the host and the run, so it checks those limits and
+reports its figures; the table above is the one measurement this rundown
+quotes.
 
 A small process is the opposite case. A spawner costs it a Node startup, about
 85 ms: in a fresh process, 13 Git commands took 72.5 ms with the executor in
@@ -130,11 +133,12 @@ the process itself and 196 ms with a spawner of its own.
 
 `commandSpawner` starts every finite command. The files that start processes
 themselves are listed once, each with its number of uses of `child_process`,
-node-pty or execa and why, in
+node-pty, execa or open and why, in
 `tests/server/commandSpawnerOwnership.unit.test.js`. That test reads every
-JavaScript file of `server.js`, `server/` and `packages/` and fails on any
-other use, a new one in a listed file included, and on a listed file that no
-longer has its uses. What the list holds:
+JavaScript file of `server.js`, `bin/`, `server/` and `packages/` and fails on
+any other use, a new one in a listed file included, and on a listed file that
+no longer has its uses. It skips `templates/` folders: their files are copied
+into a person's project and never run as the editor. What the list holds:
 
 - `commandExecutor.js`, where finite commands start, and `commandSpawner.js`,
   which starts the spawner;
@@ -144,9 +148,12 @@ longer has its uses. What the list holds:
 - one finite exception: the synchronous Git identity read (`spawnSync`) a
   terminal's environment needs, which cannot wait for the spawner's reply (its
   asynchronous read goes through the spawner);
+- the person's browser, opened once after the server starts (`bin/server.js`,
+  through the open package);
 - programs that are not the editor: the execution helper (`src/host/`), the
   stdio bridge an AI engine's conversation runs in, OpenCode's plugin, the
-  publishing command line and the PHP recorder's build script.
+  publishing command line, the `vibe64` and development launchers in `bin/` and
+  the PHP recorder's build script.
 
 ### What it decides: nothing
 
@@ -174,7 +181,13 @@ capture resolves a relative one against the editor's). The environment is
 required (`spawnCommand` throws without one) and passes as Node's `spawn`
 passes it: each value as text, a name whose value is `undefined` left out. The
 spawner's own working directory (`/`) and environment never reach a command.
-Every command leads its own process group (outside Windows).
+
+Every command starts as a session leader (`setsid`, outside Windows), not only
+as the leader of its own process group. That is intentional, and it is one
+difference from Node's `spawn` in the editor: the command has no controlling
+terminal. A terminal's Ctrl-C never reaches it, and nothing it runs can prompt
+on `/dev/tty`, so a command that would ask there (Git or SSH wanting a
+password) fails instead of waiting for an answer no one can give. The stop and the spawner end each command by its process group.
 
 ### Security model
 
@@ -214,12 +227,25 @@ Nothing ever falls back to starting a command in the editor.
   that started has its process group ended as a stop ends one (`SIGTERM`, then
   `SIGKILL` after 3 s, each sent only while the group has members) before it
   closes: a capture, a plain `spawnCommand` and `execFileCommand` alike.
-- **Stuck** means a spawn or kill left unanswered for 5 s (`STUCK_AFTER_MS`,
-  the grace a timed-out capture gets before SIGKILL), counted from the request
-  that found nothing outstanding or from the last answer. The decision waits
-  one turn of the event loop, so answers already read on a starved loop still
-  count.
+- **Stuck** means a spawn or kill left unanswered for 5 s (`STUCK_AFTER_MS`),
+  counted from the request that found nothing outstanding or from the last
+  answer. The spawner answers each one as soon as it reads it, with well under
+  a millisecond of its own work, and what it starts never delays the answer.
+  Only the machine can (a starved CPU, swapping). So a spawner silent for 5 s,
+  the grace a timed-out capture already gets between SIGTERM and SIGKILL, has
+  stopped. The decision waits one turn of the editor's event loop, so an editor
+  that was busy itself counts the answers that were already waiting
+  (`commandSpawner.unit.test.js` holds the loop past the limit and keeps the
+  spawner). A stuck verdict costs every command that spawner was running: each
+  fails with `vibe64_command_spawner_failed` and is ended, and the next command
+  starts a new spawner. A right verdict saves every caller from waiting for an
+  answer that never comes.
 - **It cannot start**: the command fails with the same code, naming the error.
+- **A command that cannot start** (a missing program, or arguments `spawn()`
+  refuses: an environment value over Linux's 128 KiB, a NUL byte) has one
+  `error` and then `close`, as a `ChildProcess` does, and its `spawned`
+  resolves with no pid. It never rejects, so a caller listening for `close`
+  alone, or for `error`, always hears the end.
 - **Every started command's pid is in a pipe the editor owns before the
   spawner does anything else, so a spawner's death never leaves a command the
   editor cannot end.** The spawner writes each start's id and pid there in the
@@ -237,8 +263,9 @@ Nothing ever falls back to starting a command in the editor.
   run through the host's managed execution is stopped with its unit, by
   execution id, when the command fails; elsewhere it runs until it exits, or
   until it next writes output, which SIGPIPE then ends.
-  `commandSpawner.unit.test.js` kills a spawner behind 0 to 8 MB of unread
-  output and finds every command it started known to the editor and ended.
+  `commandSpawner.unit.test.js` kills a spawner behind no unread output, just
+  past 128 KB of it and 8 MB of it, and finds every command it started known
+  to the editor and ended.
 
 ### Lifecycle
 
@@ -246,17 +273,22 @@ Nothing ever falls back to starting a command in the editor.
   `server.js`), while the editor is small.
 - **Held and idle:** it is held (ref'd) only while commands run, as a running
   command is held, so it never keeps a process alive by itself.
-- **The editor's stop needs nothing from it.** The stop ends each capture's
-  process group itself with `kill(2)`: once requests in flight have had their
-  350 ms (`STOP_DRAIN_MS` in `server/lib/stopGate.js`), SIGTERM to every
-  capture asked for before the stop began, then SIGKILL to a group still there
-  75 ms later (`STOP_COMMAND_GRACE_MS`). A capture the spawner has not yet
-  answered for is ended once its pid arrives. The spawner ignores SIGHUP,
-  SIGINT and SIGTERM, so a terminal's Ctrl-C or a service manager's stop
-  signal to the whole cgroup does not end it early, and it reports the
-  commands still running until the editor exits.
-- **End:** its channel closes when the editor exits for any reason, SIGKILL
-  included, and the spawner exits with it.
+- **The editor's stop needs nothing from it.** The stop ends each command's
+  process group itself with `kill(2)` (`endCommands`: captures, plain
+  `spawnCommand` children and `execFileCommand` alike). Once requests in flight
+  have had their 350 ms (`STOP_DRAIN_MS` in `server/lib/stopGate.js`), it sends
+  SIGTERM to every command asked for before the stop began, then SIGKILL to a
+  group still there 75 ms later (`STOP_COMMAND_GRACE_MS`). A command the
+  spawner has not yet answered for is ended once its pid arrives. The spawner
+  ignores SIGHUP, SIGINT and SIGTERM, so a terminal's Ctrl-C or a service
+  manager's stop signal to the whole cgroup does not end it early, and it
+  reports the commands still running until the editor exits.
+- **End:** its channel closes when the editor exits for any reason: a stop, a
+  crash, Ctrl-C, SIGKILL. The spawner then ends every command still running,
+  as the detached reaper ends a group (SIGTERM to its process group, then
+  SIGKILL to a group still there after 3 s), and exits. No command outlives
+  the editor (`commandSpawner.unit.test.js` ends an editor with Ctrl-C and with
+  kill -9 and finds its commands gone).
 
 ## Main Request Shape
 
