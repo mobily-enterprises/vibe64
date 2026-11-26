@@ -1520,6 +1520,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-core/src/server/stateUpgrades/20261010-assistant-workflow.js`
 - `packages/vibe64-terminals/src/shared/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/agentPlanCommand.js`
+- `packages/vibe64-core/src/server/commandInput.js`
 - `packages/vibe64-terminals/src/server/assistantPlanUpgrade.js`
 - `src/components/studio/vibe64-session/Vibe64WorkPlan.vue`
 - `src/components/studio/vibe64-session/Vibe64WorkPlanSections.vue`
@@ -2271,7 +2272,9 @@ a planning turn does not create a plan. Unrelated direct requests do not read or
 attach the current plan; Junior's lifecycle permissions remain unchanged.
 
 The model uses vibe64-helper plan read/history/new/write/complete/archive/reopen,
-through the existing bound session command socket. The server derives Senior,
+through the existing bound session command socket. Its outcome reads the
+workflow identity a read returns under the same names (`status`, when given,
+must match the request's) and refuses any other field. The server derives Senior,
 Junior or review authority from the admitted turn, never a caller's claimed role.
 Junior can write paired Progress and move existing checklist items among their
 three marks: `[ ]` not done yet, `[~]` built (implemented, and its own focused
@@ -2727,12 +2730,20 @@ again, and those changed then and not now. The plan command's `new`, `write`,
 write `plans/updated.json` beside `current.json`: when (the source state's
 time, read before Git), how (`updated` or `checked`) and that source state.
 `checked` takes the paired revisions and changes nothing else: it is the AI's
-explicit answer that nothing needs a new mark. Each operation reads only its own
-fields (`OPERATION_FIELDS`: `text` for `new`, `write` and `progress-write`, the
-paired revisions, `archiveId`, `archiveCurrent`, a read's `offset` and `limit`);
-`refuseUnreadInput` refuses any other field and a missing or empty `text`,
-naming what the operation takes, so a Progress sent as `progressText` is never
-accepted as an empty Progress. The session command server hands the plan route
+explicit answer that nothing needs a new mark. Each document has one name both
+ways (`TEXT_OPERATIONS`): a read returns the Plan as `text` and the Progress as
+`progressText`, and `new` and `write` take the Plan as `text`, `progress-write`
+the Progress as `progressText`, so an agent reusing the name it just read sends
+the right one. Each operation reads only its own fields (`OPERATION_FIELDS`:
+that document, the paired revisions, `readThrough`, `archiveId`,
+`archiveCurrent`, a read's `offset` and `limit`); `refuseUnreadInput` refuses
+any other field and a missing or empty document, naming what the operation
+takes, so a Progress sent as `text` is never accepted as an empty Progress.
+Every turn learns these inputs from the session guidance each engine builds as
+it starts or resumes the conversation (`VIBE64_PLAN_COMMAND_INSTRUCTIONS`,
+[Genesis context](../understanding/genesis-context.md)), never only from an
+earlier turn's plan guidance, which may be an older release's; a plan's pass
+turn carries only its pass instructions. The session command server hands the plan route
 the agent's own fields (`fields`), without the token, session and generation
 that admitted the request. A plan replaced or archived drops
 the record; a plan without one (from before it) reports its pair's save time as
@@ -3094,7 +3105,24 @@ exit status and signal handling; `deployment` is the Env executable asked for
 `deployment`, the read-only staging status of the session's project and, where a host allows the session,
 how it reaches staging itself (`ssh staging`). Missing groups fail without searching PATH
 for a substitute. Each underlying command retains its session binding and
-authorization. The individual executables stay installed for existing
+authorization. Every operation that takes input refuses a field it does not
+read, a missing one it needs, and input that is not a JSON object, naming the
+fields it takes, before anything changes (`refuseUnreadFields` in
+`@local/vibe64-core/server/commandInput`, codes `vibe64_command_input_unread`,
+`vibe64_command_input_missing` and `vibe64_command_input_not_object`): every
+plan operation, outcome and handoff included, `database erd apply` (its batch
+and each move), `preview identities save` given an object, and the session
+commands, whose routes hand each its own fields and whose client sends each only
+those. A field is never ignored while the command answers ok, as plan
+`progress-write` once kept an empty Progress for a field it did not read. The
+plan client also refuses input that is not an object and the names it adds
+itself (`operation`, `token`, `sessionId`, `generationId`) instead of replacing
+them. A value a read returns goes back to its write under the same name: the
+Plan as `text`, the Progress as `progressText`, an outcome's workflow identity
+(`messageId`, `turnId`, `stage`, `status`), an ERD's `revision` and moves
+(`table`, `x`, `y`, `pinned`, as `previousMoves` gives them) and the identity
+list as `identities`; the paired `revision` a read returns goes back as
+`expectedRevision`, the convention of every compare-and-swap. The individual executables stay installed for existing
 conversations and scripts; new session guidance uses the common entry point.
 The ordinary `vibe64` launcher, managed `git`/`gh`, and internal process helpers
 retain their existing roles.

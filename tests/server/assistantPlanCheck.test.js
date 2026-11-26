@@ -70,7 +70,7 @@ test("a turn on item 1 that also built items 2 to 4 without ticking gets one pla
 
   // The AI walks the checklist: items 1 to 3 are built and checked, item 4 only started; Progress says so.
   const { plan, revisions } = await planCommands(f);
-  await plan({ operation: "progress-write", text: "# Progress\n\nThe thread store, listing and replies are built; their tests pass. " +
+  await plan({ operation: "progress-write", progressText: "# Progress\n\nThe thread store, listing and replies are built; their tests pass. " +
     "Moving old messages is started in src/migrate.js, not built.\n", ...await revisions() });
   const ticked = (await readWorkPlan(f.context)).text.replace(/- \[ \] (Store|List|Reply)/gu, "- [~] $1");
   await plan({ operation: "write", text: ticked, ...await revisions() });
@@ -146,7 +146,7 @@ test("no plan check for a turn that ticked, wrote Progress or checked the plan i
   await f.service.send("session-1", request, f.context);
   await buildAlongTheWay(f);
   commands = await planCommands(f);
-  await commands.plan({ operation: "progress-write", text: "# Progress\n\nThe store is half built.\n", ...await commands.revisions() });
+  await commands.plan({ operation: "progress-write", progressText: "# Progress\n\nThe store is half built.\n", ...await commands.revisions() });
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.deepEqual([f.sends.length, f.state().status], [1, "complete"], "Progress written in the turn");
   // Ticks or Progress changed where no update record was kept (a plan write from outside the plan command, say)
@@ -157,7 +157,7 @@ test("no plan check for a turn that ticked, wrote Progress or checked the plan i
     await f.service.send("session-1", request, f.context);
     await buildAlongTheWay(f);
     const current = await readWorkPlan(f.context);
-    await manageWorkPlan(f.context, { operation, text: text(current), expectedRevision: current.revision,
+    await manageWorkPlan(f.context, { operation, [operation === "write" ? "text" : "progressText"]: text(current), expectedRevision: current.revision,
       expectedProgressRevision: current.progressRevision || "" }, "junior");
     await f.service.afterTurn("session-1", end(f.state()), f.context);
     assert.deepEqual([f.sends.length, f.state().status], [1, "complete"], `${operation} without an update record`);

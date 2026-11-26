@@ -47,7 +47,7 @@ test("stable scope and separate progress retain explicit Senior completion and r
   await assert.rejects(f.change("new", "junior", { text: openText }), /Only Senior/);
   await f.change("new", "senior", { text: openText });
   assert.equal((await readWorkPlan(f.context)).checked, 0, "Unchecked scope is not an implementation outcome");
-  await f.change("progress-write", "junior", { text: checkedText });
+  await f.change("progress-write", "junior", { progressText: checkedText });
   assert.equal((await readWorkPlan(f.context)).status, "active");
   assert.equal((await readWorkPlanPage(f.context)).checked, 0);
   await assert.rejects(f.change("complete", "junior"), /Only Senior/);
@@ -57,7 +57,7 @@ test("stable scope and separate progress retain explicit Senior completion and r
   const completed = await readWorkPlan(f.context);
   assert.equal(completed.status, "completed");
   assert.equal((await readWorkPlanPage(f.context)).text, completed.text, "completed stays readable");
-  await assert.rejects(f.change("progress-write", "junior", { text: openText }), /explicitly reopen/);
+  await assert.rejects(f.change("progress-write", "junior", { progressText: openText }), /explicitly reopen/);
   await f.change("reopen");
   await f.change("write", "senior", { text: openText + "- [ ] Missing acceptance check\n" });
   assert.equal((await readWorkPlan(f.context)).checked, 0);
@@ -69,7 +69,7 @@ test("Junior updates verified checklist ticks without changing scope or completi
   const f = await fixture(t);
   const text = openText + "  1. [ ] Nested proof\n+ [ ] Final proof\n\n## Technical details\nKeep account isolation.\n```markdown\n- [ ] Example only\n```\n";
   const first = await f.change("new", "senior", { text });
-  const evidence = await f.change("progress-write", "junior", { text: "# Progress\nSupervisor check passed; access proof remains open.\n" });
+  const evidence = await f.change("progress-write", "junior", { progressText: "# Progress\nSupervisor check passed; access proof remains open.\n" });
   const partial = text.replace("[ ] Save", "[x] Save");
   await assert.rejects(manageWorkPlan(f.context, { operation: "write", text: partial,
     expectedRevision: first.revision, expectedProgressRevision: first.progressRevision }, "junior"), { code: "vibe64_work_plan_progress_changed" });
@@ -203,7 +203,8 @@ test("a plan's pass changes only its own Passes item's tick, and Junior only the
   await f.change("new", "senior", { text });
   const pass = async (next, passItem = "Review: the plan's changes", operation = "write") => {
     const current = await readWorkPlan(f.context);
-    return manageWorkPlan(f.context, { operation, text: next, expectedRevision: current.revision, expectedProgressRevision: current.progressRevision }, "pass", { passItem });
+    return manageWorkPlan(f.context, { operation, [operation === "progress-write" ? "progressText" : "text"]: next, expectedRevision: current.revision,
+      expectedProgressRevision: current.progressRevision }, "pass", { passItem });
   };
   for (const next of [text.replace("- [ ] Deslop", "- [x] Deslop"), text.replace("- [~] Book", "- [x] Book"),
     text.replace("- [ ] Review", "- [x] Review").replace("whole app", "the bookings pages"), text + "- [ ] Speed pass: whole app\n"]) {
@@ -333,28 +334,31 @@ test("the installed plan command uses the admitted role, emits live changes and 
       (error, stdout, stderr) => error ? reject(new Error(stderr)) : resolve(JSON.parse(stdout)));
     if (!["read", "history", "handoff"].includes(operation) || Object.keys(input).length) child.stdin.end(JSON.stringify(input));
   });
+  const help = await new Promise((resolve, reject) => execFile(path.join(wrapperHostDir, "vibe64-plan"), ["--help"],
+    { env: { ...process.env, ...prepared.env }, timeout: 5000 }, (error, stdout) => error ? reject(error) : resolve(stdout)));
+  assert.match(help, /progress-write requires progressText: the whole new Progress, under the name read returns it\./u);
   const first = await command("new", { text: openText });
   assert.equal(metadata.get("after_plan_base"), startHead, "a new plan records where its after-plan passes start");
   assert.equal(first.status, "active");
   request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "junior" };
   await assert.rejects(command("complete", { role: "senior", expectedRevision: first.revision }), /Only Senior/);
   // A whole-document write carries the readThrough of what it was built from: here each answer, which fits one page.
-  const ticked = await command("progress-write", { text: checkedText, expectedRevision: first.revision, expectedProgressRevision: first.progressRevision,
+  const ticked = await command("progress-write", { progressText: checkedText, expectedRevision: first.revision, expectedProgressRevision: first.progressRevision,
     readThrough: first.readThrough });
   assert.equal(ticked.checked, 0);
   assert.equal(ticked.progressText, checkedText);
   const proven = await command("write", { text: provenText, expectedRevision: ticked.revision, expectedProgressRevision: ticked.progressRevision,
     readThrough: ticked.readThrough });
   assert.equal(proven.checked, 2);
-  // Through the installed helper too, a text under a name the command does not read is refused, never accepted empty;
-  // the control fields the helper adds are not the agent's.
-  await assert.rejects(command("progress-write", { progressText: "# Progress\nKept nowhere.\n", expectedRevision: proven.revision,
-    expectedProgressRevision: proven.progressRevision }), /plan progress-write does not read progressText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision, readThrough\./u);
+  // Through the installed helper too, Progress under a name the command does not read (text, the Plan's name) is
+  // refused, never accepted empty; the control fields the helper adds are not the agent's.
+  await assert.rejects(command("progress-write", { text: "# Progress\nKept nowhere.\n", expectedRevision: proven.revision,
+    expectedProgressRevision: proven.progressRevision }), /plan progress-write does not read text: nothing changed\. It takes progressText, expectedRevision, expectedProgressRevision, readThrough\./u);
   assert.equal((await command("read")).progressText, checkedText);
   // A Junior chat's own review (one upgraded in flight) records Progress but leaves the plan active for Senior.
   request = { schemaVersion: 7, status: "working", delivery: "accepted", stage: "review", followup: {}, mode: "junior", resolvedMode: "junior" };
   await assert.rejects(command("complete", { expectedRevision: proven.revision, expectedProgressRevision: proven.progressRevision }), /Only Senior/);
-  const reviewed = await command("progress-write", { text: `${checkedText}Review found no gaps.\n`,
+  const reviewed = await command("progress-write", { progressText: `${checkedText}Review found no gaps.\n`,
     expectedRevision: proven.revision, expectedProgressRevision: proven.progressRevision, readThrough: proven.readThrough });
   assert.equal((await command("read")).status, "active");
   // In Auto, Senior's check of the plan completes it.
@@ -377,7 +381,7 @@ test("the installed plan command uses the admitted role, emits live changes and 
   assert.equal(metadata.get("after_plan_base"), laterHead, "a plan reopened with no base recorded records one");
   request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "junior" };
   const expectedProgress = "# Progress\n" + "native helper evidence 🙂\n".repeat(1200);
-  await command("progress-write", { text: expectedProgress, expectedRevision: reopened.revision, expectedProgressRevision: reopened.progressRevision,
+  await command("progress-write", { progressText: expectedProgress, expectedRevision: reopened.revision, expectedProgressRevision: reopened.progressRevision,
     readThrough: reopened.readThrough });
   let page = await command("read"); const readRevision = page.revision; const progressRevision = page.progressRevision;
   let allPlan = page.text; let allProgress = page.progressText;
@@ -389,9 +393,9 @@ test("the installed plan command uses the admitted role, emits live changes and 
   assert.equal(allProgress, expectedProgress, "The actual helper supplies companion beyond the first page before work/review");
   // A Progress rewritten from the first page alone would cut the tail: the installed helper refuses it, naming the fix.
   const firstPage = await command("read");
-  await assert.rejects(command("progress-write", { text: `${firstPage.progressText}Security found nothing.\n`, expectedRevision: readRevision,
+  await assert.rejects(command("progress-write", { progressText: `${firstPage.progressText}Security found nothing.\n`, expectedRevision: readRevision,
     expectedProgressRevision: progressRevision }), /plan progress-write replaces the whole Progress, so it needs readThrough/u);
-  await command("progress-write", { text: `${allProgress}Security found nothing.\n`, expectedRevision: readRevision,
+  await command("progress-write", { progressText: `${allProgress}Security found nothing.\n`, expectedRevision: readRevision,
     expectedProgressRevision: progressRevision, readThrough: page.readThrough });
   assert.equal((await readWorkPlan(f.context)).progressText, `${expectedProgress}Security found nothing.\n`, "read through, nothing is cut");
 
@@ -457,7 +461,7 @@ test("paired progress writes preserve scope and explicit Senior completion rejec
   const f = await fixture(t);
   const first = await f.change("new", "senior", { text: openText });
   await assert.rejects(f.change("write", "junior", { text: checkedText }), /Only Senior/);
-  const updated = await f.change("progress-write", "junior", { text: "# Progress\nActual focused evidence\n- still blocked: permission\n" });
+  const updated = await f.change("progress-write", "junior", { progressText: "# Progress\nActual focused evidence\n- still blocked: permission\n" });
   assert.equal(updated.text, first.text);
   assert.equal(updated.revision, first.revision);
   assert.notEqual(updated.progressRevision, first.progressRevision);
@@ -475,37 +479,38 @@ test("paired progress writes preserve scope and explicit Senior completion rejec
 test("a plan write whose text is missing, empty or under a name the operation does not read is refused, naming what it takes", async t => {
   const f = await fixture(t);
   await f.change("new", "senior", { text: openText });
-  await f.change("progress-write", "junior", { text: "# Progress\nThe supervisor is saved.\n" });
+  await f.change("progress-write", "junior", { progressText: "# Progress\nThe supervisor is saved.\n" });
   const before = await readWorkPlan(f.context);
-  // A read returns Progress as progressText: a write naming it so used to be accepted and keep an empty Progress.
+  // Each document has one name both ways: a read returns Progress as progressText and progress-write takes it so; text
+  // is always the Plan. Progress sent as text (the name progress-write once took) is refused, naming progressText.
   for (const [operation, extra, refusal] of [
-    ["progress-write", { progressText: "# Progress\nAccess is restricted.\n" }, /^plan progress-write does not read progressText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision, readThrough\.$/u],
-    ["progress-write", {}, /^plan progress-write takes the whole new Progress as text, a string that is not empty: nothing changed\. A read returns the current Progress as progressText\.$/u],
-    ["progress-write", { text: null }, /takes the whole new Progress as text/u],
-    ["progress-write", { text: ["# Progress"] }, /takes the whole new Progress as text/u],
-    ["progress-write", { text: " \n" }, /takes the whole new Progress as text/u],
+    ["progress-write", { text: "# Progress\nAccess is restricted.\n" }, /^plan progress-write does not read text: nothing changed\. It takes progressText, expectedRevision, expectedProgressRevision, readThrough\.$/u],
+    ["progress-write", {}, /^plan progress-write takes the whole new Progress as progressText, a string that is not empty: nothing changed\.$/u],
+    ["progress-write", { progressText: null }, /takes the whole new Progress as progressText/u],
+    ["progress-write", { progressText: ["# Progress"] }, /takes the whole new Progress as progressText/u],
+    ["progress-write", { progressText: " \n" }, /takes the whole new Progress as progressText/u],
     ["write", { planText: provenText }, /^plan write does not read planText: nothing changed\. It takes text, expectedRevision, expectedProgressRevision, readThrough\.$/u],
     ["write", { text: "" }, /^plan write takes the whole new Plan as text, a string that is not empty: nothing changed\.$/u],
     ["checked", { messageId: "request-1" }, /^plan checked does not read messageId: nothing changed\. It takes expectedRevision, expectedProgressRevision\.$/u]
   ]) {
     await assert.rejects(f.change(operation, "junior", extra), (error) => {
       assert.match(error.message, refusal, `${operation} ${JSON.stringify(extra)}`);
-      assert.ok(["vibe64_work_plan_input_unknown", "vibe64_work_plan_text_required"].includes(error.code), error.code);
+      assert.ok(["vibe64_command_input_unread", "vibe64_work_plan_text_required"].includes(error.code), error.code);
       return true;
     });
   }
   await assert.rejects(manageWorkPlan(f.context, { operation: "read", progressOffset: 10 }, "junior"),
-    { code: "vibe64_work_plan_input_unknown", message: /^plan read does not read progressOffset: nothing changed\. It takes offset, limit, expectedRevision, expectedProgressRevision, archiveId\.$/u });
+    { code: "vibe64_command_input_unread", message: /^plan read does not read progressOffset: nothing changed\. It takes offset, limit, expectedRevision, expectedProgressRevision, archiveId\.$/u });
   const after = await readWorkPlan(f.context);
   assert.deepEqual([after.text, after.progressText, after.progressRevision], [before.text, before.progressText, before.progressRevision]);
   assert.notEqual(after.progressRevision, createHash("sha256").update("").digest("hex"), "never the empty Progress");
-  assert.match(workPlanInstructions("junior"), /progress-write takes the whole new Progress as text too, never as progressText/u);
+  assert.match(workPlanInstructions("junior"), /progress-write takes the whole new Progress as progressText, the name a read returns it under; text is always the Plan/u);
 });
 
 test("archive replacement and reopen retain one exact pair and start replacement progress fresh", async t => {
   const f = await fixture(t);
   await f.change("new", "senior", { text: openText });
-  await f.change("progress-write", "junior", { text: "# Progress\nOld evidence 🙂\n" });
+  await f.change("progress-write", "junior", { progressText: "# Progress\nOld evidence 🙂\n" });
   const old = await readWorkPlan(f.context);
   const replacement = await f.change("new", "senior", { text: "# Next scope\n- [ ] Verify next requirement", archiveCurrent: true });
   assert.equal(replacement.progressText, "# Progress\n\n");
@@ -514,7 +519,7 @@ test("archive replacement and reopen retain one exact pair and start replacement
   assert.equal(archived.progressText, old.progressText);
   await f.change("reopen", "senior", { archiveId: old.artifactRevision, archiveCurrent: true });
   assert.equal((await readWorkPlan(f.context)).progressText, old.progressText);
-  await f.change("progress-write", "junior", { text: "# Progress\nDifferent evidence\n" });
+  await f.change("progress-write", "junior", { progressText: "# Progress\nDifferent evidence\n" });
   const next = await readWorkPlan(f.context);
   assert.equal(next.revision, old.revision);
   assert.notEqual(next.artifactRevision, old.artifactRevision);
@@ -526,7 +531,7 @@ test("archive replacement and reopen retain one exact pair and start replacement
 test("paired pages preserve full Unicode and reject progress replacement without changing scope", async t => {
   const f = await fixture(t);
   await f.change("new", "senior", { text: openText });
-  await f.change("progress-write", "junior", { text: "# Progress\n" + "🙂 actual evidence\n".repeat(2000) });
+  await f.change("progress-write", "junior", { progressText: "# Progress\n" + "🙂 actual evidence\n".repeat(2000) });
   const expected = await readWorkPlan(f.context);
   let page = await readWorkPlanPage(f.context, { limit: 100 });
   const first = page;
@@ -538,7 +543,7 @@ test("paired pages preserve full Unicode and reject progress replacement without
     plan += page.text; progress += page.progressText;
   }
   assert.equal(plan, expected.text); assert.equal(progress, expected.progressText);
-  await f.change("progress-write", "junior", { text: "# Progress\nChanged evidence" });
+  await f.change("progress-write", "junior", { progressText: "# Progress\nChanged evidence" });
   await assert.rejects(readWorkPlanPage(f.context, { offset: first.nextOffset, limit: 100,
     expectedRevision: first.revision, expectedProgressRevision: first.progressRevision }), { code: "vibe64_work_plan_read_changed" });
 });
@@ -549,7 +554,7 @@ test("full paired agent reads retain detailed implementation instructions beyond
     "Follow the existing authorization owner and verify foreign access.\n".repeat(350) +
     "Final implementation constraint: never bypass account isolation.";
   await f.change("new", "senior", { text });
-  await f.change("progress-write", "junior", { text: "# Progress\nAcceptance remains open." });
+  await f.change("progress-write", "junior", { progressText: "# Progress\nAcceptance remains open." });
   const expected = await readWorkPlan(f.context);
   let page = await readWorkPlanPage(f.context);
   const first = page;
@@ -673,7 +678,7 @@ test("legacy current and archived plans remain exact read-only documents until t
   const oldPage = await readWorkPlanPage(f.context, { archiveId });
   assert.equal(oldPage.text, archivedText);
   assert.equal(oldPage.progressAvailable, false);
-  await assert.rejects(f.change("progress-write", "junior", { text: "# Progress\n" }), /stopped-service plan-progress upgrade/);
+  await assert.rejects(f.change("progress-write", "junior", { progressText: "# Progress\n" }), /stopped-service plan-progress upgrade/);
   assert.deepEqual(await snapshot(currentPath), beforeCurrent);
   assert.deepEqual(await snapshot(archivePath), beforeArchive);
   for (const name of ["current.json", "plan", "progress", path.join("archive", `${archiveId}.json`)]) {
@@ -686,7 +691,7 @@ test("direct pair readers hold the original per-path queue until referenced docu
   for (const reader of ["current", "page", "history"]) {
     const f = await fixture(t);
     await f.change("new", "senior", { text: openText });
-    await f.change("progress-write", "junior", { text: `# Progress\nRetained ${reader} evidence\n` });
+    await f.change("progress-write", "junior", { progressText: `# Progress\nRetained ${reader} evidence\n` });
     const saved = await readWorkPlan(f.context);
     if (reader === "history") {
       await f.change("archive");
@@ -729,7 +734,7 @@ test("direct pair readers hold the original per-path queue until referenced docu
       writing = manageWorkPlan(f.context, {
         get operation() { enteredMutation = true; return "progress-write"; },
         expectedRevision: current.revision, expectedProgressRevision: current.progressRevision,
-        text: `# Progress\nNew ${reader} evidence\n`
+        progressText: `# Progress\nNew ${reader} evidence\n`
       }, "junior");
       // Drain the original catch().then() scheduling without releasing the held file read.
       await Promise.resolve();
@@ -760,7 +765,7 @@ test("an archived plan Vibe64 cannot read is named and left out of History, and 
   if (process.getuid?.() === 0) return t.skip("root reads every file, so no file is unreadable");
   const f = await fixture(t);
   await f.change("new", "senior", { text: openText });
-  await f.change("progress-write", "junior", { text: "# Progress\nFirst evidence\n" });
+  await f.change("progress-write", "junior", { progressText: "# Progress\nFirst evidence\n" });
   const first = await readWorkPlan(f.context);
   await f.change("archive");
   await f.change("new", "senior", { text: "# Second plan\n- [ ] Second requirement\n" });
@@ -786,7 +791,7 @@ test("an archived plan Vibe64 cannot read is named and left out of History, and 
   assert.equal((await readWorkPlanPage(f.context, { summary: true })).planFileProblems[0].path, firstRecord);
 
   // Writes still work, and cleanup keeps the documents the unreadable archive may still reference.
-  const written = await f.change("progress-write", "junior", { text: "# Progress\nCurrent evidence\n" });
+  const written = await f.change("progress-write", "junior", { progressText: "# Progress\nCurrent evidence\n" });
   assert.equal(written.progressText, "# Progress\nCurrent evidence\n");
   assert.equal(written.planFileProblems[0].path, firstRecord);
   await f.change("archive");
@@ -811,7 +816,7 @@ test("cleanup keeps a stray or unreadable file among plan documents, names it, a
   await writeFile(unreadable, "# Progress\nSomeone else's\n", { mode: 0o000 });
   t.after(() => chmod(unreadable, 0o600).catch(() => {}));
 
-  const written = await f.change("progress-write", "junior", { text: "# Progress\nKept going\n" });
+  const written = await f.change("progress-write", "junior", { progressText: "# Progress\nKept going\n" });
   assert.equal(written.progressText, "# Progress\nKept going\n");
   assert.deepEqual(written.planFileProblems.map(problem => problem.path).sort(), [unreadable, stray].sort());
   assert.ok(written.warning.includes(stray) && written.warning.includes(unreadable), "the warning names both files");

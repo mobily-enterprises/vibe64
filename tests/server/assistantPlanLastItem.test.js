@@ -74,7 +74,7 @@ test("every item half-ticked because its last proof can't run in the session, th
   for (const ending of ["asks the person", "reports wait", "reports nothing"]) {
     const f = await lastItemTurn(t, PASSES_OR_SAVE);
     const { plan, revisions } = await planCommands(f);
-    await plan({ operation: "progress-write", text: "# Progress\n\nThe migration is built; its unit tests pass. Unproven here: a real phone, the browser suite.\n", ...await revisions() });
+    await plan({ operation: "progress-write", progressText: "# Progress\n\nThe migration is built; its unit tests pass. Unproven here: a real phone, the browser suite.\n", ...await revisions() });
     await plan({ operation: "write", text: (await readWorkPlan(f.context)).text.replace("- [ ] Move", "- [~] Move"), ...await revisions() });
     if (ending === "reports wait") await reportOutcome(f, "wait", { involved: true, explanation: "Should I run the passes before saving, or save now?" });
     if (ending !== "asks the person") f.tail[0].messages[0].text = "The migration is built. Should I run the passes before saving, or save now?";
@@ -90,7 +90,7 @@ test("a question while an item is still open waits for the person's answer, as b
   const f = await lastItemTurn(t, "Old messages need a contact id.\n\n[1] Which contact id should old messages use?\n" +
     "Possible answers:\n- The email address (recommended)\n- The phone number");
   const { plan, revisions } = await planCommands(f);
-  await plan({ operation: "progress-write", text: "# Progress\n\nThe migration waits for the contact id.\n", ...await revisions() });
+  await plan({ operation: "progress-write", progressText: "# Progress\n\nThe migration waits for the contact id.\n", ...await revisions() });
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.deepEqual([f.sends.length, f.state().status, f.state().awaitingAnswer], [1, "waiting", true]);
   // The plan's status line shows it waiting for the person, never as implementing: from the request, and from the
@@ -120,7 +120,7 @@ test("in a Senior chat, every item built and the turn asking whether to run the 
       messages: [{ role: "assistant", text: ending === "asks the person" ? PASSES_OR_SAVE : "The migration is built. Should I run the passes before saving, or save now?" }] }];
     f.context.runtime.store.readConversationTail = async () => f.tail;
     const { plan, revisions } = await planCommands(f);
-    await plan({ operation: "progress-write", text: "# Progress\n\nThe migration is built; its unit tests pass. Unproven here: a real phone.\n", ...await revisions() });
+    await plan({ operation: "progress-write", progressText: "# Progress\n\nThe migration is built; its unit tests pass. Unproven here: a real phone.\n", ...await revisions() });
     await plan({ operation: "write", text: (await readWorkPlan(f.context)).text.replace("- [ ] Move", "- [~] Move"), ...await revisions() });
     if (ending === "reports wait") await reportOutcome(f, "wait", { involved: true, explanation: "Should I run the passes before saving, or save now?" });
     await f.service.afterTurn("session-1", end(f.state()), f.context);

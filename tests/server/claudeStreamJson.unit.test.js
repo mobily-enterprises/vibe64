@@ -22,6 +22,8 @@ import { assertCanUseVibe64Assistant } from "../../packages/vibe64-runtime/src/s
 import { __testables as assistantSelectionTestables, defineVibe64AssistantCapabilities, defineVibe64AssistantSelection, resolveVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
 import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 import { assertPagesGuidance } from "../fixtures/pagesGuidanceRules.js";
+import { assertPlanCommandGuidance } from "../fixtures/planCommandGuidanceRules.js";
+import { assistantPassInstructions } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
@@ -413,6 +415,24 @@ test("Claude main and temporary chats' composed system guidance tells them about
   for (const [index, kind] of ["main", "temporary"].entries()) {
     assertPagesGuidance(assert, f.processes[index].options.instructionArguments[1], `Claude ${kind}`);
   }
+});
+
+// 2026-11-26: the release restarted Claude, which resumed the session's conversation with a freshly built
+// --append-system-prompt holding no plan guidance, and its next turn, a plan's UI pass, carried only its pass
+// instructions: the agent's only plan-command knowledge was earlier turns' guidance, from an older release. The system
+// prompt a resumed conversation's process starts with gives the plan commands' current inputs to every turn after it.
+test("a resumed Claude chat's pass turn has the plan commands' current inputs in the system prompt its process starts with", async (t) => {
+  const f = await fixture(t);
+  const before = await f.provider.sendMessage(f.context, { message: "Work", messageId: "before-release" });
+  await f.provider.closeSession(f.context);
+  const restarted = createClaudeSessionAgentProvider(f.providerOptions);
+  const pass = { id: "genesis-ui-pass", title: "UI pass", item: "UI pass: the plan's changes", request: "Run the UI pass." };
+  await restarted.sendMessage(f.context, { message: `${assistantPassInstructions(pass)}\n\n${pass.request}`, messageId: "ui-pass" });
+  const resumed = f.processes.at(-1).options;
+  assert.equal(resumed.resume, true);
+  assert.equal(resumed.sessionId, before.thread.id);
+  assert.equal(resumed.instructionArguments[0], "--append-system-prompt");
+  assertPlanCommandGuidance(assert, resumed.instructionArguments[1], "Claude resumed main");
 });
 
 test("a Claude chat whose project Genesis cannot read is sent with Vibe64's guidance and a note", async (t) => {

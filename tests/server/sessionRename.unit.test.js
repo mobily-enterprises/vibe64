@@ -60,10 +60,11 @@ test("rename HTTP uses the project/session route and validates input", async () 
   });
 });
 
-function socketRequest(control, route, extra = {}) {
+// As the chat's client sends it: the control identity, never the socket path, then the route's own fields.
+function socketRequest({ socketPath, ...control }, route, extra = {}) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ ...control, ...extra });
-    const request = http.request({ socketPath: control.socketPath, method: "POST", path: route, headers: { "Content-Type": "application/json" } }, (response) => {
+    const request = http.request({ socketPath, method: "POST", path: route, headers: { "Content-Type": "application/json" } }, (response) => {
       let text = "";
       response.on("data", (chunk) => { text += chunk; });
       response.on("end", () => resolve({ status: response.statusCode, body: JSON.parse(text) }));

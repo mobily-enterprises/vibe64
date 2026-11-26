@@ -15,7 +15,7 @@ ${agentControlIdentitySource(controlFilePath)}
 const [operation, ...extra] = process.argv.slice(2);
 if (!operation || ["--help", "-h"].includes(operation)) {
   console.log('Usage: vibe64-helper plan <read|history|new|write|progress-write|checked|complete|archive|reopen|outcome|handoff>\\n'
-    + 'Mutations take JSON input on stdin. new/write require text (Markdown title and checklists: - [ ] not done yet, - [~] built, - [x] proven). progress-write requires text too: the whole new Progress. A field an operation does not read is refused, never ignored.\\n'
+    + 'Mutations take JSON input on stdin. new/write require text (Markdown title and checklists: - [ ] not done yet, - [~] built, - [x] proven). progress-write requires progressText: the whole new Progress, under the name read returns it. A field an operation does not read, or a missing one it needs, is refused, never ignored, and changes nothing: the refusal names the fields the operation takes. The operation is the argument, never a field.\\n'
     + 'write and progress-write replace the whole Plan or Progress, so they also require readThrough: the last page of a read (hasMore false) returns it, and so does the answer of each write.\\n'
     + 'For read pagination or archive selection, use read --input with JSON on stdin. Bare read/history never wait for stdin.\\n'
     + 'Mutations require expectedRevision and expectedProgressRevision from the current paired read, unless no current plan exists.\\n'
@@ -37,6 +37,11 @@ try {
     if (Buffer.byteLength(text) > 512 * 1024) throw new Error('Plan input is too large.');
   }
   const input = text.trim() ? JSON.parse(text) : {};
+  // The input is the agent's own fields: the operation is the argument of the command and Vibe64 adds the session identity,
+  // so neither is taken from it, never silently replaced.
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('plan ' + operation + ' takes a JSON object on stdin: nothing changed. Use vibe64-helper plan --help.');
+  const reserved = ['operation', 'token', 'sessionId', 'generationId'].filter(name => Object.hasOwn(input, name));
+  if (reserved.length) throw new Error('plan ' + operation + ' does not read ' + reserved.join(', ') + ': nothing changed. The operation is the argument of the command, and Vibe64 adds the session identity itself.');
   const control = sessionControlIdentity(JSON.parse(process.env[${JSON.stringify(controlEnvironmentName)}] || 'null') || {});
   if (!control?.socketPath || !control.token || !control.sessionId || !control.generationId) throw new Error('Plan controls are unavailable. Reconnect the assistant.');
   const body = JSON.stringify({ ...input, operation, token: control.token, sessionId: control.sessionId, generationId: control.generationId });

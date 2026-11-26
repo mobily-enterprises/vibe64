@@ -173,7 +173,7 @@ test("an item that asks for the whole run, in a plan made before this rule: Seni
     "to the person once the plan is finished, and report continue with the returned revisions", "u"));
   // The review rewrites the item and records the offer, then reports continue: its next turn reviews the plan as it now stands.
   await writePlan(f, (text) => text.replace("- [~] The whole test suite passes", "- [~] The focused tests for the plan's changes pass"), "review");
-  await change(f, "progress-write", "review", { text: "# Progress\n\nThe whole run is not a step of this plan: Vibe64 offers it once the plan is finished.\n" });
+  await change(f, "progress-write", "review", { progressText: "# Progress\n\nThe whole run is not a step of this plan: Vibe64 offers it once the plan is finished.\n" });
   await finish(f, "continue");
   assert.equal(f.sends.length, 3);
   assert.match(f.sends[2].input.message, /Senior review of the plan: /u);

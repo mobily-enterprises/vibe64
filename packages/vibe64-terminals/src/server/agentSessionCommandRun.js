@@ -11,6 +11,23 @@ import { commandLineFailure } from "./commandFailure.js";
 
 const AGENT_SESSION_COMMAND_NAME = "vibe64-session-command";
 
+// The fields each session command reads, as its route hands them over: any other, and a missing one it needs, is
+// refused before the command acts (refuseUnreadFields). The session client below sends each command only its own.
+const SESSION_COMMAND_FIELDS = Object.freeze({
+  listProject: { operation: "session list-project", fields: ["projectSlug"], required: ["projectSlug"] },
+  messageProject: {
+    operation: "session message-project",
+    fields: ["projectSlug", "message", "messageId", "destinationSessionId"],
+    required: ["projectSlug", "message"]
+  },
+  projectPreview: { operation: "session project-preview", fields: ["projectSlug", "destinationSessionId"], required: ["projectSlug"] },
+  renameSession: { operation: "session rename", fields: ["name"], required: ["name"] },
+  retrySetup: { operation: "session setup retry", fields: [] },
+  sessionStatus: { operation: "session status", fields: [] },
+  updateSession: { operation: "session update", fields: ["reviewedConflictId"] },
+  saveSession: { operation: "session save", fields: [] }
+});
+
 const AGENT_SESSION_COMMAND_CONTRACT_VERSION = "1";
 
 const AGENT_SESSION_COMMAND_OUTPUT_MAX_BYTES = 20 * 1024 * 1024;
@@ -173,8 +190,10 @@ try {
   if (!control?.socketPath || !control.token || !control.sessionId || !control.generationId) {
     throw new Error("Session control is unavailable. Reconnect the assistant.");
   }
+  // Each route reads only its own fields and refuses any other, so each is sent only those.
   const body = JSON.stringify({
-    name: args[1], projectSlug: args[1],
+    ...(route === "rename" ? { name: args[1] } : {}),
+    ...(listProject || messageProject || projectPreview ? { projectSlug: args[1] } : {}),
     ...(messageProject ? { message: args[messageIndex], messageId: args[messageIndex + 1] } : {}),
     ...(explicitSession ? { destinationSessionId: args[3] } : {}),
     ...(reviewedConflictId ? { reviewedConflictId } : {}),
@@ -379,6 +398,7 @@ export {
   SESSION_RENAME_CONTROL_ENV,
   sessionCommandCwd,
   sessionRenameCommandSource,
+  SESSION_COMMAND_FIELDS,
   VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV,

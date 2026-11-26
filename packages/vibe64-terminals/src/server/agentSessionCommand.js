@@ -21,6 +21,7 @@ import {
 } from "@local/vibe64-runtime/server/workspaceSetupState";
 import { assertSessionTempRootFits } from "@local/vibe64-runtime/server/sessionTempFolder";
 
+import { refuseUnreadFields } from "@local/vibe64-core/server/commandInput";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   logOperationalEvent
@@ -74,7 +75,8 @@ import {
   VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV,
   VIBE64_AGENT_SESSION_RUN_RESULT_ENV,
   VIBE64_WRAPPER_ENV,
-  waitForCommandResult
+  waitForCommandResult,
+  SESSION_COMMAND_FIELDS
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { assistantPlanRole } from "./assistantRoutingRequests.js";
@@ -93,6 +95,13 @@ const AGENT_SESSION_COMMAND_RUNNER_NAME = "vibe64-session-command-runner";
 const AGENT_SESSION_COMMAND_SOCKET_NAME = "session-command.sock";
 const AGENT_SESSION_COMMAND_RUNS_DIR_NAME = "session-command-runs";
 const AGENT_SESSION_COMMAND_REQUEST_MAX_BYTES = 4 * 1024 * 1024;
+// What plan outcome reads: the workflow identity a plan read returns, under the same names, and the outcome itself.
+const OUTCOME_FIELDS = Object.freeze({
+  operation: "plan outcome",
+  fields: ["messageId", "turnId", "stage", "status", "decision", "explanation", "progress", "expectedRevision", "expectedProgressRevision"],
+  required: ["messageId", "turnId", "stage", "decision", "explanation", "progress"]
+});
+
 function wrapperHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_SESSION_COMMAND_NAME);
 }
@@ -111,55 +120,24 @@ function commandRunsHostPath(wrapperHostDir = "") {
 }
 
 // Every route but run is authorized by the control token rather than the
-// shell-execution token.
+// shell-execution token, and hands its command the agent's own fields.
+const controlRoute = (name) => ({
+  handle: ({ commandService, fields, sessionId }) => commandService[name](sessionId, fields),
+  status: vibe64StatusCode,
+  token: "controlToken"
+});
 const commandServers = createSessionCommandServers({
   routePrefix: "/agent-session-command",
   routes: {
-    "/agent-session-command/list-project": {
-      handle: ({ commandService, input, sessionId }) => commandService.listProject(sessionId, input),
-      status: vibe64StatusCode,
-      token: "controlToken"
-    },
-    "/agent-session-command/message-project": {
-      handle: ({ commandService, input, sessionId }) => commandService.messageProject(sessionId, input),
-      status: vibe64StatusCode,
-      token: "controlToken"
-    },
-    "/agent-session-command/project-preview": {
-      handle: ({ commandService, input, sessionId }) => commandService.projectPreview(sessionId, input),
-      status: vibe64StatusCode,
-      token: "controlToken"
-    },
-    "/agent-session-command/rename": {
-      handle: ({ commandService, input, sessionId }) => commandService.renameSession(sessionId, input.name),
-      status: vibe64StatusCode,
-      token: "controlToken"
-    },
-    "/agent-session-command/setup-retry": {
-      handle: ({ commandService, sessionId }) => commandService.retrySetup(sessionId),
-      status: vibe64StatusCode,
-      token: "controlToken"
-    },
-    "/agent-session-command/status": {
-      handle: ({ commandService, sessionId }) => commandService.sessionStatus(sessionId),
-      status: vibe64StatusCode,
-      token: "controlToken"
-    },
-    "/agent-session-command/update": {
-      handle: ({ commandService, input, sessionId }) => commandService.updateSession(sessionId, input),
-      status: vibe64StatusCode,
-      token: "controlToken"
-    },
-    "/agent-session-command/save": {
-      handle: ({ commandService, sessionId }) => commandService.saveSession(sessionId),
-      status: vibe64StatusCode,
-      token: "controlToken"
-    },
-    "/agent-session-command/plan": {
-      handle: ({ commandService, fields, sessionId }) => commandService.managePlan(sessionId, fields),
-      status: vibe64StatusCode,
-      token: "controlToken"
-    },
+    "/agent-session-command/list-project": controlRoute("listProject"),
+    "/agent-session-command/message-project": controlRoute("messageProject"),
+    "/agent-session-command/project-preview": controlRoute("projectPreview"),
+    "/agent-session-command/rename": controlRoute("renameSession"),
+    "/agent-session-command/setup-retry": controlRoute("retrySetup"),
+    "/agent-session-command/status": controlRoute("sessionStatus"),
+    "/agent-session-command/update": controlRoute("updateSession"),
+    "/agent-session-command/save": controlRoute("saveSession"),
+    "/agent-session-command/plan": controlRoute("managePlan"),
     "/agent-session-command/run": {
       handle({ commandService, input, request, response }) {
         const abortController = new AbortController();
@@ -303,6 +281,17 @@ function createAgentSessionCommandService({
   }
 
   /**
+   * Runs a session command in its bound project: once the binding is checked, a field the command does not read, or
+   * a missing one it needs, is refused before it acts (SESSION_COMMAND_FIELDS).
+   */
+  function runSessionCommand(sessionId, name, input, operation) {
+    return runInSessionProject(sessionId, (bound) => {
+      refuseUnreadFields(input, SESSION_COMMAND_FIELDS[name]);
+      return operation(bound);
+    });
+  }
+
+  /**
    * Cross-project commands act for the person who submitted the current request.
    * @param {Vibe64SessionStore} store
    * @param {string} sessionId
@@ -314,7 +303,7 @@ function createAgentSessionCommandService({
   }
 
   async function listProject(sessionId, input) {
-    return runInSessionProject(sessionId, async ({ binding, store }) => {
+    return runSessionCommand(sessionId, "listProject", input, async ({ binding, store }) => {
       return listProjectSessions({
         projectSlug: toText(input.projectSlug),
         sourceProject: binding.projectSlug,
@@ -325,7 +314,7 @@ function createAgentSessionCommandService({
   }
 
   async function messageProject(sessionId, input) {
-    return runInSessionProject(sessionId, async ({ binding, store }) => {
+    return runSessionCommand(sessionId, "messageProject", input, async ({ binding, store }) => {
       return sendProjectMessage({
         projectSlug: toText(input.projectSlug),
         message: toText(input.message),
@@ -339,7 +328,7 @@ function createAgentSessionCommandService({
   }
 
   async function projectPreview(sessionId, input) {
-    return runInSessionProject(sessionId, async ({ binding, store }) => {
+    return runSessionCommand(sessionId, "projectPreview", input, async ({ binding, store }) => {
       return readProjectPreview({
         projectSlug: toText(input.projectSlug),
         ...(input.destinationSessionId !== undefined ? { destinationSessionId: toText(input.destinationSessionId) } : {}),
@@ -350,16 +339,16 @@ function createAgentSessionCommandService({
     });
   }
 
-  async function renameSession(sessionId, name) {
-    return runInSessionProject(sessionId, async ({ store }) => {
-      const sessionName = await store.writeSessionLabel(sessionId, name);
+  async function renameSession(sessionId, input) {
+    return runSessionCommand(sessionId, "renameSession", input, async ({ store }) => {
+      const sessionName = await store.writeSessionLabel(sessionId, input.name);
       await publishSessionChanged(sessionId, { reason: "session-renamed", payload: { clientRefresh: { includeList: true } } });
       return { ok: true, sessionId, sessionName };
     });
   }
 
-  async function sessionStatus(sessionId) {
-    return runInSessionProject(sessionId, ({ descriptor, project: projectRecord, sourceRoot, store }) => readAgentSessionStatus({
+  async function sessionStatus(sessionId, input = {}) {
+    return runSessionCommand(sessionId, "sessionStatus", input, ({ descriptor, project: projectRecord, sourceRoot, store }) => readAgentSessionStatus({
       descriptor,
       project,
       projectRecord,
@@ -373,8 +362,8 @@ function createAgentSessionCommandService({
    * Runs the session's complete declared setup again, like Retry on its card.
    * It returns once preparation starts; session status reports the result.
    */
-  async function retrySetup(sessionId) {
-    return runInSessionProject(sessionId, async () => {
+  async function retrySetup(sessionId, input = {}) {
+    return runSessionCommand(sessionId, "retrySetup", input, async () => {
       const setup = await retryWorkspaceSetup(sessionId);
       if (setup?.ok === false) return setup;
       const state = workspaceSetupState(setup?.state);
@@ -397,8 +386,8 @@ function createAgentSessionCommandService({
    * @param {string} sessionId
    * @param {{ reviewedConflictId?: string }} input
    */
-  async function updateSession(sessionId, input) {
-    return runInSessionProject(sessionId, async ({ binding, store }) => {
+  async function updateSession(sessionId, input = {}) {
+    return runSessionCommand(sessionId, "updateSession", input, async ({ binding, store }) => {
       const startedAt = new Date().toISOString();
       const reviewedConflictId = toText(input.reviewedConflictId);
       const result = await updateSessionWork(sessionId, {
@@ -424,8 +413,8 @@ function createAgentSessionCommandService({
    * changes is on (`runAgentSessionSave` decides whose command it is).
    * @param {string} sessionId
    */
-  function saveSession(sessionId) {
-    return runInSessionProject(sessionId, async ({ binding, store }) => ({
+  function saveSession(sessionId, input = {}) {
+    return runSessionCommand(sessionId, "saveSession", input, async ({ binding, store }) => ({
       sessionId,
       ...await runAgentSessionSave({ actor: () => requestActor(store, sessionId, binding), saveSessionWork, sessionId, store })
     }));
@@ -434,10 +423,13 @@ function createAgentSessionCommandService({
   async function managePlan(sessionId, input) {
     return runInSessionProject(sessionId, async ({ store, descriptor, sourceRoot }) => {
       const request = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
-      if (input.operation === "outcome") {
+      const { operation, ...fields } = input;
+      if (operation === "outcome") {
+        refuseUnreadFields(fields, OUTCOME_FIELDS);
         return reportWorkflowOutcome(sessionId, input, { vibe64User: request?.submittedBy || null });
       }
-      if (input.operation === "handoff") {
+      if (operation === "handoff") {
+        refuseUnreadFields(fields, { operation: "plan handoff", fields: [] });
         return { ok: true, ...await handPlanOver({ sessionId, request, handPlanToSenior }) };
       }
       // A plan's pass ticks only its own Passes item, and a new plan in a chat whose plans run passes gets them.
