@@ -619,6 +619,45 @@ test('Architecture view keeps public ranges and complete dependency evidence wit
   });
 });
 
+// A Machine City as Genesis writes it from version 3: no buildings, which repeated architecture.files, and each
+// symbol without its file's path, language and extractor, without rangeAvailable, which follows from its end, and
+// with its start only where it differs from its line and column.
+function machineCityVersion3() {
+  const { buildings: _buildings, functions: _functions, ...machine } = architectureFixture();
+  const fileId = machine.architecture.files[0].id;
+  const symbol = { fileId, kind: 'function', visibility: 'public', parameters: [], container: null, async: false, generator: false, static: false, role: 'source' };
+  return {
+    ...machine,
+    schemaVersion: 3,
+    architecture: {
+      ...machine.architecture,
+      schema: 'genesis.architecture.v2',
+      symbols: [
+        { ...symbol, id: 'run', name: 'run', qualifiedName: 'run', line: 1, column: 1, end: { line: 2, column: 1 } },
+        { ...symbol, id: 'shifted', name: 'shifted', qualifiedName: 'shifted', line: 2, column: 8, start: { line: 2, column: 1 }, end: { line: 2, column: 20 } },
+        { ...symbol, id: 'value', name: 'VALUE', qualifiedName: 'VALUE', kind: 'constant', line: 1, column: 14 },
+      ],
+    },
+  };
+}
+
+test('Architecture view reads a version 3 Machine City: symbol ranges from line, column and end, and source size from its architecture files', async () => {
+  await withTempRoot(async root => {
+    const city = machineCityVersion3();
+    const service = createService({ logger: console, publishSessionChanged: async () => null, project: projectServiceFor(root),
+      cityReader: async (_root, kind) => ({ builtAt: new Date(0).toISOString(), city, exists: true, kind, path: GENESIS_MACHINE_CITY_PATH }) });
+    const response = await service.readArchitecture({ sessionId: 'session-1' });
+    assert.equal(response.ok, true, response.error);
+    assert.deepEqual(response.architecture.symbols.map(({ id, start, end, rangeAvailable }) => ({ id, start, end, rangeAvailable })), [
+      { id: 'run', start: { line: 1, column: 1 }, end: { line: 2, column: 1 }, rangeAvailable: true },
+      { id: 'shifted', start: { line: 2, column: 1 }, end: { line: 2, column: 20 }, rangeAvailable: true },
+      { id: 'value', start: { line: 1, column: 14 }, end: undefined, rangeAvailable: false },
+    ]);
+    // The source file's size comes from its architecture file, as it came from its building.
+    assert.equal(response.architecture.files[0].sourceLines, 2);
+  });
+});
+
 test('Architecture projects hash-matched source size and declared entry files without running an inspector', async () => {
   await withTempRoot(async root => {
     const machine = architectureFixture();

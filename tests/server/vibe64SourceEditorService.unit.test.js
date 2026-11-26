@@ -9,6 +9,7 @@ import { test } from "node:test";
 
 import { __testables } from "../../packages/vibe64-source-editor/src/server/filePolicy.js";
 import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
+import { indexedSymbolSelection } from "../../packages/vibe64-source-editor/src/server/explanations.js";
 import { sourceEditorLanguageForPath } from "../../packages/vibe64-source-editor/src/server/sourceEditorLanguage.js";
 import { readSourceInterpretations } from "../../packages/vibe64-source-editor/src/server/sourceInterpretations.js";
 import {
@@ -4970,4 +4971,25 @@ test("unreadable saved explanations ask for a new generation without naming a re
   await writeFile(path.join(scope, sha(other.path)), "not a directory");
   assert.deepEqual(await readSourceInterpretations(context, other, () => "1"),
     { records: [], warning: "Saved explanations are unavailable. Generate them again." });
+});
+
+test("an indexed symbol's selection reads a version 3 Machine City, where a symbol's path is its file's, its start its line and column unless given, and its range follows its end, as it reads version 2", () => {
+  const file = { path: "src/app.js", hash: "abc" };
+  const lines = ["export function app(a) {", "  return a;", "}"];
+  const indexedFile = { id: "file:src/app.js", path: "src/app.js", hash: "sha256:abc" };
+  const version2 = { id: "symbol:app", fileId: indexedFile.id, path: "src/app.js", name: "app", visibility: "public", parameters: ["a"], line: 1, column: 17, start: { line: 1, column: 1 }, end: { line: 3, column: 2 }, rangeAvailable: true };
+  const { path: _path, rangeAvailable: _rangeAvailable, ...version3 } = version2;
+  const selection = { startLine: 1, startColumn: 1, endLine: 3, endColumn: 2 };
+  for (const symbol of [version2, version3]) {
+    assert.deepEqual(indexedSymbolSelection({ files: [indexedFile], symbols: [symbol] }, "symbol:app", file, lines, "steps"), selection);
+  }
+  // Without a start, the range starts at the symbol's line and column.
+  const { start: _start, ...atName } = version3;
+  assert.deepEqual(indexedSymbolSelection({ files: [indexedFile], symbols: [atName] }, "symbol:app", file, lines, "steps"),
+    { ...selection, startColumn: 17 });
+  // Still refused: a symbol without a range, or whose file is another file or other content.
+  const { end: _end, ...rangeless } = version3;
+  for (const [files, symbols] of [[[indexedFile], [rangeless]], [[{ ...indexedFile, path: "src/other.js" }], [version3]], [[{ ...indexedFile, hash: "sha256:old" }], [version3]]]) {
+    assert.throws(() => indexedSymbolSelection({ files, symbols }, "symbol:app", file, lines, "steps"), { code: "vibe64_source_explanation_symbol_changed" });
+  }
 });
