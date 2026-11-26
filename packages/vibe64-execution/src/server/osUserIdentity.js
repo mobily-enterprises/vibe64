@@ -1,5 +1,5 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -96,25 +96,90 @@ function currentOsUser({
   };
 }
 
+// The NSS passwd sources whose records are a plain passwd file this process can read: the system's files, and the
+// extra users database (libnss-extrausers) a host keeps its workspace accounts in.
+const PASSWD_SOURCE_FILES = Object.freeze({ files: "/etc/passwd", extrausers: "/var/lib/extrausers/passwd" });
+const NSSWITCH_FILE = "/etc/nsswitch.conf";
+// Each reader's parsed files, by path, while the file's identity (device, inode, size, change times) stays the same.
+const parsedFiles = new WeakMap();
+
+/**
+ * A file's parsed contents, read again only when the file changed or was replaced; null when there is no such file.
+ * Any other failure to read it rejects.
+ */
+async function parsedFile(file, parse, { readFileFn, statFn }) {
+  let info;
+  try {
+    info = await statFn(file, { bigint: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  const identity = `${info.dev}:${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`;
+  if (!parsedFiles.has(readFileFn)) parsedFiles.set(readFileFn, new Map());
+  const files = parsedFiles.get(readFileFn);
+  const cached = files.get(file);
+  if (cached?.identity === identity) return cached.value;
+  const value = readFileFn(file, "utf8").then(parse);
+  files.set(file, { identity, value });
+  value.catch(() => {
+    if (files.get(file)?.value === value) files.delete(file);
+  });
+  return value;
+}
+
+/** The passwd sources of nsswitch.conf's one passwd line, in order, or null when it has none or several. */
+function passwdSources(config = "") {
+  const rules = [...String(config).matchAll(/^[\t ]*passwd[\t ]*:[\t ]*([^#\r\n]*)/gmu)];
+  return rules.length === 1 ? rules[0][1].trim().split(/\s+/u).filter(Boolean) : null;
+}
+
+/** A passwd file's records by username; a name whose record cannot be read is kept as null. */
+function passwdUsers(text = "") {
+  const users = new Map();
+  for (const line of String(text).split(/\r?\n/u)) {
+    const name = line.trim().split(":")[0];
+    if (!name || users.has(name)) continue;
+    users.set(name, parsePasswdLine(line));
+  }
+  return users;
+}
+
+/**
+ * The user from the passwd files NSS consults first, as NSS answers by its default actions: the first source with
+ * the user returns it, a source without it hands on to the next. Undefined when NSS itself must answer: a source
+ * this process cannot read (sss, ldap, systemd, compat, ...) comes before the user is found, a source carries its own
+ * action, a record is unreadable, or nsswitch.conf has no single passwd line. Null when every source was read and
+ * none has the user.
+ */
+async function passwdFileUser(username, files) {
+  const sources = passwdSources(await parsedFile(NSSWITCH_FILE, (text) => text, files) ?? "");
+  if (!sources?.length) return undefined;
+  for (const [index, source] of sources.entries()) {
+    const file = Object.hasOwn(PASSWD_SOURCE_FILES, source) ? PASSWD_SOURCE_FILES[source] : "";
+    if (!file || sources[index + 1]?.startsWith("[")) return undefined;
+    const users = await parsedFile(file, passwdUsers, files);
+    if (!users?.has(username)) continue;
+    return users.get(username) || undefined;
+  }
+  return null;
+}
+
 async function resolveOsUser(username = "", {
   execFileFn = execFile,
   platform = process.platform,
   readFileFn = readFile,
+  statFn = stat,
   userInfo = os.userInfo
 } = {}) {
   const safeUsername = assertSafeOsUsername(username);
   if (platform === "linux" && !/^\d+$/u.test(safeUsername)) {
-    // A successful first-source files lookup is authoritative under NSS's
-    // default return rule. Read it asynchronously instead of forking the server.
-    // Other source orders/actions and missing users still go through NSS.
-    const config = await readFileFn("/etc/nsswitch.conf", "utf8").catch(() => "");
-    const rules = [...config.matchAll(/^[\t ]*passwd[\t ]*:[\t ]*([^#\r\n]*)/gmu)];
-    const sources = rules.length === 1 ? rules[0][1].trim().split(/\s+/u) : [];
-    if (sources[0] === "files" && (sources.length === 1 || /^[a-z_][a-z0-9_-]*$/iu.test(sources[1]))) {
-      const passwd = await readFileFn("/etc/passwd", "utf8").catch(() => "");
-      const localUser = passwd.split(/\r?\n/u).map(parsePasswdLine).find((user) => user?.username === safeUsername);
-      if (localUser) return localUser;
-    }
+    // Every request resolves its person's account, so the passwd files NSS reads are read here, asynchronously
+    // and once per change, instead of forking getent for each: on a host whose workspace accounts live in the extra
+    // users database, that fork ran about 20 times a second. NSS still answers what these files cannot.
+    const localUser = await passwdFileUser(safeUsername, { readFileFn, statFn }).catch(() => undefined);
+    if (localUser) return localUser;
+    if (localUser === null) throw osUserNotFound(safeUsername);
   }
   let record;
   if (platform === "darwin") {
@@ -131,12 +196,14 @@ async function resolveOsUser(username = "", {
     });
     record = parsePasswdLine(passwd.split(/\r?\n/u)[0]);
   }
-  if (!record || record.username !== safeUsername) {
-    const error = new Error(`OS user was not found: ${safeUsername}`);
-    error.code = "vibe64_os_user_not_found";
-    throw error;
-  }
+  if (!record || record.username !== safeUsername) throw osUserNotFound(safeUsername);
   return record;
+}
+
+function osUserNotFound(username) {
+  const error = new Error(`OS user was not found: ${username}`);
+  error.code = "vibe64_os_user_not_found";
+  return error;
 }
 
 async function listOsUsers({
