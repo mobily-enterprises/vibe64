@@ -3592,6 +3592,10 @@ the exact saved request and configuration, and an application-reported
 connected result with a verification time. Configure carries the request fingerprint through the project route. Integrations
 attaches it only for the matching development session and slot, together with the
 loaded configuration hash. Confirmed decisions reload the server conversation;
+a check, connection or cancel whose answer carries no decision (the request is
+still pending, as in the recovery check each load runs on a visible pending
+request) rereads nothing, and a failure rereads only after the setup operation
+was sent;
 the card renders Setup completed independently of live account status. Completion publishes the existing session-changed event with a refresh reason;
 other selected-session conversation models reread durable history rather than
 trusting event-provided decision data. Status restoration does not publish another
@@ -4988,7 +4992,10 @@ This gives the transcript its complete initial tail for bottom positioning.
 Manual refreshes retain rendered history and do not reset the reader's position.
 Main's supplied conversation also retains the original canonical session
 completion watcher from `useVibe64ConversationLog`: a missed native
-completion notification requests the same binding's reload. The existing
+completion notification requests the same binding's reload. The watcher starts
+at the session's first detailed record, at mount or after it: a turn completed
+by then is already in the binding's subscribed state, so it reloads only when
+that state still shows the turn working; each later completed turn reloads. The existing
 product event listener records the session/revision/turn key so its later
 matching session watcher does not request a duplicate reload; the common
 subscription still owns read coalescing, live output, saved
