@@ -71,6 +71,8 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommandRun.js`
+- `packages/vibe64-terminals/src/server/agentCommandDatabaseServers.js`
+- `tests/server/agentCommandDatabaseServers.unit.test.js`
 - `packages/vibe64-terminals/src/server/helperCommandGroups.js`
 - `packages/vibe64-terminals/src/server/sessionCommandRuns.js`
 - `tests/server/helperCommandGroups.unit.test.js`
@@ -742,6 +744,27 @@ from 0 to 255, which the caller exits with; any other answer fails the call.
 The caller never starts a process of its own, so a group starts no process
 outside managed execution: a host whose work needs one runs it through its own
 managed execution.
+
+An agent's shell command runs at most `AGENT_SESSION_COMMAND_TIMEOUT_MS`, 30
+minutes, which catches a hung command, and its stop ends every process it
+started. So nothing long-lived runs through one: the session's database server
+is the host's or the person's, outside commands, and database tests run on the
+test databases the Stack declares (`TEST_DB_NAME`, `BROWSER_TEST_DB_NAME`),
+where JSKIT gives each test file or browser worker its own copy from one schema
+snapshot and drops it when the run ends; the app, its watchers and its workers
+run in Preview. The session's instructions say so, and so does
+`vibe64-helper database --help`. A command that reaches the limit answers with
+what it wrote, then why it ended and where such work runs
+(`sessionCommandTimeoutFailure`, exit 124). While a command runs, its
+processes are read every 5 seconds (`agentCommandDatabaseServers.js`): its own
+systemd unit's control group and the groups below it where a host gives each
+command one, which setsid and a daemon's fork never leave, and otherwise its
+process group, which is what its stop ends. The runner writes its process ID
+for that. The first process whose executable (`/proc/<pid>/exe`) is `mariadbd`,
+`mysqld` or `postgres` is told once: in the command's output at once, and to
+the main chat as Vibe64's note (the command services' `noteAgent`, with
+`nextTurn`), which steers a running turn and otherwise leads its next message. Neither the command's text nor any process's
+environment, which holds secrets, is read.
 
 `vibe64-helper spec [<name>]` prints the exact contracts a coding agent
 implements: every Stack section Vibe64 interprets, the Preview identity command

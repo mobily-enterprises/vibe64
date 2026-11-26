@@ -54,7 +54,11 @@ function usageText() {
     "Run this once after a migration or any other database schema change.",
     "It refreshes the session Database tool's tables, relationships, indexes, and ERD source.",
     "Overview reads the current schema, data-overview.json grouping, coverage and authoring instructions. It does not run queries or alter data.",
-    "ERD reads saved table bounds, pins and routed connection paths. Its response includes the exact revision and move format. Apply accepts that revision and a batch of table moves as JSON on stdin; it changes only the session diagram. A field the batch or a move does not read, or a missing one it needs, is refused and nothing moves."
+    "ERD reads saved table bounds, pins and routed connection paths. Its response includes the exact revision and move format. Apply accepts that revision and a batch of table moves as JSON on stdin; it changes only the session diagram. A field the batch or a move does not read, or a missing one it needs, is refused and nothing moves.",
+    "",
+    "Test databases:",
+    "The session's database server is Vibe64's (or the person's own) and runs outside agent commands. Never start mariadbd, mysqld or postgres in a command: a command ends after 30 minutes, with every process it started.",
+    "Run database tests on the test databases the Stack declares: TEST_DB_NAME for `jskit test --databases` (npm test), BROWSER_TEST_DB_NAME for browser workers. Each test file or worker gets its own copy (<name>_1, <name>_2, ...), made from one schema snapshot and dropped when the run ends; a run that was killed leaves none past the next run's start. Never create other databases for tests."
   ].join("\n") + "\n";
 }
 

@@ -239,6 +239,7 @@ const UNATTENDED_STARTS = Object.freeze([
       conversationTurns: { settled: async () => {} },
       finishInterruptedCloses: async () => {},
       restorePreviewAfterTurn: () => null,
+      summarizeTurnCommands: () => null,
       logger: LOGGER,
       providerUsage: { observe() {} },
       publishSessionChanged: { agentTerminal: async () => {} },

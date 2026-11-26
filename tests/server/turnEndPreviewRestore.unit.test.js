@@ -20,6 +20,7 @@ function publication({ closing = false, restorePreviewAfterTurn } = {}) {
     conversationTurns: { settled: async () => {} },
     finishInterruptedCloses: async () => {},
     restorePreviewAfterTurn: restorePreviewAfterTurn || ((sessionId) => { restored.push(sessionId); return null; }),
+    summarizeTurnCommands: () => null,
     logger: { warn: (fields) => warnings.push(fields.event), info() {}, error() {}, debug() {} },
     providerUsage: { observe() {} },
     publishSessionChanged: { agentTerminal: async () => {} },

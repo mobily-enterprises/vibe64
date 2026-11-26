@@ -4,7 +4,7 @@ import {
   runWithProjectRequestContext
 } from "@local/vibe64-core/server/projectRequestContext";
 import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import path from "node:path";
 import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planPassItemsCheck, planPassListing, withAfterPlanPasses } from "./planPasses.js";
@@ -56,35 +56,36 @@ import {
 } from "./helperCommandGroups.js";
 import {
   createSessionCommandServers,
-  shortCommandHash,
-  unixCommandSocketPath
+  shortCommandHash
 } from "./unixJsonCommand.js";
 import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
 import {
   AGENT_SESSION_COMMAND_CONTRACT_VERSION,
-  AGENT_SESSION_COMMAND_NAME,
   AGENT_SESSION_COMMAND_TIMEOUT_MS,
   commandRunnerSource,
+  commandRunsHostPath,
+  commandSocketHostPath,
   commandWrapperSource,
+  createCommandRun,
   decodedCommand,
   readBoundedFile,
+  runnerHostPath,
   sanitizedCommandEnvironment,
   SESSION_RENAME_CONTROL_ENV,
   sessionCommandCwd,
+  sessionCommandTimeoutFailure,
   sessionRenameCommandSource,
   VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV,
   VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV,
   VIBE64_AGENT_SESSION_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_SESSION_COMMAND_TOKEN_ENV,
-  VIBE64_AGENT_SESSION_RUN_COMMAND_ENV,
-  VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV,
-  VIBE64_AGENT_SESSION_RUN_RESULT_ENV,
   VIBE64_WRAPPER_ENV,
   SESSION_COMMAND_FIELDS,
-  waitForSessionCommand
+  waitForSessionCommand,
+  wrapperHostPath
 } from "./agentSessionCommandRun.js";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { assistantPlanRole } from "./assistantRoutingRequests.js";
@@ -92,6 +93,8 @@ import { sessionSourceState } from "./planSourceChanges.js";
 import { handPlanOver, refusedPlanChange } from "./assistantPlanHandoff.js";
 import { commandLineFailure } from "./commandFailure.js";
 import { rememberAfterPlanBase } from "./afterPlanBase.js";
+import { createAgentCommandRepeats, createTurnCommandRepeats } from "./agentCommandRepeats.js";
+import { commandDatabaseServerWatch } from "./agentCommandDatabaseServers.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
@@ -99,9 +102,6 @@ import { rememberAfterPlanBase } from "./afterPlanBase.js";
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
 
-const AGENT_SESSION_COMMAND_RUNNER_NAME = "vibe64-session-command-runner";
-const AGENT_SESSION_COMMAND_SOCKET_NAME = "session-command.sock";
-const AGENT_SESSION_COMMAND_RUNS_DIR_NAME = "session-command-runs";
 const AGENT_SESSION_COMMAND_REQUEST_MAX_BYTES = 4 * 1024 * 1024;
 // What plan outcome reads: the workflow identity a plan read returns, under the same names, and the outcome itself.
 const OUTCOME_FIELDS = Object.freeze({
@@ -109,23 +109,6 @@ const OUTCOME_FIELDS = Object.freeze({
   fields: ["messageId", "turnId", "stage", "status", "decision", "explanation", "progress", "expectedRevision", "expectedProgressRevision"],
   required: ["messageId", "turnId", "stage", "decision", "explanation", "progress"]
 });
-
-function wrapperHostPath(wrapperHostDir = "") {
-  return path.join(wrapperHostDir, AGENT_SESSION_COMMAND_NAME);
-}
-
-function runnerHostPath(wrapperHostDir = "") {
-  return path.join(wrapperHostDir, AGENT_SESSION_COMMAND_RUNNER_NAME);
-}
-
-/** The command's socket, under this server process's temporary directory. */
-function commandSocketHostPath(wrapperHostDir = "") {
-  return unixCommandSocketPath(path.join(wrapperHostDir, AGENT_SESSION_COMMAND_SOCKET_NAME), { env: process.env });
-}
-
-function commandRunsHostPath(wrapperHostDir = "") {
-  return path.join(wrapperHostDir, AGENT_SESSION_COMMAND_RUNS_DIR_NAME);
-}
 
 // Every route but run is authorized by the control token rather than the
 // shell-execution token, and hands its command the agent's own fields.
@@ -201,6 +184,11 @@ const commandServers = createSessionCommandServers({
  * @param {typeof stopVibe64Execution} [dependencies.stopExecution]
  * @param {typeof stopVibe64OwnedExecutions} [dependencies.stopOwnedExecutions]
  * @param {import("./types.js").HelperCommandGroup[]} [dependencies.helperCommandGroups] a host's own vibe64-helper groups
+ * @param {import("./agentCommandRepeats.js").NoteAgent} dependencies.noteAgent Vibe64's note to the running Main turn
+ * @param {ReturnType<typeof createAgentCommandRepeats>} [dependencies.commandRepeats] each Main turn's repeated commands
+ * @param {() => number} [dependencies.now] the clock a command's duration for its repeats is read from
+ * @param {object} [dependencies.databaseServerScan] tests' own /proc, cgroup root and interval for the database server watch
+ * @param {number} [dependencies.commandTimeoutMs] an agent command's limit; tests give a shorter one
  */
 function createAgentSessionCommandService({
   listProjectSessions,
@@ -219,7 +207,12 @@ function createAgentSessionCommandService({
   runCommand = runVibe64Command,
   stopExecution = stopVibe64Execution,
   stopOwnedExecutions = stopVibe64OwnedExecutions,
-  helperCommandGroups = NO_HELPER_COMMAND_GROUPS
+  helperCommandGroups = NO_HELPER_COMMAND_GROUPS,
+  noteAgent,
+  commandRepeats = createAgentCommandRepeats(),
+  now = Date.now,
+  databaseServerScan = {},
+  commandTimeoutMs = AGENT_SESSION_COMMAND_TIMEOUT_MS
 }) {
   const projectBinding = createAgentCommandProjectBinding(project, {
     sessionRequired: ["Vibe64 session command binding is incomplete.", "vibe64_agent_session_command_binding_required"],
@@ -316,6 +309,7 @@ function createAgentSessionCommandService({
     };
   }
   const requestActor = async (store, sessionId, binding) => (await requestTurn(store, sessionId, binding)).actor;
+  const watchDatabaseServers = commandDatabaseServerWatch({ ...databaseServerScan, logger, noteAgent, requestTurn });
   const helperGroups = createHelperGroupRunner({ groups: helperCommandGroups, runInSessionProject, requestTurn, sessionRuns });
 
   async function listProject(sessionId, input) {
@@ -502,20 +496,9 @@ function createAgentSessionCommandService({
       session: { ...context.descriptor, sessionId: toText(input.sessionId) }
     });
     const commandId = randomUUID();
-    const runRoot = path.join(
-      commandRunsHostPath(context.binding.wrapperHostDir),
-      commandId
-    );
-    const outputPath = path.join(runRoot, "output.log");
-    const resultPath = path.join(runRoot, "result.txt");
-    await mkdir(runRoot, { mode: 0o700, recursive: true });
-    const childEnv = {
-      ...sanitizedCommandEnvironment(input.env),
-      ...genesisParserEnvironment(),
-      [VIBE64_AGENT_SESSION_RUN_COMMAND_ENV]: Buffer.from(command, "utf8").toString("base64"),
-      [VIBE64_AGENT_SESSION_RUN_OUTPUT_ENV]: outputPath,
-      [VIBE64_AGENT_SESSION_RUN_RESULT_ENV]: resultPath
-    };
+    const commandRun = await createCommandRun(context.binding.wrapperHostDir, commandId, command);
+    const { outputPath, pidPath, resultPath } = commandRun;
+    const childEnv = { ...sanitizedCommandEnvironment(input.env), ...genesisParserEnvironment(), ...commandRun.env };
     const projectSlug = context.binding.projectSlug;
     input.signal?.throwIfAborted();
     const started = await runCommand({
@@ -551,11 +534,11 @@ function createAgentSessionCommandService({
       },
       shimDirs: withGenesisCommandShim([context.binding.wrapperHostDir]),
       tempDirectory: cwd.tempDirectory,
-      timeout: AGENT_SESSION_COMMAND_TIMEOUT_MS
+      timeout: commandTimeoutMs
     });
     const executionId = toText(started?.execution?.id);
     if (started?.ok !== true || !executionId) {
-      await rm(runRoot, { force: true, recursive: true }).catch(() => null);
+      await rm(commandRun.root, { force: true, recursive: true }).catch(() => null);
       return commandLineFailure(
         toText(started?.error || started?.stderr || started?.output) || "Vibe64 could not start this session command.",
         toText(started?.code) || "vibe64_agent_session_command_start_failed"
@@ -564,8 +547,9 @@ function createAgentSessionCommandService({
     const executions = sessionExecutions.get(toText(input.sessionId)) || new Set();
     executions.add(executionId);
     sessionExecutions.set(toText(input.sessionId), executions);
+    const stopWatching = watchDatabaseServers({ context, executionId, outputPath, pidPath, sessionId: input.sessionId });
     try {
-      const exitCodeText = await waitForSessionCommand(resultPath, { ...input, command });
+      const exitCodeText = await waitForSessionCommand(resultPath, { ...input, command, timeoutMs: commandTimeoutMs });
       const exitCode = Number.parseInt(exitCodeText, 10);
       const output = await readBoundedFile(outputPath).catch((error) => (
         error?.code === "ENOENT" ? "" : Promise.reject(error)
@@ -583,13 +567,25 @@ function createAgentSessionCommandService({
       await stopExecution(executionId, {
         reason: error?.code || "agent-session-command-failed"
       }).catch(() => null);
-      throw error;
+      if (error?.code !== "vibe64_agent_session_command_timeout") throw error;
+      // What the command wrote stays its answer, with why it ended.
+      return {
+        execution: started.execution,
+        ...sessionCommandTimeoutFailure(await readBoundedFile(outputPath).catch(() => ""))
+      };
+    } finally {
+      stopWatching();
     }
   }
+
+  const repeats = createTurnCommandRepeats({
+    commandRepeats, logger, noteAgent, now, publishSessionChanged, requestTurn, runInSessionProject
+  });
 
   async function run(input = {}) {
     const startedAtMs = Date.now();
     const sessionId = toText(input.sessionId);
+    const counted = repeats.begin(sessionId, input.commandBase64);
     const tracked = sessionRuns.track(sessionId, input.signal);
     let result;
     try {
@@ -622,6 +618,8 @@ function createAgentSessionCommandService({
       ok: result?.ok !== false,
       sessionId
     }, "Vibe64 agent session command finished.");
+    // A command that ran counts toward its turn's repeats, once it has answered; one refused before it started does not.
+    if (result?.execution?.id) counted();
     return result;
   }
 
@@ -629,6 +627,7 @@ function createAgentSessionCommandService({
     const normalizedSessionId = toText(sessionId);
     const binding = projectBinding.forget(normalizedSessionId);
     sessionRuns.cancelSession(normalizedSessionId);
+    repeats.forget(normalizedSessionId);
     const executions = [...(sessionExecutions.get(normalizedSessionId) || [])];
     sessionExecutions.delete(normalizedSessionId);
     const owned = await stopOwnedExecutions({
@@ -679,6 +678,7 @@ function createAgentSessionCommandService({
     saveSession,
     managePlan,
     run,
+    summarizeTurnCommands: repeats.summarize,
     helperGroups: helperGroups.listing,
     runHelperGroup: helperGroups.run
   });

@@ -25,7 +25,7 @@ import { Vibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/serv
 
 const PUBLIC_GROUPS = ["preview", "playwright", "env", "staging", "database", "github", "pages", "session", "plan",
   "training", "spec"];
-// vibe64-helper --help as it was before hosts could add groups.
+// vibe64-helper --help with no host groups.
 const OWN_HELP = `Usage: vibe64-helper <group> [arguments]
 
 Groups:
@@ -33,7 +33,7 @@ Groups:
   playwright   Managed project browser test suites
   env          Project environment settings
   staging      Staging status, and how this session reaches staging itself (ssh staging)
-  database     Database refresh, overview and diagram operations
+  database     Database refresh, overview and diagram operations, and where database tests run
   github       GitHub view refresh
   pages        Publish, update and list pages everyone on the project can open
   session      Session status, Update, Save, setup retry, rename, and listing and messaging project sessions

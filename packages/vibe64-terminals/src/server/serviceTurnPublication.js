@@ -35,6 +35,8 @@ const MAIN_TURN_IDLE_ENGINES = new Map([
  * @param {ServiceGoals["resumeGoalAfterTurn"]} dependencies.resumeGoalAfterTurn
  * @param {(sessionId: string) => Promise<unknown> | null} dependencies.restorePreviewAfterTurn restores the Preview a
  *   finished browser test left to the agent's turn end
+ * @param {(sessionId: string) => Promise<unknown> | null} dependencies.summarizeTurnCommands shows the person the
+ *   ended Main turn's repeated commands, when it crossed the line (agentCommandRepeats.js)
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProviderUsage} dependencies.providerUsage
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
@@ -50,6 +52,7 @@ function createServiceTurnPublication({
   continueGoalWhenLimitResets,
   resumeGoalAfterTurn,
   restorePreviewAfterTurn,
+  summarizeTurnCommands,
   logger,
   providerUsage,
   publishSessionChanged,
@@ -139,6 +142,15 @@ function createServiceTurnPublication({
     if (!engineId) {
       return;
     }
+    // The ended turn's repeated commands: their summary, when the turn crossed the line, and the count's end.
+    state.trackShutdownWork(runWithoutActionRequest(async () => summarizeTurnCommands(sessionId)).catch((error) => {
+      logOperationalEvent(logger, "warn", {
+        component: "vibe64.agent_session_command",
+        event: "vibe64.agent_session_command.repeats_summary_failed",
+        sessionId,
+        code: error.code
+      }, "The ended turn's repeated commands could not be summarized.");
+    }));
     state.trackShutdownWork(runWithoutActionRequest(() => followMainTurn(sessionId, payload).then(() => conversationTurns.settled(sessionId, "")).catch((error) => {
       logOperationalEvent(logger, "warn", {
         component: "vibe64.conversation",

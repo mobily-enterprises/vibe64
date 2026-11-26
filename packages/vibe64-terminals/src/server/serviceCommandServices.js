@@ -47,6 +47,8 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks
  * @param {import("./types.js").HelperCommandGroup[]} dependencies.helperCommandGroups a host's own vibe64-helper groups, or none
  * @param {ServiceAssistant["sendAgentMessage"]} dependencies.sendAgentMessage
+ * @param {ReturnType<typeof import("./mainChatNote.js").createMainChatNote>} dependencies.noteMainChat Vibe64's note to
+ *   Main chat's running turn
  * @param {ServiceSessionAccess} dependencies.sessionAccess
  * @param {ServiceState} dependencies.state
  * @param {ServiceWorkspacePreparation} dependencies.workspacePreparation
@@ -68,6 +70,7 @@ function createServiceCommandServices({
   savedEnvValueLinks,
   helperCommandGroups,
   sendAgentMessage,
+  noteMainChat,
   sessionAccess,
   state,
   workspacePreparation
@@ -198,6 +201,12 @@ function createServiceCommandServices({
       }, "Accepted project message failed during asynchronous delivery.")
     }),
     reportWorkflowOutcome: recordWorkflowOutcome,
+    // A turn's repeated commands, and a database server a command started, are told to its AI as Vibe64's note, for
+    // the person whose request it runs while they may still use the project, as a planned restart's note is.
+    noteAgent: async (sessionId, message, { actor, projectSlug, nextTurn = false }) => {
+      const vibe64User = actor ? await authorizeProjectMessage(actor, projectSlug).catch(() => null) : null;
+      return noteMainChat(sessionId, { message, nextTurn }, vibe64User ? { vibe64User } : {});
+    },
     handPlanToSenior,
     helperCommandGroups,
     logger,
