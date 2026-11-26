@@ -256,7 +256,8 @@ commit. Never amend or rewrite selected commits. Summarize the resolved scope,
 the main tasks with who does them, each task's steps and decisions before and
 after, what changed and why, the tests, screenshots and transcripts actually
 taken and run (with their paths), files changed, and what lies outside this
-scope, with what it needs and who must act.
+scope, with what it needs and who must act. End the report with one line: how
+many test runs the pass made, their total time and its longest single run.
 
 When the prompt ends with a `PASS RECORD` step, take it once the pass has
 finished: the Genesis `passes done ux-pass` operation records it in `genesis/passes.json`,
@@ -264,7 +265,12 @@ an uncommitted change that lands in the pass's own commit. Genesis adds that
 step only to the pass's own runs, whose requests it writes itself, so a user experience pass
 of a section, commits or your own changes is never recorded as the pass;
 neither is a pass that stopped early, was abandoned or still has failing
-checks.
+checks. Take it only after the whole-suite run, asked for once at the end,
+passed with the person's OK, or after the person explicitly accepted finishing
+without it, as `PASS REPORT` says; until the end, run focused checks only.
+Work as the engineering approach's "Your own test loop" says: fix in groups,
+run the narrow files that cover each group once, and leave the full run to the
+pass's end.
 
 ## Deep run
 

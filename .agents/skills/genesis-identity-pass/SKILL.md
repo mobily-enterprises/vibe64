@@ -266,7 +266,9 @@ Leave the pass as ordinary uncommitted work for review and a later normal
 commit. Never amend or rewrite selected commits. Summarize the resolved scope,
 the look spec (style option, seed, content kinds and their motifs), what
 changed, files changed, the checks, contrast figures and screenshots actually
-taken (with their paths), and what lies outside this scope.
+taken (with their paths), and what lies outside this scope. End the report with
+one line: how many test runs the pass made, their total time and its longest
+single run.
 
 When the prompt ends with a `PASS RECORD` step, take it once the pass has
 finished: the Genesis `passes done identity-pass` operation records it in `genesis/passes.json`,
@@ -274,7 +276,12 @@ an uncommitted change that lands in the pass's own commit. Genesis adds that
 step only to the pass's own runs, whose requests it writes itself, so an
 identity pass of a section, commits or your own changes is never recorded as
 the pass; neither is a pass that stopped early, was abandoned or still has
-failing checks.
+failing checks. Take it only after the whole-suite run, asked for once at the
+end, passed with the person's OK, or after the person explicitly accepted
+finishing without it, as `PASS REPORT` says; until the end, run focused checks
+only. Work as the engineering approach's "Your own test loop" says: fix in
+groups, run the narrow files that cover each group once, and leave the full
+run to the pass's end.
 
 ## Deep run
 

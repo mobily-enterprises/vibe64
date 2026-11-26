@@ -84,11 +84,13 @@ If the scope is ambiguous, ask which section or changes.
 - The prompt says what a review judges. It fixes what it finds within the
   scope: for each defect it writes the test that fails because of it, sees it
   fail, then fixes the code.
-- Run the tests relevant to the scope; report what actually ran and what was not
-  verified, and never report an unrun check as passing.
+- Run the focused tests relevant to the scope; the whole suite waits for the
+  person's OK at the end. Report what actually ran and what was not verified,
+  and never report an unrun check as passing.
 
 Leave the review as ordinary uncommitted work for a later normal commit. Never
-amend or rewrite selected commits.
+amend or rewrite selected commits. End the report with one line: how many test
+runs the review made, their total time and its longest single run.
 
 When the prompt ends with a `PASS RECORD` step, take it once the review has
 finished: the Genesis `passes done review` operation records it in `genesis/passes-added.json`,
@@ -96,7 +98,12 @@ an uncommitted change that lands in the review's own commit. Genesis adds that
 step only to the pass's own runs, whose requests it writes itself, so a review
 of a section, commits, a base or the current work is never recorded as the
 pass; neither is a review that stopped early, was abandoned or still has
-failing checks.
+failing checks. Take it only after the whole-suite run, asked for once at the
+end, passed with the person's OK, or after the person explicitly accepted
+finishing without it, as `PASS REPORT` says; until the end, run focused checks
+only. Work as the engineering approach's "Your own test loop" says: fix in
+groups, run the narrow files that cover each group once, and leave the full
+run to the pass's end.
 
 ## Deep run
 

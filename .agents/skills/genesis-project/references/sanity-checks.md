@@ -292,10 +292,14 @@ old form. A new mechanism replaces the one already doing the job.
 
 **Good:** a failing test is a defect with an owner, in the product or in the
 test. Red CI on the main branch stops the line. A final run is one whole run on
-the tree that is pushed.
+the tree that is pushed, run only with the person's explicit OK, asked at the
+end once the work is complete and its focused checks pass, in the session,
+never detached to outlive it.
 
 **Check:** name each failure's cause; never rerun until green, skip or loosen
-to finish. Compare the tested commit with the pushed one. List every skip with
+to finish, and never call one pre-existing or environmental: a missing tool or
+an environment's refusal is a defect to fix, reported with what is missing.
+Compare the tested commit with the pushed one. List every skip with
 its reason and the run that covers it, against the last run's count. See each
 new test fail once. Diagnosis runs may stop early; a final run runs everything
 and reports what did not run. Report a speed win with its absolute number.
@@ -306,6 +310,9 @@ and reports what did not run. Report a speed win with its absolute number.
   the run reported success (shell).
 - A suite kept a set of "known" failures as a baseline until they hid a new
   regression.
+- An agent reran a half-hour suite on its own several times, detached it to
+  outlive the session, called 27 failures pre-existing and environmental, and
+  was about to record its pass done.
 
 **Outer limit:** a red test on main nobody owns, a suite that needs reruns to
 look green, or dozens of skips nobody can place.
@@ -364,6 +371,33 @@ preparation in minutes, or a limit ten times the measured need. A new test
 whose time is mostly its own setup, for a check that a cheaper level or an
 existing test could make, is not acceptable: every run, by every person and
 agent, pays for it for as long as it exists.
+
+## Tests: your own loop
+
+**Good:** the checks an agent runs while it works follow the suite's rules,
+since even fast tests take ages when rerun at every change. It makes all of a
+step's changes, then runs once, never after each small edit. While iterating it
+runs only the narrowest test that covers the change, and the browser or wider
+checks for it once, when the step is done. New tests are seen to fail in one
+batch: several behaviors broken, or the fix reverted once, in one run. One
+started server, prepared database and set of fixtures serve several runs.
+
+**Check:** count your own runs and what each costs. A check rerun after each
+small edit, or one that takes minutes, runs files one at a time, rebuilds its
+database each run or needs reruns for a flaky helper or the environment, is a
+defect: fix it first, timed before and after, or, when that lies outside the
+task, tell the person at once with its cause and numbers. Never skip, shorten
+or lighten a pass, plan step or requested check to save time.
+
+**Examples:**
+- A plan's automatic passes took 566 tool calls and about 95 minutes, almost
+  all test runs: browser tests one at a time at about a minute each, one
+  deliberate break per run to see each new test fail, and a 25 s test database
+  restore several times per break. The agent then proposed lightening the
+  remaining passes instead of fixing its loop.
+
+**Outer limit:** an agent's own check that takes minutes and runs again after
+every change, or a pass whose time is mostly reruns of the same check.
 
 ## Tests: each owns what it uses
 

@@ -2,51 +2,51 @@
   "schemaVersion": 1,
   "skills": {
     "genesis-data-pass": {
-      "hash": "sha256:b15300abfb51311aaad3585d8230f8e65192d4a2dae3f830c0168834aa3a3def",
+      "hash": "sha256:422b7f042a4bbe7301559b8cfd66461996211358b254aa9e3900945a537f5b99",
       "source": "genesis:skills/genesis-data-pass"
     },
     "genesis-deslop": {
-      "hash": "sha256:3b0003d5ba34b8ce9b0d7315e889a1b1221c61163720246185a02d272d9f5448",
+      "hash": "sha256:271e5edc547bd1633100add2f86439cc20b6838e283a41e17441744ecccf69fe",
       "source": "genesis:skills/genesis-deslop"
     },
     "genesis-identity-pass": {
-      "hash": "sha256:5495e70d124d59544b6e78776adaba8594be0c99a1a7756e147ce851740638a9",
+      "hash": "sha256:b678df5e57c3868fe06b15d60a2f3982edb70c6c3d7f8e0e2d2a64cf1e5b82fe",
       "source": "genesis:skills/genesis-identity-pass"
     },
     "genesis-master-pass": {
-      "hash": "sha256:23bc0ee712620368668fbc08c3e6d8f8f8d20dfba9ae8bda82ab9805749996e6",
+      "hash": "sha256:eca888617f5fa6fed0e4248d75ed76ed7d29b5bd3a3cb91d7c59d805e3d57f41",
       "source": "genesis:skills/genesis-master-pass"
     },
     "genesis-program": {
-      "hash": "sha256:3641fc1ae2b9688f4acffa1034b07bbb1607e74aa4f4aea4da91d1441d4b2653",
+      "hash": "sha256:7b934be74f415e733203fa9a6244857de36a4e000f3ee53a535b32761b14c2df",
       "source": "genesis:skills/genesis-program"
     },
     "genesis-project": {
-      "hash": "sha256:70d50ab33fcd1ead2e1b117d54a89a346ccbd3d996cdb9f8daeaa8933bf205a7",
+      "hash": "sha256:27b25bf1d9e16807d355c966a871dac6dae0ce26627fcbc8ba5778e9053d84ac",
       "source": "genesis:skills/genesis-project"
     },
     "genesis-quality-pass": {
-      "hash": "sha256:1480287ad0176648c861e5121153d924a192e69873d6a9a8e57d6076bd3cc7f5",
+      "hash": "sha256:72be0b8a6fc9525bebbcc09451e3bb0b2dad9f01275e2230a0bb8534d9d6af0d",
       "source": "genesis:skills/genesis-quality-pass"
     },
     "genesis-review": {
-      "hash": "sha256:ccb9890c016c9ade47cd440c51823954775b87751e9fa59d2475e9260a81a7c8",
+      "hash": "sha256:446b3fd03f6e72f81b1ce4bcf159483538071aa2facd7e22d3e22c881aecac26",
       "source": "genesis:skills/genesis-review"
     },
     "genesis-security-pass": {
-      "hash": "sha256:31dae5d1614491076d317389d48acf29f738d5e86e2c8cc26cf24014662a8507",
+      "hash": "sha256:62a08863ee5c24b93855afea608fc85bfa89ba9f074b56e7e696c260595cefc2",
       "source": "genesis:skills/genesis-security-pass"
     },
     "genesis-speed-pass": {
-      "hash": "sha256:7fa10389f9347eedd72da51400b8a489af48b37316bb3e9bf895c5e37d54ca32",
+      "hash": "sha256:73d9b6ba2080f0a7831ed5e10248017278107cc5bb6b24f5d243f41afc86e212",
       "source": "genesis:skills/genesis-speed-pass"
     },
     "genesis-ui-pass": {
-      "hash": "sha256:8183c1ffc2592cf9fa58495801a3d3fecc9124c055884d2c4818f67d1e8f7fb6",
+      "hash": "sha256:c26470c57a7baa0350ac1180bbdb9c6050ad51c82b4c50194b203ba560056c94",
       "source": "genesis:skills/genesis-ui-pass"
     },
     "genesis-ux-pass": {
-      "hash": "sha256:6b13dfba306201520c1f17affa573d0b1b56ed06f063c40f6c92e952586806a3",
+      "hash": "sha256:99c6428d4e1b334eb8ad60dcd93d4932bb81c48e32f7827c17cba37845c23dc9",
       "source": "genesis:skills/genesis-ux-pass"
     }
   }

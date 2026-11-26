@@ -1,13 +1,14 @@
 ---
 name: genesis-master-pass
-description: Run the project's passes deeply, one after another, through an explicitly requested Master pass over the whole app or the changes since its last completed run, every pass or the ones named, each as that pass's own Deep run, committed and tested before the next starts, with a ledger that lets an interrupted Master pass continue and one combined report. Use when asked for a Master pass, to run every pass, or to run several passes deeply in turn.
+description: Run the project's passes deeply, one after another, through an explicitly requested Master pass over the whole app or the changes since its last completed run, every pass or the ones named, each as that pass's own Deep run, committed with its focused checks passing before the next starts and one whole-suite run at the end only with the person's OK, with a ledger that lets an interrupted Master pass continue and one combined report. Use when asked for a Master pass, to run every pass, or to run several passes deeply in turn.
 ---
 
 # Genesis Master pass
 
 Run the selected passes deeply, one after another, so the software comes out of
-each one committed and tested before the next starts. A Master pass is
-explicit: never run it merely because implementation finished.
+each one committed, with its focused checks passing, before the next starts,
+and the whole suite runs once, at the end, only with the person's OK. A Master
+pass is explicit: never run it merely because implementation finished.
 
 Resolve the invocation before running the first Genesis operation. Do not use a
 Genesis operation or `genesis --version` as an availability probe.
@@ -70,7 +71,8 @@ Each pass runs as that pass's own Deep run, from its own prompt. Its `DEEP RUN`
 section says how the checklist, evidence, chunks, agents, commits and report
 work, and its skill says what its lens adds and what it may change. The Master
 pass never restates, shortens or loosens that guidance; it adds only the order,
-the checkpoint between passes, the ledger and the combined report.
+the checkpoint between passes, the ledger, the one whole-suite question at its
+end and the combined report.
 
 ## Keep the Master ledger
 
@@ -79,13 +81,16 @@ section names. It lives in Git's own directory, outside the project's tracked
 files, so an interrupted Master pass finds it again. Record the request, the
 commit it starts from, and each listed pass with its status (to do, running,
 questions, done or skipped), the path of its checklist (the one its `DEEP RUN`
-names), its commits and its checklist count. Update it as each pass starts and
-finishes.
+names), its commits and its checklist count, and, at the end, the whole-suite
+question, the person's answer and the run's result. Update it as each pass
+starts and finishes. A pass is done in the ledger once its work is committed
+and its focused checks pass; no pass needs a whole run of its own.
 
 When a ledger for the same request is already there and not finished, continue
-from it: passes marked done stay done, and a pass marked running or questions
-continues its own checklist from its first unticked item. Any other ledger is
-replaced.
+from it: passes marked done stay done, a pass marked running or questions
+continues its own checklist from its first unticked item, and once every pass
+is done or skipped it continues at the whole-suite question. Any other ledger
+is replaced.
 
 ## Run each pass
 
@@ -95,8 +100,11 @@ For each listed pass, in order:
 2. Generate its prompt with the Genesis `prompt` operation and the exact
    request listed for it, for example `prompt --task security-pass "Security
    pass the whole app deeply."`, and follow that prompt in full as this pass's
-   instructions, through its own `PASS RECORD` step, which records the pass on
-   its own so its next run since its last completed one starts there.
+   instructions, except its end: it runs focused checks, never the whole suite,
+   and leaves its whole-suite question and its `PASS RECORD` step to the end of
+   the Master pass. It works as the engineering approach's "Your own test
+   loop" says: it fixes in groups, runs the narrow files that cover each group
+   once, and leaves the full run to the Master pass's end.
 3. Where the host can run several agents, the pass gives its chunks to them as
    its `DEEP RUN` says, as many as the host's test budget and limits allow, and
    you coordinate them. The passes themselves run one after another, never at
@@ -104,8 +112,8 @@ For each listed pass, in order:
 4. Checkpoint before the next pass starts: every change of this pass is
    committed, in small commits of one checklist item or concern each with
    messages that say what changed and why; nothing is left uncommitted; and the
-   pass's final whole-suite run passed on the committed tree. Record its
-   commits and checklist count in the ledger and mark it done.
+   pass's focused checks pass on the committed tree. Record its commits and
+   checklist count in the ledger and mark it done.
 
 Each pass ends as its `PASS REPORT` says: finished, or with questions for the
 person. A pass with questions, including a blocker such as failing checks it
@@ -117,15 +125,21 @@ choice and finishes, and the Master pass goes on.
 
 Skip a pass that does not apply to this software, such as the UI or identity
 pass where the software has no screens, and write the reason in the ledger and
-the report. Never skip a pass because it is long or hard.
+the report. Never skip, shorten or lighten a pass because it is long, hard or
+slow: a slow check is a defect to fix first, as the engineering approach says.
 
 ## Record and report
 
-Once every listed pass is done or skipped, take the prompt's `PASS RECORD` step:
-the Genesis `passes done master-pass <pass id...>` operation, naming the passes
-it ran and leaving out those it skipped, records the Master pass in
-`genesis/passes-added.json`; commit that change as its last commit, so nothing is
-left uncommitted and its next run since the last one starts there.
+Once every listed pass is done or skipped, ask the person about one whole-suite
+run on the committed tree, as `PASS REPORT` says, and note the question and the
+answer in the ledger. Only after that run passed, or after the person
+explicitly accepted finishing without it, record: take each finished pass's
+own `PASS RECORD` step, in order, each as its own commit, then the prompt's
+`PASS RECORD` step: the Genesis `passes done master-pass <pass id...>`
+operation, naming the passes it ran and leaving out those it skipped, records
+the Master pass in `genesis/passes-added.json`; commit that change as its last
+commit, so nothing is left uncommitted and its next run since the last one
+starts there.
 
 End with one combined report. Open with the ending reached (finished, or the
 questions of the pass where it stopped), the passes run and skipped, and how the
@@ -137,6 +151,8 @@ A pass that changes behaviour on purpose, such as the security, data or
 quality pass, states plainly what now behaves differently; a pass that keeps
 behaviour, such as Deslop, states that behaviour is unchanged and how that was
 proven. For a run since the last Master pass, say which files each pass read in
-full and which it only searched against the whole app. Close with the final
-whole-suite run on the committed tree, then one "Outside this scope" list for
-every pass.
+full and which it only searched against the whole app. Close with the
+whole-suite run on the committed tree, or the person's choice to finish without
+it, then one "Outside this scope" list for every pass. End it with one line: how
+many test runs the Master pass made across every pass, their total time and its
+longest single run.

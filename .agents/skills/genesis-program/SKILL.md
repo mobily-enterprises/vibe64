@@ -51,6 +51,13 @@ One short explanation of why the boundary exists.
 Meaningful inputs, outputs, effects, failures, and guarantees.
 ```
 
+Each Sources bullet is a project file path alone in backticks,
+``- `path/to/source` ``, and exactly one is ``- Main: `path/to/source` ``, with
+nothing after the path: name functions and methods in the Public contract or the
+Implementation map, never on a Sources line. Only these bullets sit between
+`## Sources` and `## Public contract`. `genesis check` refuses any other form and
+names the module, its line, and what to change.
+
 Every module requires exactly one `- Main:` source bullet. Choose the main
 source explicitly as the place to start reading the implementation; it need not
 be an executable entry point. It must belong to the module's owning subsystem,

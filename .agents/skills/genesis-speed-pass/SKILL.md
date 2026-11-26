@@ -176,7 +176,11 @@ need is a finding too, since it lets the next slowdown pass unseen.
 Prove it with the whole suite's wall time before and after, on the same
 machine under the same load, with each phase and the slowest files, and the
 same tests and assertions passing. A faster suite that proves less is not
-faster.
+faster. The whole suite runs only with the person's OK: take the time before
+from its last whole run (CI's, or one the person allowed), and when there is
+none, ask before running it, saying it is the measurement before and roughly
+how long it takes; the time after is the timed whole run at the end. During
+the work, time single files and phases.
 
 ## Client speed
 
@@ -286,8 +290,8 @@ For each wait:
    fix. Assert counts rather than tight times, which change with the machine;
    a time bound, where one is needed, is a generous outer limit set from the
    measured need.
-5. Run the checks the Stack guidance names, and finish with one whole run of
-   the suite, timed.
+5. Run the checks the Stack guidance names; then ask the person about one
+   whole run of the suite, timed, as `PASS REPORT` says.
 
 ## Boundaries
 
@@ -325,12 +329,13 @@ For each wait:
 
 Leave the pass as ordinary uncommitted work for review and a later normal
 commit. Never amend or rewrite selected commits. Summarize the resolved scope,
-each wait with how it was measured and its numbers before and after, each
-cause found and its fix, the whole suite's wall time before and after with its
-phases and slowest files, the tests guarding each fix and their failing run
-without it, the paths fixed with the data pass's method, the areas that do not
-apply and why, files changed, checks actually run, and what lies outside this
-scope, with what it needs and who must act.
+each wait with how it was measured and its numbers before and after, each cause
+found and its fix, the whole suite's wall time before and after with its phases
+and slowest files, the tests guarding each fix and their failing run without
+it, the paths fixed with the data pass's method, the areas that do not apply
+and why, files changed, checks actually run, and what lies outside this scope,
+with what it needs and who must act. End the report with one line: how many
+test runs the pass made, their total time and its longest single run.
 
 When the prompt ends with a `PASS RECORD` step, take it once the pass has
 finished: the Genesis `passes done speed-pass` operation records it in `genesis/passes.json`,
@@ -338,7 +343,12 @@ an uncommitted change that lands in the pass's own commit. Genesis adds that
 step only to the pass's own runs, whose requests it writes itself, so a speed
 pass of a section, commits or your own changes is never recorded as the pass;
 neither is a pass that stopped early, was abandoned or still has failing
-checks.
+checks. Take it only after the whole-suite run, asked for once at the end,
+passed with the person's OK, or after the person explicitly accepted finishing
+without it, as `PASS REPORT` says; until the end, run focused checks only.
+Work as the engineering approach's "Your own test loop" says: fix in groups,
+run the narrow files that cover each group once, and leave the full run to the
+pass's end.
 
 ## Deep run
 
