@@ -27,6 +27,9 @@ import { createServiceState } from "../../packages/vibe64-terminals/src/server/s
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 import { sessionHelper } from "./agentSessionUpdateTestHelpers.js";
 import { commandRunner, git } from "./connectedCopiesTestHelpers.js";
+import { fixture as routingFixture, reportOutcome } from "../fixtures/assistantRouting.js";
+import { manageWorkPlan } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
+import { readSourceState } from "../../packages/vibe64-terminals/src/server/planSourceChanges.js";
 
 const execFileAsync = promisify(execFile);
 const PERSON = { id: "person-1" };
@@ -60,8 +63,9 @@ async function bounded(work, waitingFor) {
  * the sessions feature fills them, and `vibe64-helper session ...` over the session command the terminals compose.
  * A session's `agentRuns` say whether its main chat turn runs; `steers` are the notes sent into a running turn.
  * @param {import("node:test").TestContext} t
+ * @param {{ first?: string }} [options] the first session's id (the second is beta)
  */
-async function twoSessions(t) {
+async function twoSessions(t, { first = "alpha" } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-session-save-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const seed = path.join(root, "seed");
@@ -90,12 +94,12 @@ async function twoSessions(t) {
   });
   await Promise.all(["authority", "runtime"].map(name => mkdir(path.join(root, name), { recursive: true })));
   const sessions = {};
-  for (const sessionId of ["alpha", "beta"]) {
+  for (const sessionId of [first, "beta"]) {
     await records.createSession({ metadata: {}, runtimeKind: "genesis", sessionId });
     const metadata = {
       assistant_routing: JSON.stringify({ mode: "auto", afterPlan: AFTER_PLAN, afterPlanDeep: [], autoSave: true }),
       assistant_routing_request: JSON.stringify({ submittedBy: PERSON }),
-      label: sessionId === "alpha" ? "Passes" : "Inbox"
+      label: sessionId === first ? "Passes" : "Inbox"
     };
     const created = await createSessionSource({
       env: process.env,
@@ -223,7 +227,9 @@ async function twoSessions(t) {
     repositoryUpdates,
     runtime,
     sessions,
-    steers
+    state,
+    steers,
+    work
   };
 }
 
@@ -317,4 +323,29 @@ test("while automatic save is off the command saves nothing, through the real Sa
   assert.deepEqual([refused.code, refused.json.status, refused.json.code], [1, "not_allowed", "vibe64_agent_session_save_off"]);
   assert.equal(await p.canonical("main"), initial);
   assert.equal(await p.runtime.store.readBackgroundTask("alpha", "save-work"), null, "no Save started");
+});
+
+test("a person's Save while the session's turn runs, through the real Save, is not the turn's change: no plan check and no Senior's review follow its commit", async (t) => {
+  const p = await twoSessions(t, { first: "session-1" });
+  const session = p.sessions["session-1"];
+  const { source_kind, source_path, source_path_authority } = session.metadata;
+  // The session's Main chat routing, sharing the service's registry of the writes that run while the AI works.
+  const f = await routingFixture(t, { mode: "senior" }, { readyPlan: false, writes: p.state.writesWhileAssistantWorks,
+    sourceMetadata: { source_kind, source_path, source_path_authority } });
+  await manageWorkPlan(f.context, { operation: "new", text: "# Contact threads\n\n- [ ] Store contact threads\n" }, "senior",
+    { sourceState: () => readSourceState(f.context.session) });
+  // An earlier turn's work, not saved yet; the turn implementing the plan starts.
+  await writeFile(path.join(session.sourcePath, "feature.txt"), "an earlier turn's work\n");
+  await f.service.send("session-1", { messageId: "request-1", message: "Build the contact threads", submissionKind: "send" }, f.context);
+  // The person saves while the turn runs: the real Save commits that work and publishes it.
+  session.agentRuns = [{ active: true }];
+  const saved = await bounded(p.work.saveToCurrentDestination("session-1", { vibe64User: PERSON }), "the person's Save");
+  assert.equal(saved.ok, true, saved.error);
+  assert.equal(await p.canonicalFile("feature.txt"), "an earlier turn's work");
+  // The turn changes nothing itself, reports its outcome on the plan and ends.
+  await reportOutcome(f, "wait", { involved: true, explanation: "Which store should the threads use?" });
+  session.agentRuns = [];
+  await f.service.afterTurn("session-1", { payload: { agentRun: { active: false, state: "completed", providerTurnId: f.state().turnId } } },
+    f.context);
+  assert.deepEqual([f.sends.length, f.state().status], [1, "waiting"], "the Save's commit is not the turn's change");
 });

@@ -87,6 +87,10 @@ async function fixture(t, preferences = { mode: "auto" }, {
   readyPlan = true,
   onPlanCompleted,
   source: withSource = false,
+  // Another session source's metadata (one the real Save saves, say) in place of the fixture's own repository.
+  sourceMetadata,
+  // The Saves and Updates that run while the AI works: the real service's registry, when a test runs the real Save.
+  writes = createWritesWhileAssistantWorks(),
   // false: a temporary chat, where Auto and plans are unavailable
   allowAuto = true,
   // The editor process's run (turnInterruptions.js); none by default, as routing has none without a system root.
@@ -111,7 +115,7 @@ async function fixture(t, preferences = { mode: "auto" }, {
   const configuration = createAssistantRoutingStore({ systemRoot: root });
   await configuration.write({ owner: assignments, nonOwner: {} }, 0);
   const sourceRepository = withSource ? await managedSource(root, "session-1") : null;
-  const metadata = { assistant_selection: JSON.stringify(assignments.senior), ...sourceRepository?.metadata,
+  const metadata = { assistant_selection: JSON.stringify(assignments.senior), ...sourceRepository?.metadata, ...sourceMetadata,
     // A saved chat mode carries its after-plan passes and save choice; unless a
     // test says otherwise, they are a new chat's defaults.
     ...(preferences ? { assistant_routing: JSON.stringify({ ...ASSISTANT_FINISHING_DEFAULTS, ...preferences }) } : {}) };
@@ -218,7 +222,6 @@ async function fixture(t, preferences = { mode: "auto" }, {
   const interrupts = [];
   const discards = [];
   let dispatchGate = null;
-  const writes = createWritesWhileAssistantWorks();
   // Genesis's pass list for the session's source; a test may change it, count its reads or make them fail.
   const genesis = { unavailable: null, passes: GENESIS_PASSES, master: GENESIS_MASTER_PASS };
   const passReads = { count: 0, failure: null };
