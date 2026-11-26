@@ -84,6 +84,7 @@ consumer operations.
 each `{ label, argv }` in order, and the Stack identity (`stackHash`) Genesis's
 verify records with them, from Genesis's `inspectVerification`: one Stack read
 that runs, writes and checks nothing, so a host can recognise a declared check.
+A host imports it from `@local/vibe64-genesis/server`.
 A genesis-compiler without that operation fails it, naming the update.
 
 

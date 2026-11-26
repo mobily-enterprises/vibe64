@@ -74,6 +74,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-terminals/src/server/helperCommandGroups.js`
 - `packages/vibe64-terminals/src/server/sessionCommandRuns.js`
 - `tests/server/helperCommandGroups.unit.test.js`
+- `tests/server/hostExtensionExports.unit.test.js`
 - `tests/server/sessionNaming.unit.test.js`
 - `tests/server/sessionRename.unit.test.js`
 - `tests/e2e/session-naming.spec.ts`
@@ -721,7 +722,8 @@ so a manual rename wins. IDs, directories, source branches and URLs never move.
 
 A composed host may add its own `vibe64-helper` groups through the terminals
 feature's optional `vibe64.terminals.helper-command-groups` token, a list of
-`{ name, summary, help, run }` (`helperCommandGroups.js`). Composition refuses a
+`{ name, summary, help, run }` (`helperCommandGroups.js`, which a host imports as
+`@local/vibe64-terminals/server/helperCommandGroups` for the token). Composition refuses a
 name `vibe64-helper` already has, so a host adds groups and never replaces one;
 without the token `vibe64-helper` lists and refuses exactly its own. A host's
 groups follow its own in `vibe64-helper --help`, and `<group> --help` prints the
