@@ -87,6 +87,17 @@ Running and closing acknowledgements are not readiness or completed cleanup;
 the model inspects the actual preview/terminal state. Stop retains the log;
 Close waits for cleanup and removes the terminal and its log. Coding agents and
 immutable download results remain separately owned.
+A web target's port is its Stack's Preferred port, else the next free one above
+it: the daemon checks it free and holds it until the run releases it
+(`reserveAvailableWebLaunchTargetPort`, `launchTargetTerminal.js`), and the Run
+command binds it later, in its own process. It is therefore never a port in the
+host's ephemeral range (`/proc/sys/net/ipv4/ip_local_port_range` wherever it
+exists, IANA's 49152-65535 off Linux), where an outgoing connection can take it
+in between and the run then cannot listen; a preferred port inside that range
+is passed over like a taken one. A run whose process exits with an error is
+`failed`, and its message gives the exit code and the last error line its output
+printed (`previewExitMessage`, `launchPreviewStatus.js`), as `The preview process
+exited with code 1: listen EADDRINUSE: address already in use 127.0.0.1:4103.`
 
 Project Close keeps shared-service admission blocked until those services drain.
 If they drain but a different project cleanup controller fails, the project stays

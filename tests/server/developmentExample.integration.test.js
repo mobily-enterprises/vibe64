@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import getPort from "get-port";
 import http from "node:http";
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
 import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
@@ -17,6 +16,7 @@ import {
   inspectGenesisProject, inspectGenesisSubsystems, inspectVibe64Outputs, inspectVibe64WorkspaceSetup
 } from "@local/vibe64-genesis/server";
 import { prepareExampleProject } from "../../tooling/dev-example.mjs";
+import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 import "../../examples/hello-node/test/server.test.js";
 
 const run = promisify(execFile);
@@ -74,7 +74,9 @@ test("the development preview serves its own backend, frontend and project", { t
   // A Unix socket path holds at most 107 bytes and TMPDIR can be a long path (macOS
   // gives each user one), so the sockets get a folder under /tmp, as Vibe64's own fallback does.
   const runtimeDir = await mkdtemp(path.join(process.platform === "win32" ? tmpdir() : "/tmp", "v64-xdg-"));
-  const port = await getPort();
+  // dev-example is told its port (its backend and Vite share the origin made from it), so it is chosen here, below the
+  // ephemeral range, where no outgoing connection takes it before the example binds it.
+  const port = await portBelowEphemeralRange();
   const claudeCommand = path.join(root, "claude.cjs");
   await writeFile(claudeCommand, `#!${process.execPath}
 if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", "--json"])) {

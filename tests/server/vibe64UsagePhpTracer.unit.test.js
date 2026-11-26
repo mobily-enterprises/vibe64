@@ -20,6 +20,7 @@ import {
   phpUsageScanDirectory
 } from "../../packages/vibe64-usage-recording/runtime/php/module.js";
 import { RECORDED_PATH_CASES, SECRET_SEGMENTS } from "./usageRecordedPathCases.js";
+import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 
 const TEST_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = path.resolve(TEST_DIR, "../fixtures/usage-recording/php-http");
@@ -120,17 +121,6 @@ function readTrace(directory) {
 
 function runPhp(args, { env, cwd = FIXTURE }) {
   return spawnSync("php", args, { cwd, env, encoding: "utf8", timeout: 30000 });
-}
-
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const { port } = server.address();
-      server.close(() => resolve(port));
-    });
-  });
 }
 
 async function startServer(args, { env, cwd = FIXTURE, port }) {
@@ -529,7 +519,7 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
 
   test("requests under php -S -t public are recorded one by one, with the project's auto_prepend_file", async () => {
     const directory = newRecordingDirectory();
-    const port = await freePort();
+    const port = await portBelowEphemeralRange();
     const env = { ...recordedEnvironment({ recordingDirectory: directory }), PHP_CLI_SERVER_WORKERS: "3" };
     const jobs = Array.from({ length: 12 }, (_, index) => ({ id: `r_${String(index + 1).padStart(6, "0")}`, service: index % 2 ? "beta" : "alpha" }));
     await withServer(["-d", `auto_prepend_file=${FIXTURE}/prepend.php`, "-S", `127.0.0.1:${port}`, "-t", "public"], { env, port }, async () => {
@@ -563,7 +553,7 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
 
   test("requests through a router script, as php artisan serve runs them, are recorded one by one", async () => {
     const directory = newRecordingDirectory();
-    const port = await freePort();
+    const port = await portBelowEphemeralRange();
     await withServer(["bin/serve.php", String(port)], { env: recordedEnvironment({ recordingDirectory: directory }), port }, async () => {
       for (const [index, service] of ["alpha", "beta", "alpha"].entries()) {
         const response = await request(port, `/${service}`, { headers: { "x-vibe64-recording-request": `r_00000${index + 1}` } });
@@ -585,7 +575,7 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
 
   test("a stopped recording leaves a running server idle", async () => {
     const directory = newRecordingDirectory();
-    const port = await freePort();
+    const port = await portBelowEphemeralRange();
     await withServer(["-S", `127.0.0.1:${port}`, "-t", "public"], { env: recordedEnvironment({ recordingDirectory: directory }), port }, async () => {
       await request(port, "/alpha", { headers: { "x-vibe64-recording-request": "r_000001" } });
       fs.writeFileSync(path.join(directory, "control.json"), "{\"state\":\"stopping\"}\n");
@@ -599,7 +589,7 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
 
   test("a php -S worker that first runs after the stop writes no file", async () => {
     const directory = newRecordingDirectory();
-    const port = await freePort();
+    const port = await portBelowEphemeralRange();
     const env = { ...recordedEnvironment({ recordingDirectory: directory }), PHP_CLI_SERVER_WORKERS: "2" };
     await withServer(["-S", `127.0.0.1:${port}`, "-t", "public"], { env, port }, async () => {
       fs.writeFileSync(path.join(directory, "control.json"), "{\"state\":\"stopping\"}\n");
@@ -614,7 +604,7 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
 
   test("records no query, header, cookie, body, argument or environment value", async () => {
     const directory = newRecordingDirectory();
-    const port = await freePort();
+    const port = await portBelowEphemeralRange();
     const env = { ...recordedEnvironment({ recordingDirectory: directory, extra: { FIXTURE_SECRET: "SECRET-ENV" } }) };
     await withServer(["-S", `127.0.0.1:${port}`, "-t", "public"], { env, port }, async () => {
       for (const id of ["r_000001", "r_00000SECRET-ID"]) {
@@ -636,7 +626,7 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
 
   test("a local request's label is written with its opaque segments redacted", async () => {
     const directory = newRecordingDirectory();
-    const port = await freePort();
+    const port = await portBelowEphemeralRange();
     await withServer(["-S", `127.0.0.1:${port}`, "-t", "public"], { env: recordedEnvironment({ recordingDirectory: directory }), port }, async () => {
       for (const [requestPath] of RECORDED_PATH_CASES) await request(port, requestPath);
     });

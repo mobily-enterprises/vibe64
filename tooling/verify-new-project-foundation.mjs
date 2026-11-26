@@ -7,7 +7,7 @@ import {
   readdir,
   rm
 } from "node:fs/promises";
-import getPort from "get-port";
+import { randomInt } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 
@@ -16,6 +16,7 @@ import {
 } from "@local/vibe64-project/server/managedProject";
 
 import { applyGenesisTemplate, inspectGenesisProject } from "@local/vibe64-genesis/server";
+import { reserveAvailableWebLaunchTargetPort } from "../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 
 const START_TIMEOUT_MS = 30_000;
 
@@ -118,7 +119,11 @@ async function main() {
     await run("npm", ["ls"], { cwd: checkoutRoot });
     await run("npm", ["run", "verify"], { cwd: checkoutRoot });
 
-    const port = await getPort();
+    // The new app is told its port and answers on a health URL made from it, so its port is chosen here, by the rule a
+    // Preview's is: free and outside the ephemeral range, where an outgoing connection can take it before the app binds it.
+    const reservation = await reserveAvailableWebLaunchTargetPort(24_000 + randomInt(8_000));
+    reservation.release();
+    const port = reservation.port;
     server = spawn("npm", ["start"], {
       cwd: checkoutRoot,
       env: {

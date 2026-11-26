@@ -55,7 +55,8 @@ function webOutputTarget(overrides = {}) {
     mode: "interactive",
     presentation: {
       kind: "web",
-      preferredPort: 49_000 + crypto.randomInt(500),
+      // Random among files run at once, below every host's ephemeral range (portBelowEphemeralRange's reason).
+      preferredPort: 24_000 + crypto.randomInt(8_000),
       readiness: {
         kind: "http",
         method: "GET",

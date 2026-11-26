@@ -8,12 +8,12 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
-import getPort from "get-port";
 
 import {
   __testables as launchTargetTerminalTestables,
   createVibe64WebLaunchTargetTerminalSpec
 } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
+import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
@@ -479,7 +479,7 @@ test("launch start awaits preparation, publishes proxied ingress, and cannot ret
     assert.notEqual(outputsEnd, -1);
     await writeFile(
       stackPath,
-      `${stack.slice(0, outputsStart)}## Outputs\n\n### Target \`app\`: Run app\n\n- Default.\n- Mode: \`interactive\`\n- Runtimes: \`nodejs\`\n- Run \`Develop\`: \`npm\` \`run\` \`develop\`\n\n#### Presentation\n\n- Kind: \`web\`\n- Preferred port: \`${await getPort()}\`\n- URL path: \`/\`\n- Ready when: \`GET\` \`/api/health\` returns \`200\`\n${stack.slice(outputsEnd)}`,
+      `${stack.slice(0, outputsStart)}## Outputs\n\n### Target \`app\`: Run app\n\n- Default.\n- Mode: \`interactive\`\n- Runtimes: \`nodejs\`\n- Run \`Develop\`: \`npm\` \`run\` \`develop\`\n\n#### Presentation\n\n- Kind: \`web\`\n- Preferred port: \`${await portBelowEphemeralRange()}\`\n- URL path: \`/\`\n- Ready when: \`GET\` \`/api/health\` returns \`200\`\n${stack.slice(outputsEnd)}`,
       "utf8"
     );
     const currentSetup = await inspectVibe64WorkspaceSetup({
@@ -983,7 +983,7 @@ test("web launch resolves preview identity from the explicit launch declaration"
       launch: {
         previewIdentity: previewIdentityCapability()
       },
-      preferredPort: 47000 + crypto.randomInt(500),
+      preferredPort: await portBelowEphemeralRange(),
       session: fixture.session,
       targetRoot: fixture.targetRoot
     });
@@ -1013,7 +1013,7 @@ test("preview identity exchange does not reload or provision the project environ
       launch: {
         previewIdentity: previewIdentityCapability()
       },
-      preferredPort: 47000 + crypto.randomInt(500),
+      preferredPort: await portBelowEphemeralRange(),
       session: fixture.session,
       targetRoot: fixture.targetRoot
     });
@@ -1081,7 +1081,7 @@ test("web launch rejects a declared preview identity without its executable", as
       launch: {
         previewIdentity: previewIdentityCapability()
       },
-      preferredPort: 47500 + crypto.randomInt(500),
+      preferredPort: await portBelowEphemeralRange(),
       session: fixture.session,
       targetRoot: fixture.targetRoot
     });
@@ -1112,7 +1112,7 @@ test("web launch rejects preview identity executable symlinks", async () => {
       launch: {
         previewIdentity: previewIdentityCapability()
       },
-      preferredPort: 47500 + crypto.randomInt(500),
+      preferredPort: await portBelowEphemeralRange(),
       session: fixture.session,
       targetRoot: fixture.targetRoot
     });
@@ -1339,7 +1339,7 @@ test("preview public origin isolates localhost instances by public port", () => 
 
 test("web launch target port allocation reserves ports during concurrent spec creation", async () => {
   const fixture = await createLaunchSpecFixture();
-  const preferredPort = 48000 + crypto.randomInt(1000);
+  const preferredPort = await portBelowEphemeralRange();
   let firstSpec;
   let secondSpec;
   let releasedSpec;
@@ -1388,7 +1388,7 @@ test("web launch target passes resolved env to the host launch command and redac
 
   try {
     spec = await createSpec({
-      preferredPort: 49000 + crypto.randomInt(1000),
+      preferredPort: await portBelowEphemeralRange(),
       session: fixture.session,
       targetRoot: fixture.targetRoot
     });

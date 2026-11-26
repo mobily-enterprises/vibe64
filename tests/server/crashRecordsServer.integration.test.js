@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -10,6 +9,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { readVibe64CrashRecords } from "@local/vibe64-core/server/crashRecords";
+import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 
 // A real editor server's crashes, end to end (server.js's crash watch, crashRecords.js, the Studio Health crash
 // routes): one that throws an uncaught socket error records it and still exits 1, the next start shows it, one
@@ -18,16 +18,6 @@ import { readVibe64CrashRecords } from "@local/vibe64-core/server/crashRecords";
 
 const APP_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const SERVER = path.join(APP_ROOT, "tests/e2e/support/start-crash-test-server.mjs");
-
-async function freePort() {
-  const server = net.createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const { port } = server.address();
-  server.close();
-  await once(server, "close");
-  return port;
-}
 
 async function waitUntil(check, label, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
@@ -81,7 +71,7 @@ test("a real server's uncaught error and SIGKILL are both recorded, shown, and a
   t.after(() => rm(root, { force: true, recursive: true }));
   const systemRoot = path.join(root, "state");
   const running = () => readdir(path.join(systemRoot, "crashes", "running"));
-  const servers = crashTestServers(t, root, await freePort());
+  const servers = crashTestServers(t, root, await portBelowEphemeralRange());
 
   const first = await servers.start();
   assert.equal((await running()).length, 1, "a running server holds its marker");

@@ -87,3 +87,21 @@ test("only a local editor on a TCP port needs a start's access key", () => {
   assert.equal(localAccessTokenForStart({ env: {}, listenTarget: tcp, runtimeProfile: { local: false } }), "");
   assert.equal(localAccessTokenForStart({ env: {}, listenTarget: tcp, required: false, runtimeProfile: local }), "");
 });
+
+// PORT=0 asks the system for a free port, so a caller that starts Vibe64 reads the one it bound from what it reports,
+// never choosing one first that another process may take before the server binds it.
+test("a server told to listen on port 0 reports the port it bound, in its address and its listen record", async () => {
+  const previousToken = process.env[LOCAL_ACCESS_TOKEN_ENV];
+  delete process.env[LOCAL_ACCESS_TOKEN_ENV];
+  const app = await startServer({ host: "127.0.0.1", port: 0, strictPort: true });
+  try {
+    const bound = app.server.address().port;
+    assert.notEqual(bound, 0);
+    assert.equal(app.vibe64Listen.port, bound);
+    assert.equal(Number(new URL(app.vibe64Url).port), bound);
+  } finally {
+    await app.close();
+    if (previousToken === undefined) delete process.env[LOCAL_ACCESS_TOKEN_ENV];
+    else process.env[LOCAL_ACCESS_TOKEN_ENV] = previousToken;
+  }
+});

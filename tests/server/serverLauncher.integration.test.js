@@ -6,7 +6,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
-import getPort from "get-port";
 
 const PUBLIC_ROOT = path.resolve(import.meta.dirname, "../..");
 
@@ -19,15 +18,16 @@ test("Vibe64's own start command starts it as production under the pinned JSKIT"
   const runtimeDir = await mkdtemp(path.join(process.platform === "win32" ? tmpdir() : "/tmp", "v64-xdg-"));
   const project = path.join(root, "project");
   await mkdir(project);
-  const port = await getPort();
+  // PORT=0: the server binds a free port itself and prints the address it serves, so no port is chosen here first.
+  const namespace = `launcher-${process.pid}-${Date.now()}`;
   const inherited = { ...process.env };
   delete inherited.APP_ENV;
   delete inherited.NODE_ENV;
   const child = spawn(process.execPath, ["bin/server.js", "--no-open", project], {
     cwd: PUBLIC_ROOT,
     env: {
-      ...inherited, PORT: String(port), HOST: "127.0.0.1", VIBE64_LOG_LEVEL: "info",
-      VIBE64_SYSTEM_ROOT: path.join(root, "state"), VIBE64_RUNTIME_NAMESPACE: `launcher-${port}`, XDG_RUNTIME_DIR: runtimeDir
+      ...inherited, PORT: "0", HOST: "127.0.0.1", VIBE64_LOG_LEVEL: "info",
+      VIBE64_SYSTEM_ROOT: path.join(root, "state"), VIBE64_RUNTIME_NAMESPACE: namespace, XDG_RUNTIME_DIR: runtimeDir
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -43,7 +43,9 @@ test("Vibe64's own start command starts it as production under the pinned JSKIT"
       await delay(100);
     }
     assert.match(logs, /APP_ENV is production: email, SMS, push notifications, webhooks, connector writes and payments act for real\./u, logs);
-    const health = await fetch(`http://127.0.0.1:${port}/api/health`);
+    const address = new URL(logs.match(/Vibe64 is running at (\S+)/u)[1]);
+    assert.notEqual(address.port, "0", logs);
+    const health = await fetch(new URL("/api/health", address));
     assert.equal(health.status, 200);
     assert.ok(health.headers.get("strict-transport-security"), "a production server sends HSTS");
   } finally {

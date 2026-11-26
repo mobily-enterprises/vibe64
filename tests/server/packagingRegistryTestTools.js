@@ -5,10 +5,10 @@
 import { execFile, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 
 const run = promisify(execFile);
 const TOOLS = path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), "vibe64-test-tools");
@@ -20,18 +20,6 @@ async function temporaryFolder(t, prefix) {
   const folder = await mkdtemp(path.join(os.tmpdir(), prefix));
   t.after(() => rm(folder, { recursive: true, force: true }));
   return folder;
-}
-
-function freePort() {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.unref();
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const { port } = server.address();
-      server.close(() => resolve(port));
-    });
-  });
 }
 
 // Starts a server in its own process group and stops the whole group at teardown.
@@ -75,7 +63,7 @@ async function verdaccioBinary() {
 async function startVerdaccio(t) {
   const binary = await verdaccioBinary();
   const root = await temporaryFolder(t, "vibe64-verdaccio-");
-  const port = await freePort();
+  const port = await portBelowEphemeralRange();
   const config = path.join(root, "config.yaml");
   await writeFile(config, [
     `storage: ${path.join(root, "storage")}`,
@@ -144,7 +132,7 @@ async function startPypiServer(t) {
     "h.save()"
   ].join("\n"), htpasswd, secretFile], { timeout: 30_000 });
   await rm(secretFile);
-  const port = await freePort();
+  const port = await portBelowEphemeralRange();
   const url = `http://127.0.0.1:${port}/`;
   await startServer(t, {
     command: tools.python,

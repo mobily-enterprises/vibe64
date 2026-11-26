@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -11,19 +10,10 @@ import { fileURLToPath } from "node:url";
 
 import playwrightConfig from "../../playwright.config.mjs";
 import { DEFAULT_SHUTDOWN_TIMEOUT_MS } from "../../server.js";
+import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 
 const APP_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const HARNESS = path.join(APP_ROOT, "tests/e2e/support/start-web-server.mjs");
-
-async function freePort() {
-  const server = net.createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const { port } = server.address();
-  server.close();
-  await once(server, "close");
-  return port;
-}
 
 async function serverFolders(tmp) {
   return (await readdir(tmp)).filter(name => name.startsWith("vibe64-e2e-"));
@@ -42,7 +32,7 @@ async function waitUntil(check, label, timeoutMs = 60_000) {
 // TMPDIR, PORT and HOST, no stdin, and its output piped.
 async function startHarness(t) {
   const tmp = await mkdtemp(path.join(os.tmpdir(), "vibe64-harness-test-"));
-  const port = await freePort();
+  const port = await portBelowEphemeralRange();
   const child = spawn(process.execPath, [HARNESS], {
     cwd: APP_ROOT,
     env: { ...process.env, HOST: "127.0.0.1", PORT: String(port), TEST_PARALLEL_INDEX: "0", TMPDIR: tmp },

@@ -8,7 +8,6 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import test from "node:test";
 import { promisify } from "node:util";
-import getPort from "get-port";
 import { initializeGenesisProject, inspectVibe64Outputs, inspectVibe64WorkspaceSetup } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createOutputTargetTerminalController } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 import { createAgentPreviewCommandService, prepareAgentPreviewCommand } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
@@ -19,6 +18,7 @@ import { runDetachedCommand, stopDetachedExecution } from "../../packages/vibe64
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 import { currentProjectRequestContext, runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { vibe64Driver } from "../../packages/vibe64-genesis/src/server/promptContext.js";
+import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 
 const execFileAsync = promisify(execFile);
@@ -53,9 +53,9 @@ async function fixture(t, name, workflowHooks = {}) {
   initializeGit.child.stdin.end();
   await initializeGit;
   await initializeGenesisProject({ projectRoot: sourceRoot });
-  // Its own free port, not the default 4100: test files run at the same time,
-  // and a port another file's Preview chose between its check and its start is lost.
-  const previewPort = await getPort();
+  // Its own free port, not the default 4100: test files run at the same time, and a port another file's Preview chose
+  // between its check and its start is lost. Below the ephemeral range, where no outgoing connection takes it first.
+  const previewPort = await portBelowEphemeralRange();
   const target = (id, mode = id) => `### Target \`${id}\`: ${id}
 ${id === "app" ? "- Default.\n" : ""}- Mode: \`interactive\`
 - Data: \`${id === "app" ? "development" : "test"}\`

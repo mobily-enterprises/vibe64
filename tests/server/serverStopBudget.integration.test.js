@@ -16,6 +16,7 @@ import {
   resumePolicy
 } from "../../packages/vibe64-terminals/src/server/turnInterruptions.js";
 import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/src/server/runtime/processEnded.js";
+import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 
 // A busy editor's stop, end to end, in a real server process (fixtures/stopBudgetServer.mjs): a request waiting on a
 // long command, a background job's long command and a poller starting a command every 50 ms. On release 10's stop of a
@@ -28,16 +29,6 @@ import { linuxProcessStat, processEnded } from "../../packages/vibe64-execution/
 const APP_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const SERVER = fileURLToPath(new URL("./fixtures/stopBudgetServer.mjs", import.meta.url));
 const STOP_BUDGET_MS = 1000;
-
-async function freePort() {
-  const server = net.createServer();
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const { port } = server.address();
-  server.close();
-  await once(server, "close");
-  return port;
-}
 
 async function waitUntil(check, label, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
@@ -98,7 +89,7 @@ test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves
 }, async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-stop-budget-"));
   t.after(() => rm(root, { force: true, recursive: true }));
-  const port = await freePort();
+  const port = await portBelowEphemeralRange();
   const origin = `http://127.0.0.1:${port}`;
   const server = spawn(process.execPath, [SERVER], {
     cwd: APP_ROOT,

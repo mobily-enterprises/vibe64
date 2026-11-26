@@ -4,13 +4,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import getPort from "get-port";
 
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
 import { initializeGenesisProject } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { portBelowEphemeralRange } from "./portBelowEphemeralRange.js";
 import { terminalsServiceCollaborators } from "./terminalsServiceCollaborators.js";
 import { projectServiceCollaborators } from "../server/vibe64TestHelpers.js";
 
@@ -35,9 +35,9 @@ export async function createPreviewPreparationFixture({
   await execFileAsync("git", ["init", "--initial-branch=main", sourceRoot]);
   await initializeGenesisProject({ projectRoot: sourceRoot });
   const stackPath = path.join(sourceRoot, "genesis", "stack.md");
-  // Its own free port, not the default 4100: test files run at the same time,
-  // and a port another file's Preview chose between its check and its start is lost.
-  const previewPort = await getPort();
+  // Its own free port, not the default 4100: test files run at the same time, and a port another file's Preview chose
+  // between its check and its start is lost. Below the ephemeral range, where no outgoing connection takes it first.
+  const previewPort = await portBelowEphemeralRange();
   await writeFile(stackPath, `# Stack
 
 ## Stack packages
@@ -102,8 +102,10 @@ const server = require("node:http").createServer((request, response) => {
   response.setHeader("content-type", "text/html");
   response.end(request.url === "/installed" ? installed : "<h1>Preview works: " + process.env.PREVIEW_VALUE + "</h1>");
 });
-// While hold-preview exists the server is still starting, as a slow dev server is.
-const listen = () => fs.existsSync("hold-preview") ? setTimeout(listen, 20) : server.listen(Number(process.argv[3]), process.argv[2]);
+// While hold-preview exists the server is still starting, as a slow dev server is. While listen-port exists it listens
+// on the port it names instead of its own, as a server does whose port another process took first.
+const port = () => Number(fs.existsSync("listen-port") ? fs.readFileSync("listen-port", "utf8") : process.argv[3]);
+const listen = () => fs.existsSync("hold-preview") ? setTimeout(listen, 20) : server.listen(port(), process.argv[2]);
 listen();
 `);
   const project = createProjectService({ ...projectServiceCollaborators(), logger,

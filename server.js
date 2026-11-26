@@ -712,7 +712,7 @@ async function startServer(options = {}) {
     app.vibe64Listen = {
       address: listenAddress,
       host: listenTarget.host,
-      port: selectedPort,
+      port: app.server.address().port,
       transport: "tcp"
     };
   }
