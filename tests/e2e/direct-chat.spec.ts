@@ -1185,6 +1185,111 @@ test.describe("direct chat", () => {
     });
   }
 
+  // A touch laptop's Chrome reports (hover: none) and (pointer: coarse), as a phone's does; a mouse reports neither.
+  // Every tab shows its work state on all three, and that icon is the button that opens the tab's info.
+  for (const device of [
+    { name: "touch laptop", width: 1280, hasTouch: true, isMobile: false },
+    { name: "phone", width: 390, hasTouch: true, isMobile: true },
+    { name: "mouse", width: 1280, hasTouch: false, isMobile: false }
+  ]) {
+    test.describe(`session tab work state on a ${device.name}`, () => {
+      test.use({ hasTouch: device.hasTouch, isMobile: device.isMobile });
+      test("shows each tab's work-state icon, which opens its info by tap, click or keyboard without selecting or archiving", async ({ page }, testInfo) => {
+        await page.setViewportSize({ width: device.width, height: 844 });
+        const secondSessionId = "work-state-second-session";
+        await mockDirectChat(page, {
+          additionalSessionIds: [secondSessionId],
+          workState: { operation: null, unsaved: false, updateOperation: null }
+        });
+        await routeApiEndpoint(page, `/vibe64/sessions/${secondSessionId}/work`, (route) => fulfillJson(route, {
+          changedPaths: ["index.html", "src/app.js"], ok: true, operation: null, unsaved: true, updateOperation: null
+        }));
+        // The page publishes each selection; the second session must never be one.
+        const selections: string[] = [];
+        page.on("request", (request) => {
+          if (request.method() === "PUT" && new URL(request.url()).pathname.endsWith("/sessions/current")) {
+            selections.push(String(request.postDataJSON()?.sessionId || ""));
+          }
+        });
+        await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}`);
+        expect(await page.evaluate(() => matchMedia("(hover: none), (pointer: coarse)").matches)).toBe(device.hasTouch);
+        const selectedTab = page.locator(`[data-vibe64-session-id="${SESSION_ID}"]:visible`).first();
+        const otherTab = page.locator(`[data-vibe64-session-id="${secondSessionId}"]:visible`).first();
+        await expect(selectedTab).toHaveAttribute("aria-label", "Direct chat. All work is saved.");
+        await expect(otherTab).toHaveAttribute("aria-label", "Second session. 2 changes.");
+        await expect(selectedTab).toHaveClass(/studio-ai-sessions__tab--active/u);
+        // Each tab's width and its state icon's box, which this change keeps as a mouse showed them before.
+        const layout = await page.locator(".studio-ai-sessions__tab:visible").evaluateAll((tabs) => tabs.map((tab) => {
+          const icon = tab.querySelector(".studio-ai-sessions__repository-state")?.getBoundingClientRect();
+          return { tab: tab.getAttribute("aria-label"), width: tab.getBoundingClientRect().width, icon: icon ? [icon.width, icon.height] : null };
+        }));
+        console.log(`session tabs on a ${device.name}: ${JSON.stringify(layout)}`);
+        const press = (control: Locator) => device.hasTouch ? control.tap() : control.click();
+        const infoFor = (label: string) => page.locator(".studio-ai-sessions__info:visible").filter({ hasText: label });
+
+        for (const { tab, label, state, work } of [
+          { tab: selectedTab, label: "Direct chat", state: "saved", work: "All work is saved" },
+          { tab: otherTab, label: "Second session", state: "unsaved", work: "2 changes" }
+        ]) {
+          const stateButton = tab.getByRole("button", { name: `Session info: ${label}. ${work}`, exact: true });
+          await expect(stateButton).toBeVisible();
+          await expect(stateButton).toHaveClass(new RegExp(`studio-ai-sessions__repository-state--${state}`, "u"));
+          await expect(stateButton).toHaveAttribute("title", work);
+          await expect(stateButton).toHaveAttribute("aria-expanded", "false");
+          // The icon is the tab's one info control: no separate info button.
+          await expect(tab.getByRole("button", { name: /^Session info:/u })).toHaveCount(1);
+          // The button is as large as its icon, so the tab keeps the width it had while the icon was not a button.
+          const [buttonBox, iconBox] = await Promise.all([stateButton.boundingBox(), stateButton.locator(".v-icon").boundingBox()]);
+          expect([buttonBox!.width, buttonBox!.height]).toEqual([iconBox!.width, iconBox!.height]);
+          if (state === "saved") {
+            // The selected tab's Archive follows the icon, and its touch target never covers it.
+            const box = (await stateButton.boundingBox())!;
+            for (const x of [box.x + 1, box.x + box.width / 2, box.x + box.width - 1]) {
+              const hit = await page.evaluate(([pointX, pointY]) => document.elementFromPoint(pointX, pointY)?.closest("button")?.getAttribute("aria-label") || "", [x, box.y + box.height / 2]);
+              expect(hit).toBe(`Session info: ${label}. ${work}`);
+            }
+          }
+          await press(stateButton);
+          const info = infoFor(label);
+          await expect(info).toBeVisible();
+          await expect(info.locator("dd", { hasText: work })).toBeVisible();
+          await expect(stateButton).toHaveAttribute("aria-expanded", "true");
+          await expect(page.getByRole("dialog").filter({ hasText: "Archive session?" })).toHaveCount(0);
+          await page.screenshot({ path: testInfo.outputPath(`work-state-${device.name.replace(" ", "-")}-${state}.png`), animations: "disabled" });
+          await press(stateButton);
+          await expect(info).toHaveCount(0);
+          await expect(stateButton).toHaveAttribute("aria-expanded", "false");
+
+          // Enter and Space reach the icon, not the tab, which would select its session instead.
+          await stateButton.focus();
+          await page.keyboard.press("Enter");
+          await expect(info).toBeVisible();
+          await page.keyboard.press("Space");
+          await expect(info).toHaveCount(0);
+        }
+        await expect(selectedTab).toHaveClass(/studio-ai-sessions__tab--active/u);
+        await expect(otherTab).not.toHaveClass(/studio-ai-sessions__tab--active/u);
+        expect(selections).not.toContain(secondSessionId);
+      });
+    });
+  }
+
+  test("the selected tab's Archive answers Enter and Space, which reach it rather than the tab", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 844 });
+    await mockDirectChat(page, { workState: { operation: null, unsaved: false, updateOperation: null } });
+    const tab = page.locator(`[data-vibe64-session-id="${SESSION_ID}"]:visible`).first();
+    const archive = tab.getByRole("button", { name: "Archive session", exact: true });
+    const dialog = page.getByRole("dialog").filter({ hasText: "Archive session?" });
+    // A fresh page for each key: the dialog stays open until it is answered.
+    for (const key of ["Enter", "Space"]) {
+      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}`);
+      await expect(tab).toHaveAttribute("aria-label", "Direct chat. All work is saved.");
+      await archive.focus();
+      await page.keyboard.press(key);
+      await expect(dialog).toBeVisible();
+    }
+  });
+
   for (const width of [390, 1280]) {
     test(`offers Create PR after GitHub requires a pull request at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 844 });
