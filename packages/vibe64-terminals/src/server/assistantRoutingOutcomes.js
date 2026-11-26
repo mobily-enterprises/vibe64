@@ -111,8 +111,7 @@ function createAssistantRoutingOutcomes({
       const state = await read(context.runtime.store, sessionId);
       if (!state || (!state.workflow && state.stage !== "planning") || state.stopped ||
           state.status !== "working" || state.delivery !== "accepted" || input.messageId !== state.messageId ||
-          input.turnId !== state.turnId || input.stage !== state.stage ||
-          input.status !== undefined && input.status !== state.status) {
+          input.turnId !== state.turnId || input.stage !== state.stage || (input.status !== undefined && input.status !== state.status)) {
         throw failure("The workflow outcome does not match the active request and turn.", "vibe64_assistant_workflow_outcome_mismatch");
       }
       await decisions.validateDecision(context, state, Boolean(state.followup));
