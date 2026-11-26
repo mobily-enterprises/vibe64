@@ -5,6 +5,7 @@ import {
   DEVELOPMENT_PATH,
   SCOPED_API_PREFIX
 } from "./support/base-shell-data";
+import { SHELL_READS } from "./support/shell-reads";
 import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 
 const targetRoot = "/workspace/example-target-app";
@@ -153,7 +154,7 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
     ["/api/vibe64/training/courses", { ok: true, courses: [] }],
     ["/api/vibe64/training/learning", { ok: true, available: false }],
     ["/api/vibe64/colleague", { ok: false, error: "Colleague is not part of this smoke." }],
-    ["/api/studio/health/crashes/summary", { ok: true, canAcknowledge: true, unacknowledged: 0, latest: null }],
+    ...SHELL_READS.map(([endpoint, payload]): [string, unknown] => [`/api${endpoint}`, payload]),
     [
       "/api/vibe64/assistants/capabilities",
       {

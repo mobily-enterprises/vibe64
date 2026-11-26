@@ -1,13 +1,15 @@
 import type { Page } from "@playwright/test";
 import { directChatSessionId } from "./base-shell-data";
 import { fulfillJson, routeApiEndpoint } from "./base-shell/http";
+import { SHELL_READS } from "./shell-reads";
 
 const owner = "integration-test-owner";
 
 /**
  * Answers every read the studio shell makes around a strict integration-panel page, as a ready direct-chat session
- * with nothing else configured: no Learning, Colleague, AI accounts, AI tasks, approvals, work plan, passes, usage
- * recording or crashes. A spec's catch-all route still reports any other request as unexpected.
+ * with nothing else configured: no Learning, Colleague, AI accounts, AI tasks, approvals, work plan, passes or usage
+ * recording, and the every-page shell reads (SHELL_READS). A spec's catch-all route still reports any other request as
+ * unexpected.
  */
 async function mockIntegrationShellReads(page: Page) {
   const session = `/vibe64/sessions/${directChatSessionId}`;
@@ -35,7 +37,7 @@ async function mockIntegrationShellReads(page: Page) {
     ["/vibe64/training/courses", { ok: true, courses: [] }],
     ["/vibe64/training/learning", { ok: true, available: false }],
     ["/vibe64/colleague", { ok: false, error: "Colleague is not part of this scenario." }],
-    ["/studio/health/crashes/summary", { ok: true, canAcknowledge: true, unacknowledged: 0, latest: null }]
+    ...SHELL_READS
   ] as const) {
     await routeApiEndpoint(page, endpoint, (route) => fulfillJson(route, payload));
   }

@@ -50,8 +50,11 @@ import {
   bootstrapPayload, currentAppPayload, directChatSessionPayload,
   readyProjectSelectionPayload, WORKSPACE_SLUG
 } from "./base-shell-data.ts";
+import { SHELL_READS } from "./shell-reads.ts";
 // No Main chat send is held by these conversations' sessions.
 const noHeldMessage = () => null;
+// The reads every page's shell makes, answered as nothing to show.
+const shellReads = new Map<string, unknown>(SHELL_READS);
 
 // The real server configures the Studio project context at startup; this
 // fixture's conversation actions read it the same way.
@@ -537,7 +540,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       else if (route === "/vibe64/training/courses") result = { ok: true, courses: [] };
       else if (route === "/vibe64/training/learning") result = { ok: true, available: false };
       else if (route === "/vibe64/colleague") result = { ok: false, error: "Colleague is not part of this scenario." };
-      else if (route === "/studio/health/crashes/summary") result = { ok: true, canAcknowledge: true, unacknowledged: 0, latest: null };
+      else result = shellReads.get(route);
       if (request.method !== "GET" || result === undefined) {
         state.unexpectedRequests.push(requestKey);
         json(response, { ok: false, error: `Unexpected status fixture request: ${requestKey}` }, 404);
