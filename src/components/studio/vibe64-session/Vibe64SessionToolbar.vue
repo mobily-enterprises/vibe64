@@ -511,6 +511,14 @@ const visibleSessions = computed(() => {
   width: auto;
 }
 
+/* JSKIT centres a 48dp touch target on the icon, which reached over the end of the tab's name: on a short tab a click
+   or tap on the tab, or on its name, opened the session info instead of selecting the session. The target starts at
+   the icon's own edge on the name's side, as JSKIT's own rule does for a button that follows another, and still
+   reaches away from the name. */
+.studio-ai-sessions__repository-state::before {
+  inset-inline-start: 0;
+}
+
 .studio-ai-sessions__info {
   max-width: 100%;
   overflow-wrap: anywhere;

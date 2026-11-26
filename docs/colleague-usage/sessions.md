@@ -85,7 +85,8 @@ no desktop/mobile control or arbitrary source selection to Colleague.
 
 ## Switch between open sessions
 
-Select a session tab above the chat to open that session's conversation and work.
+Select a session tab above the chat, on its name or anywhere but its work icon,
+to open that session's conversation and work.
 The selected tab includes the Archive session control. Hover or keyboard focus
 alone does not select a session.
 

@@ -760,7 +760,9 @@ with no hover or pointer media query, and is the button that opens the same
 tooltip by click, tap, Enter or Space without selecting or archiving the
 session. Its accessible name is `Session info: <name>. <work state>`; it keeps
 the icon's own box, so the tab is no wider, and stops Enter and Space at
-itself, since the chip's own keys would select the session. The selected tab's
+itself, since the chip's own keys would select the session. Its touch target
+starts at its own edge on the name's side, so a click or tap on a short tab, or
+on its name, selects the session rather than opening its info. The selected tab's
 Archive, which follows it in the next slot, stops its touch target at its own
 start edge, as JSKIT stops a button that follows another, so a tap on the icon
 never reaches Archive; Archive also takes its own Enter and Space.
