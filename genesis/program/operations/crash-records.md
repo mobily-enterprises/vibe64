@@ -36,10 +36,12 @@ running marker, its heartbeat rewritten every 30 s, in
 recorded synchronously from Node's `uncaughtExceptionMonitor`; nothing catches
 it, so Node still prints it and exits with code 1 for the supervisor to restart.
 Any other non-zero exit is recorded from the exit handler, and a stop that
-fails or overruns from the signal shutdown. A clean stop removes the marker and
-records nothing. A process that left only its marker (SIGKILL, an out-of-memory
-kill, power loss) is recorded as stopped without a trace by `createServer` at
-the next start, after the state-upgrade baseline and before anything resumes
+fails from the signal shutdown. A clean stop removes the marker and records
+nothing, and so does a stop that overruns its deadline: it is still the stop
+that was asked for, ending what runs on its schedule, and only logs
+`vibe64.server.shutdown_timeout` before its exit 1. A process that left only
+its marker (SIGKILL, an out-of-memory kill, power loss) is recorded as stopped
+without a trace by `createServer` at the next start, after the state-upgrade baseline and before anything resumes
 work, with its last heartbeat and, newest only, the exit a host's supervisor
 wrote to `crashes/last-exit.json` (`{ result, code, status }`, as systemd's
 `SERVICE_RESULT`, `EXIT_CODE` and `EXIT_STATUS`). A marker is still live only

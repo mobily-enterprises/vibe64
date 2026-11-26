@@ -4,11 +4,12 @@
 // or an unhandled rejection is recorded from Node's uncaught-exception monitor, synchronously, before Node prints it
 // and exits with code 1 as it always does: nothing here catches the error or keeps the process running. Any other
 // exit with a non-zero code is recorded from the exit handler, a failed stop by the stop handler; each removes the
-// marker once its record is written. A clean stop removes the marker and records nothing. The next start finds the
-// marker of a process that died with neither (SIGKILL, an out-of-memory kill, power loss) and records it as stopped
-// without a trace, with its last heartbeat and the exit the host gave. Either record is written with its
-// activeTurns still to count (activeTurnsPending): the next start counts the turns still marked working, which only
-// that crash can have left so, before anything resumes them.
+// marker once its record is written. A clean stop removes the marker and records nothing, and so does a stop that
+// overran its deadline, which is still the stop that was asked for (server.js ends the watch before its exit 1). The
+// next start finds the marker of a process that died with neither (SIGKILL, an out-of-memory kill, power loss) and
+// records it as stopped without a trace, with its last heartbeat and the exit the host gave. Either record is written
+// with its activeTurns still to count (activeTurnsPending): the next start counts the turns still marked working,
+// which only that crash can have left so, before anything resumes them.
 
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";

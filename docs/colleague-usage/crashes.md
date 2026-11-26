@@ -38,7 +38,9 @@ see and acknowledge crashes."
 
 A restart the host announced beforehand is not a crash: it shows a green
 **Restarted for an update at 07:40. Nothing was lost.** message instead, and no
-red banner. See [A planned restart of the workspace](planned-restarts.md).
+red banner. See [A planned restart of the workspace](planned-restarts.md). Nor is
+a restart whose stop took longer than its second: Vibe64 ends what still runs and
+notes it in its log, and records no crash.
 
 ## The Crashes page
 

@@ -378,10 +378,12 @@ test("signal shutdown closes a real upgraded Socket.IO connection through capabi
   }
 });
 
-test("a shutdown timeout names the operations still running and the provider still stopping", async () => {
+test("a shutdown timeout names the operations still running and the provider still stopping, and is no failed stop", async () => {
   const logged = [];
   let timeoutCallback = null;
   const exits = [];
+  const failedStops = [];
+  const overruns = [];
   const providerShutdowns = [
     { id: "vibe64.colleague", status: "stopped", durationMs: 40 },
     { id: "vibe64.terminals", status: "stopping", durationMs: 7900 }
@@ -401,6 +403,12 @@ test("a shutdown timeout names the operations still running and the provider sti
     exitProcess(code) {
       exits.push(code);
     },
+    onStopFailed(error) {
+      failedStops.push(error);
+    },
+    onStopOverran() {
+      overruns.push(exits.length);
+    },
     setTimeoutFn(callback) {
       timeoutCallback = callback;
       return { unref() {} };
@@ -417,6 +425,9 @@ test("a shutdown timeout names the operations still running and the provider sti
   assert.deepEqual(timedOut.providerShutdowns, providerShutdowns);
   assert.equal(Number.isInteger(timedOut.durationMs), true);
   assert.deepEqual(exits, [1]);
+  // The stop that was asked for ended what still ran on its schedule: no crash is recorded for it.
+  assert.deepEqual(failedStops, []);
+  assert.deepEqual(overruns, [0], "the overrun is reported once, before the exit");
 });
 
 test("a failed shutdown logs each failed operation with its provider and cause", async () => {

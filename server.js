@@ -25,9 +25,7 @@ import {
   assertProjectDirectoryUsable,
   configureStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
-import {
-  closeTerminalSessionsForNamespacePrefix
-} from "@local/vibe64-execution/server/terminalSessions";
+import { closeTerminalSessionsForNamespacePrefix } from "@local/vibe64-execution/server/terminalSessions";
 import { beginServerStop, resetServerStop } from "@local/vibe64-execution/server/serverStop";
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
@@ -50,7 +48,7 @@ import {
 } from "./server/lib/browserLifecycle.js";
 import { handleUpgradeSocketErrors } from "./server/lib/upgradeSocketErrors.js";
 import { destroyUpgradedSockets, trackUpgradedSockets } from "./server/lib/upgradedSockets.js";
-import { STOP_DRAIN_MS, endRunningCommands, registerStopGate, stopAcceptingConnections } from "./server/lib/stopGate.js";
+import { STOP_DRAIN_MS, endRunningCommands, endRuntimeTerminals, registerStopGate, stopAcceptingConnections } from "./server/lib/stopGate.js";
 import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
@@ -135,23 +133,25 @@ function forceCloseServerConnections(server) {
  * The SIGINT and SIGTERM handler. The stop begins before anything else (`beginStop`): nothing new starts from then
  * on, the next server will read this stop as planned, and every AI engine closes its fence. The listener stops taking
  * connections, and the runtime terminals and the capability runtime stop together, then Fastify closes. Requests in
- * flight, and the commands that were running when the stop began, have `drainMs`: then those connections close and
- * those commands end, which ends the work still waiting on them. Every command this process started that still runs
- * is ended before it exits, and it exits within the shutdown deadline. The stop is logged at warn, which a hosted
- * editor's default level keeps, with how long it took and each provider's shutdown.
+ * flight, the commands that were running when the stop began and the runtime terminals have `drainMs`: then those
+ * connections close, those commands end and those terminals' process groups get SIGKILL, which ends the work still
+ * waiting on them. Every command this process started that still runs is ended before it exits, within the deadline.
+ * A stop past the deadline is still the stop that was asked for: it is logged and exits 1, but records no crash
+ * (`onStopOverran`). It is logged at warn, which a hosted editor's default level keeps, with its time and each provider's shutdown.
  * @param {object} dependencies
  * @param {import("fastify").FastifyInstance} dependencies.app
  * @param {CapabilityRuntime} dependencies.capabilityRuntime
  * @param {(signal: string) => unknown} dependencies.beforeClose Runs with the runtime terminals and the capability runtime.
  * @param {(signal: string, options: { logger: unknown }) => unknown} [dependencies.beginStop]
  * @param {typeof clearTimeout} [dependencies.clearTimeoutFn]
- * @param {() => unknown} [dependencies.closeRuntimeTerminals]
+ * @param {(drainMs: number) => unknown} [dependencies.closeRuntimeTerminals] Ends them, `drainMs` after SIGTERM.
  * @param {number} [dependencies.drainMs]
  * @param {(startedBefore: number) => Promise<{ ended?: number }>} [dependencies.endCommands] Ends the commands still
  *   running that started before the given time.
  * @param {(code: number) => void} [dependencies.exitProcess]
  * @param {() => number} [dependencies.now]
- * @param {(error: Error) => unknown} [dependencies.onStopFailed] Records a stop that failed or overran, before the exit.
+ * @param {(error: Error) => unknown} [dependencies.onStopFailed] Records a stop that failed, before the exit.
+ * @param {() => unknown} [dependencies.onStopOverran] Runs when the stop overruns its deadline, before the exit.
  * @param {typeof setTimeout} [dependencies.setTimeoutFn]
  * @param {number} [dependencies.shutdownTimeoutMs]
  */
@@ -161,12 +161,13 @@ function createSignalShutdownHandler({
   beforeClose,
   beginStop = beginServerStop,
   clearTimeoutFn = clearTimeout,
-  closeRuntimeTerminals = () => closeTerminalSessionsForNamespacePrefix(""),
+  closeRuntimeTerminals = endRuntimeTerminals,
   drainMs = STOP_DRAIN_MS,
   endCommands = endRunningCommands,
   exitProcess = process.exit.bind(process),
   now = Date.now,
   onStopFailed = () => {},
+  onStopOverran = () => {},
   setTimeoutFn = setTimeout,
   shutdownTimeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS
 }) {
@@ -225,10 +226,11 @@ function createSignalShutdownHandler({
       }, () => {});
     }
 
+    const drainEndsMs = Math.min(drainMs, timeoutMs);
     const drain = setTimeoutFn(() => {
       forceCloseServerConnections(app.server);
       void endCommandsStartedBefore(startedAt);
-    }, Math.min(drainMs, timeoutMs));
+    }, drainEndsMs);
     drain.unref?.();
     const timeout = setTimeoutFn(() => {
       logOperationalEvent(app.log, "error", {
@@ -239,10 +241,7 @@ function createSignalShutdownHandler({
         pendingOperations: [...pendingOperations],
         ...progressFields()
       }, "Vibe64 server shutdown timed out; forcing process exit.");
-      onStopFailed(Object.assign(
-        new Error(`Vibe64 did not stop within ${timeoutMs} ms; still running: ${[...pendingOperations].join(", ") || "nothing named"}.`),
-        { code: "vibe64_shutdown_timeout" }
-      ));
+      onStopOverran();
       forceCloseServerConnections(app.server);
       // Each command still running gets its SIGTERM before the exit, which does not wait for it.
       void endCommandsStartedBefore(Infinity);
@@ -253,7 +252,7 @@ function createSignalShutdownHandler({
     try {
       const preCloseOperations = [
         { name: "before-close", run: () => beforeClose(signal) },
-        { name: "runtime-terminals", run: () => closeRuntimeTerminals() },
+        { name: "runtime-terminals", run: () => closeRuntimeTerminals(drainEndsMs) },
         { name: "capability-runtime", run: () => capabilityRuntime.shutdown() }
       ];
       const preClosePromises = preCloseOperations.map(startOperation);
@@ -666,8 +665,9 @@ async function startServer(options = {}) {
       stoppingOnSignal = true;
       app.browserLifecycleMonitor.stop();
     },
-    // The exit ends the watch: cleanly on code 0, and a failed stop has its record by then.
+    // The exit ends the watch: cleanly on code 0; a failed stop has its record by then; an overrun is no crash.
     onStopFailed: (error) => crashWatch?.recordStopFailure(error),
+    onStopOverran: () => crashWatch?.stop(),
     shutdownTimeoutMs: options.shutdownTimeoutMs
   });
   process.once("SIGINT", closeAndExit);

@@ -309,16 +309,21 @@ the server runs nothing and is answered 503 with `Connection: close`,
 `Retry-After: 1` and `x-vibe64-stopping: 1` (`server/lib/stopGate.js`), which
 tells the page it may send it again, writes included; every answer sent while
 stopping closes its connection. The runtime terminals and capability features
-stop together, then Fastify closes. Requests in flight, and the commands
-running when the stop began, have 350 ms (`STOP_DRAIN_MS`), which leaves most
-of the stop's second for a loaded machine: then those connections close and
-those commands' process groups end (`endCaptures`: SIGTERM, then SIGKILL).
+stop together, then Fastify closes. Requests in flight, the commands running
+when the stop began and the runtime terminals have 350 ms (`STOP_DRAIN_MS`),
+which leaves most of the stop's second for a loaded machine: then those
+connections close, those commands' process groups end (`endCaptures`: SIGTERM,
+then SIGKILL) and the terminals' process groups, sent SIGTERM as the stop began,
+get SIGKILL (`endRuntimeTerminals`; a terminal's ordinary close waits 3 s).
 Before it exits the server ends every command it started that still runs, so
 none outlives it. At 850 ms (`DEFAULT_SHUTDOWN_TIMEOUT_MS`) whatever still runs
-is ended, the overrun is logged and recorded as a crash record, and the process
-exits 1; the planned stop is already recorded, so turns still resume as after a
-restart. `vibe64.server.stopping` and `vibe64.server.stopped` are logged at
-warn, which a hosted editor's default level keeps. Every stop event
+is ended, the overrun is logged and the process exits 1. An overrun is still the
+stop that was asked for, ending what runs on its schedule, so it records no
+crash (`onStopOverran` ends the crash watch as a clean stop does); a stop
+operation that fails is recorded. The planned stop is already recorded, so
+turns still resume as after a restart. `vibe64.server.stopping` and
+`vibe64.server.stopped` are logged at warn, which a hosted editor's default
+level keeps. Every stop event
 (`vibe64.server.stopped`, `vibe64.server.stop_failed` and
 `vibe64.server.shutdown_timeout`) carries its `durationMs`, `commandsEnded` and
 the capability runtime's `providerShutdowns` (each provider's status and
@@ -326,8 +331,10 @@ duration). A timeout also names its `pendingOperations`; a failure names its
 `failedOperations`, and operational logs keep each failure's inner errors and
 causes, redacted, so the provider and its reason are visible.
 `tests/server/serverStopBudget.integration.test.js` stops a busy real server
-(a request waiting on a long command, a background command and a poller) and
-holds it to all of this.
+(a request waiting on a long command, a background command, a poller and a
+terminal that ignores SIGTERM and SIGHUP) and holds it to all of this, and
+stops one whose Fastify close never ends to hold an overrun to its exit 1 with
+no crash record.
 
 ## Practice projects
 

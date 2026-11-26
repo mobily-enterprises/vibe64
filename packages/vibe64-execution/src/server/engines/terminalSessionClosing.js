@@ -42,13 +42,16 @@ function scheduleDetachedCleanup(session = {}, namespace = "default") {
 /**
  * Closes a terminal session: stops its process, waits for its hooks and forgets it.
  * @param {string} id
- * @param {{ namespace?: string, reason?: string }} [options] reason: why it closes, which its stop and close hooks
- *   receive (`close` by default; a Preview run another start replaces closes `superseded:<that start's id>`)
+ * @param {{ namespace?: string, reason?: string, termTimeoutMs?: number }} [options] reason: why it closes, which its
+ *   stop and close hooks receive (`close` by default; a Preview run another start replaces closes
+ *   `superseded:<that start's id>`); termTimeoutMs: how long its process group has after SIGTERM before SIGKILL (3 s
+ *   by default; the server's stop gives its drain)
  */
 async function closeTerminalSession(id, options = {}) {
   const {
     namespace = "default",
-    reason = "close"
+    reason = "close",
+    termTimeoutMs
   } = options;
   const sessions = sessionsForNamespace(namespace);
   const session = sessions.get(id);
@@ -66,7 +69,7 @@ async function closeTerminalSession(id, options = {}) {
     const fatalFailures = [];
     clearDetachedCleanupTimer(session);
     if (!session.processExited) {
-      const stopped = await beginTerminalStop(session, reason);
+      const stopped = await beginTerminalStop(session, reason, { termTimeoutMs });
       if (stopped.failures.length) {
         throw terminalCloseAggregateFailure(session, stopped.failures);
       }
@@ -118,7 +121,7 @@ async function closeTerminalSession(id, options = {}) {
   }
 }
 
-async function closeTerminalSessionTargets(targets = []) {
+async function closeTerminalSessionTargets(targets = [], { termTimeoutMs } = {}) {
   const uniqueTargets = [...new Map(targets.map((target) => {
     const normalizedTarget = {
       id: String(target?.id || ""),
@@ -128,7 +131,8 @@ async function closeTerminalSessionTargets(targets = []) {
   })).values()].filter((target) => target.id);
   const results = await Promise.allSettled(uniqueTargets.map((target) => (
     closeTerminalSession(target.id, {
-      namespace: target.namespace
+      namespace: target.namespace,
+      termTimeoutMs
     })
   )));
   let closed = 0;
@@ -213,13 +217,18 @@ async function closeTerminalSessionsForCwdRoot(cwdRoot = "") {
   };
 }
 
-async function closeTerminalSessionsForNamespacePrefix(namespacePrefix = "") {
+/**
+ * Closes every terminal session whose namespace starts with the prefix ("" closes them all).
+ * @param {string} [namespacePrefix]
+ * @param {{ termTimeoutMs?: number }} [options] how long each process group has after SIGTERM before SIGKILL
+ */
+async function closeTerminalSessionsForNamespacePrefix(namespacePrefix = "", options = {}) {
   const closed = await closeTerminalSessionTargets(listStoredSessions({
     namespacePrefix
   }).map((entry) => ({
     id: entry.session.id,
     namespace: entry.namespace
-  })));
+  })), options);
   return {
     ok: true,
     closed

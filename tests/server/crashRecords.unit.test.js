@@ -241,11 +241,11 @@ test("a watched process records any non-zero exit, records nothing on a clean on
 
   const stopping = new EventEmitter();
   const failed = startCrashWatch({ systemRoot: root, version: "vibe64@test", logger: SILENT, processRef: stopping });
-  failed.recordStopFailure(Object.assign(new Error("Vibe64 did not stop within 8000 ms; still running: fastify."), { code: "vibe64_shutdown_timeout" }));
+  failed.recordStopFailure(new AggregateError([new Error("Shutdown operation \"fastify\" failed: boom")], "1 shutdown operation(s) failed."));
   stopping.emit("exit", 1);
   const { records } = await readVibe64CrashRecords({ systemRoot: root });
   assert.deepEqual(records.map((entry) => entry.origin).sort(), ["exit", "stop"], "the exit after a recorded stop adds nothing");
-  assert.equal(records.find((entry) => entry.origin === "stop").error.code, "vibe64_shutdown_timeout");
+  assert.equal(records.find((entry) => entry.origin === "stop").error.message, "1 shutdown operation(s) failed.");
 });
 
 /** A child process that holds a crash watch on `root`, then runs `then` (module code). */

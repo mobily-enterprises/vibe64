@@ -1,5 +1,6 @@
 import { serverStopBegun, VIBE64_SERVER_STOPPING_CODE } from "@local/vibe64-execution/server/serverStop";
 import { endCaptures } from "@local/vibe64-execution/server";
+import { closeTerminalSessionsForNamespacePrefix } from "@local/vibe64-execution/server/terminalSessions";
 
 // The editor's answers while its stop runs. The listener closes as the stop begins (stopAcceptingConnections), but a
 // browser's kept-alive connection can still carry a request: it is answered at once, before any route runs or its
@@ -58,10 +59,21 @@ function endRunningCommands(startedBefore = Infinity) {
   });
 }
 
+/**
+ * Ends every runtime terminal: SIGTERM as the stop begins and SIGKILL when its drain ends, the time the commands running
+ * then have. A terminal's ordinary close waits up to 3 s after SIGTERM, which held two hosted editors' restarts past
+ * the stop's deadline (26 Nov 2026), each recorded as a crash.
+ * @param {number} [drainMs]
+ */
+function endRuntimeTerminals(drainMs = STOP_DRAIN_MS) {
+  return closeTerminalSessionsForNamespacePrefix("", { termTimeoutMs: drainMs });
+}
+
 export {
   STOPPING_HEADER,
   STOP_DRAIN_MS,
   endRunningCommands,
+  endRuntimeTerminals,
   registerStopGate,
   stopAcceptingConnections
 };

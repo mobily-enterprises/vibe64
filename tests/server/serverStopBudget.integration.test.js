@@ -83,17 +83,18 @@ function connectionRefused(port) {
   });
 }
 
-test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves none of its commands running, and records a planned stop", {
-  skip: process.platform !== "linux",
-  timeout: 90_000
-}, async (t) => {
+/**
+ * Starts the busy stop test server (`env` adds to its environment) and waits until its request, background job,
+ * poller and terminal all run. The test's end kills whatever of it is left, by pid.
+ */
+async function startBusyServer(t, env = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-stop-budget-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const port = await portBelowEphemeralRange();
   const origin = `http://127.0.0.1:${port}`;
   const server = spawn(process.execPath, [SERVER], {
     cwd: APP_ROOT,
-    env: { ...process.env, HOST: "127.0.0.1", PORT: String(port), VIBE64_STOP_TEST_ROOT: root },
+    env: { ...process.env, ...env, HOST: "127.0.0.1", PORT: String(port), VIBE64_STOP_TEST_ROOT: root },
     stdio: ["ignore", "pipe", "pipe"]
   });
   let output = "";
@@ -101,15 +102,18 @@ test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves
   server.stdout.on("data", keep);
   server.stderr.on("data", keep);
   const exited = once(server, "exit");
+  // The commands' pids and the terminal's.
   const childPids = () => readEvents(root).filter(({ event }) => event === "child-running")
     .map(({ detail }) => Number(detail.split(" ")[1]));
+  const terminalPids = () => readEvents(root).filter(({ event }) => event === "terminal-running")
+    .map(({ detail }) => Number(detail));
   t.after(async () => {
     if (server.exitCode === null && server.signalCode === null) {
       server.kill("SIGKILL");
       await exited;
     }
-    // The commands a stop left running, by their own pids.
-    for (const pid of childPids()) {
+    // What a stop left running, by its own pids.
+    for (const pid of [...childPids(), ...terminalPids()]) {
       try { process.kill(pid, "SIGKILL"); } catch { /* ended */ }
     }
   });
@@ -124,6 +128,23 @@ test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves
     return running.includes("slow-request") && running.includes("background");
   }, "the request's and the background job's long commands", 30_000);
   await waitUntil(() => readEvents(root).filter(({ event }) => event === "poll-ran").length >= 3, "the poller's commands");
+  await waitUntil(() => terminalPids().length === 1, "the terminal that ignores SIGTERM and SIGHUP");
+  return { root, port, server, exited, slow, output: () => output, childPids, terminalPids };
+}
+
+/** The files in a folder of the server's crash records ("records", or "running" for its running marker). */
+async function crashFiles(root, folder = "records") {
+  return readdir(path.join(root, "state", "crashes", folder)).catch((error) => {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  });
+}
+
+test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves none of its commands running, and records a planned stop", {
+  skip: process.platform !== "linux",
+  timeout: 90_000
+}, async (t) => {
+  const { root, port, server, exited, slow, output: serverOutput, childPids, terminalPids } = await startBusyServer(t);
 
   const stopAt = Date.now();
   server.kill("SIGTERM");
@@ -134,6 +155,7 @@ test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves
   const slowStatus = await slow;
   const events = readEvents(root);
   const pids = childPids();
+  const output = serverOutput();
   const report = JSON.stringify({ stopMs, refusedAfterMs, code, signal, slowStatus, events: events.slice(-40), output: output.slice(-6000) });
   t.diagnostic(`stopped ${stopMs} ms after SIGTERM; new connections refused after ${refusedAfterMs} ms; exit ${code}`);
 
@@ -148,6 +170,8 @@ test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves
     `the gateway refuses a new command as the editor stops: ${report}`);
   assert.equal(pids.length, 2, report);
   assert.deepEqual(pids.filter(processIsAlive), [], `no command the editor started outlives it: ${report}`);
+  assert.deepEqual(terminalPids().filter(processIsAlive), [], `nor does its terminal that ignores SIGTERM: ${report}`);
+  assert.deepEqual(await crashFiles(root), [], `a stop within its budget records no crash: ${report}`);
 
   // The stop's own record says how long it took, at a level a hosted editor keeps.
   const stopped = output.split("\n").filter((line) => line.includes("\"vibe64.server.stopped\"")).map((line) => JSON.parse(line));
@@ -168,4 +192,31 @@ test("a busy editor stops within a second of SIGTERM, starts nothing new, leaves
   const end = await next.endOf(run.id);
   assert.equal(end.cause, INTERRUPTION_CAUSE.RESTART, JSON.stringify(end));
   assert.equal(resumePolicy(end.cause), "now");
+});
+
+test("a stop that overruns its deadline ends what still runs and exits 1, but records no crash: it is the stop that was asked for", {
+  skip: process.platform !== "linux",
+  timeout: 90_000
+}, async (t) => {
+  // Its Fastify close never ends, as a hosted editor's did not end within the deadline on 26 Nov 2026.
+  const { root, server, exited, output: serverOutput, childPids, terminalPids } = await startBusyServer(t, {
+    VIBE64_STOP_TEST_STALL_CLOSE: "1"
+  });
+
+  server.kill("SIGTERM");
+  const [code, signal] = await exited;
+  const output = serverOutput();
+  const report = JSON.stringify({ code, signal, events: readEvents(root).slice(-40), output: output.slice(-6000) });
+  const timedOut = output.split("\n").filter((line) => line.includes("\"vibe64.server.shutdown_timeout\""))
+    .map((line) => JSON.parse(line));
+  assert.equal(timedOut.length, 1, `the overrun is logged: ${report}`);
+  assert.deepEqual([code, signal], [1, null], report);
+  assert.deepEqual(await crashFiles(root), [], `an overrun is no crash: ${report}`);
+  assert.deepEqual(await crashFiles(root, "running"), [], `nor does its running marker stay for the next start to record: ${report}`);
+  assert.equal(output.includes("\"vibe64.server.crashed\""), false, report);
+  // Only the stalled close held it: the terminal's SIGKILL came with the drain.
+  assert.deepEqual(timedOut[0].pendingOperations, ["fastify"], report);
+  // The commands got their SIGTERM and the terminal its SIGKILL as the drain ended, before the deadline.
+  await waitUntil(() => [...childPids(), ...terminalPids()].every((pid) => !processIsAlive(pid)),
+    "the commands and the terminal to end", 10_000);
 });

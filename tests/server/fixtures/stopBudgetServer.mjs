@@ -2,14 +2,18 @@
 // stops it: a request still waiting on a long command it started, a long command a background job started, and a poller
 // that starts a short command every 50 ms, as the page's and the editor's own work did on a hosted workspace's
 // release-10 stop (24 Nov 2026), when the editor started twelve helper calls after SIGTERM and took 3.33 s to stop.
-// Every command goes through the editor's one command gateway. What happens is appended to events.log in the folder the
-// test gives (VIBE64_STOP_TEST_ROOT): "<epoch ms> <event> [<detail>]".
+// Every command goes through the editor's one command gateway. It also runs a terminal whose process ignores SIGTERM and
+// SIGHUP, as one that takes its time over its own shutdown does. What happens is appended to events.log in the folder
+// the test gives (VIBE64_STOP_TEST_ROOT): "<epoch ms> <event> [<detail>]". With VIBE64_STOP_TEST_STALL_CLOSE=1 its Fastify
+// close waits on work that never ends (a timer keeps the process alive, as such work does), so its stop overruns the
+// deadline.
 import { appendFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
 import { createInstalledRuntime } from "@jskit-ai/kernel/server/platform";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { startTerminalSession } from "@local/vibe64-execution/server/terminalSessions";
 import { startServer } from "../../../server.js";
 import { playwrightServerStartOptions } from "../../e2e/support/start-web-server.mjs";
 
@@ -30,6 +34,9 @@ function command(args, timeout) {
   return runVibe64Command({ command: process.execPath, args, cwd: project, mode: "capture", purpose: "codex", timeout });
 }
 const longCommand = (name) => command(["-e", LONG_COMMAND, events, name], 60_000);
+const STUBBORN_TERMINAL = "process.on('SIGTERM', () => {}); process.on('SIGHUP', () => {});" +
+  " require('node:fs').appendFileSync(process.argv[1], `${Date.now()} terminal-running ${process.pid}\\n`);" +
+  " setInterval(() => {}, 1000);";
 
 const STOP_SIGNALS = ["SIGINT", "SIGTERM"];
 const exitOnStopSignal = (signal) => process.exit(128 + (signal === "SIGINT" ? 2 : 15));
@@ -42,6 +49,9 @@ try {
     localAccessKey: false,
     async createInstalledRuntime(options) {
       const runtime = await createInstalledRuntime(options);
+      if (process.env.VIBE64_STOP_TEST_STALL_CLOSE === "1") {
+        options.fastify.addHook("onClose", () => new Promise(() => { setInterval(() => {}, 1000); }));
+      }
       // The request that waits on its long command, as a page's request waits on a helper call.
       options.fastify.get("/api/stop-test/slow", async () => {
         mark("slow-request-started");
@@ -58,6 +68,14 @@ try {
 // The stop's second signal (a supervisor's, say) must not end the process before its own stop does.
 for (const signal of STOP_SIGNALS) process.on(signal, () => {});
 
+// The terminal: it says it runs (its pid, in the log) once it ignores both signals.
+startTerminalSession({
+  args: ["-e", STUBBORN_TERMINAL, events],
+  command: process.execPath,
+  commandPreview: "stop test terminal",
+  cwd: project,
+  namespace: "stop-test"
+});
 // The background job's long command.
 void longCommand("background").then((result) => mark("background-ended", result.code || (result.ok ? "ok" : "failed")));
 // The poller: each start that reached a process says so itself ("poll-ran", at the time its process began); one the
