@@ -238,12 +238,15 @@ every reply says so. In every scope a value given as an argument
 anything is read or written, so a value is only ever stdin and never appears in
 a command line or transcript. Each operation reads only what `OPERATION_INPUTS`
 (`agentEnvCommandText.js`) names: its arguments, its options and, for `set`
-alone, stdin. An option, an argument past its own or a value on stdin it doesn't
-read is refused (`vibe64_agent_env_command_input_unknown`, never repeating an
-argument's text or what follows an option's `=`), as is a missing or empty
-argument (`vibe64_agent_env_command_input_missing`) and a request field other
-than `args`, `stdin` and the session's identity; each refusal names what the
-operation takes, the way the plan helper's `refuseUnreadInput` refuses its fields.
+alone, stdin. Once the session's binding is checked (a session the command does
+not serve hears only that), the one refusal every helper command uses,
+`refuseUnreadFields` (`@local/vibe64-core/server/commandInput`), refuses an
+option, an argument past its own or a value on stdin the operation doesn't read
+(`vibe64_command_input_unread`, naming an extra argument by its count, never its
+text or what follows an option's `=`), a missing or empty argument
+(`vibe64_command_input_missing`) and a request field other than `args`, `stdin`
+and the session's identity; each refusal names what the operation takes, exits 2
+and is followed by the usage.
 `env remove` of a name the scope doesn't store is refused
 (`vibe64_agent_env_command_key_not_stored`) instead of answering a removal that
 changed nothing. A staging or production `set` or

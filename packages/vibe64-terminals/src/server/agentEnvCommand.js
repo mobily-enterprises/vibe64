@@ -63,17 +63,6 @@ import { commandLineFailure } from "./commandFailure.js";
 /** @typedef {import("./types.js").AgentEnvCommandService} AgentEnvCommandService */
 
 const AGENT_ENV_COMMAND_NAME = "vibe64-env";
-// The fields an Env command request carries: the wrapper's arguments and stdin, and the session's identity the
-// socket checks. Any other is refused, never ignored (agentEnvCommandText.js refuseUnreadInput).
-const REQUEST_FIELDS = Object.freeze(["args", "generationId", "sessionId", "stdin", "token"]);
-
-/** A request field the command does not read, refused before anything runs, or null. @param {object} input */
-function unreadRequestFields(input = {}) {
-  const unread = Object.keys(input).filter((name) => !REQUEST_FIELDS.includes(name));
-  if (unread.length === 0) return null;
-  const message = `The Env command does not read ${unread.join(", ")}: nothing changed. A request takes args and stdin.`;
-  return commandLineFailure(message, "vibe64_agent_env_command_input_unknown", { exitCode: 2 });
-}
 const AGENT_ENV_COMMAND_SOCKET_NAME = "env-command.sock";
 const AGENT_ENV_COMMAND_CONTRACT_VERSION = "1";
 const AGENT_ENV_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
@@ -559,11 +548,10 @@ function createAgentEnvCommandService({
     const sessionId = toText(input.sessionId);
     let result;
     try {
-      const validation = unreadRequestFields(input) || validateParsedCommand(parsed, { stdin: input.stdin });
-      result = validation || await projectBinding.run(
-        sessionId,
-        (binding) => execute(parsed, input, binding)
-      );
+      // The session's binding is checked before its input is: a session the command does not serve hears that alone.
+      result = await projectBinding.run(sessionId, (binding) => (
+        validateParsedCommand(parsed, input) || execute(parsed, input, binding)
+      ));
     } catch (error) {
       const payload = vibe64ErrorResponse(error, {
         fallbackCode: "vibe64_agent_env_command_failed",

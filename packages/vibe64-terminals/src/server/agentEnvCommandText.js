@@ -1,6 +1,12 @@
 // Parses an agent's env command line and words its replies: usage, scope status and mutation results.
 
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import {
+  COMMAND_INPUT_MISSING,
+  COMMAND_INPUT_NOT_OBJECT,
+  COMMAND_INPUT_UNREAD,
+  refuseUnreadFields
+} from "@local/vibe64-core/server/commandInput";
 import { SAVED_ENV_VALUE_SOURCE } from "@local/vibe64-project/server/savedEnvValues";
 import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { commandLineFailure } from "./commandFailure.js";
@@ -22,10 +28,13 @@ const VALUE_ON_STDIN = "A value goes in on stdin only, never as an argument, so 
 
 // What each env operation reads: the arguments after its name (each one's name, `?` when it may be left out), its
 // options and whether it reads a value on stdin. Anything else is refused, never ignored, and so is a missing argument,
-// each naming what the operation takes: an input sent under a name the operation does not read would otherwise be
-// answered ok and change nothing (26 Nov: a plan helper took progressText for text and kept no Progress). The plan
-// helper's refuseUnreadInput (assistantWorkPlan.js) refuses its fields the same way.
+// each naming what the operation takes, through refuseUnreadFields, the one refusal every helper command uses: an
+// input sent under a name the operation does not read would otherwise be answered ok and change nothing (26 Nov: a
+// plan helper took progressText for text and kept no Progress).
 const JSON_OPTION = "--json";
+// A request's own fields, the wrapper's arguments and stdin, beside the session's identity the socket checks.
+const REQUEST_IDENTITY = Object.freeze(["generationId", "sessionId", "token"]);
+const REQUEST_CONTRACT = Object.freeze({ operation: "env", fields: ["args", "stdin"] });
 const OPERATION_INPUTS = Object.freeze({
   status: { arguments: ["<development|staging|production|all>?"], options: [JSON_OPTION] },
   set: {
@@ -161,62 +170,63 @@ function syntaxFailure(message = "Invalid Vibe64 Env command.") {
   });
 }
 
-/** What an env operation takes, in words: its arguments, its options and its value on stdin. @param {string} command */
-function operationTakes(command) {
-  const { arguments: names, options, stdin } = OPERATION_INPUTS[command];
-  const shown = [
-    ...names.map((name) => (name.endsWith("?") ? `[${name.slice(0, -1)}]` : name)),
-    ...options.map((option) => `[${option === SERVICES_FLAG ? `${SERVICES_FLAG}<id>,<id> (production)` : option}]`)
-  ];
-  return `${shown.join(" ")}${stdin ? ", and the value on stdin" : ""}`;
+/**
+ * Null when `check` passes, else refuseUnreadFields's refusal (a field the command does not read or lacks) as the
+ * command line's usage failure. Any other error is thrown on. @param {() => void} check
+ */
+function inputRefusal(check) {
+  try {
+    check();
+    return null;
+  } catch (error) {
+    if (![COMMAND_INPUT_MISSING, COMMAND_INPUT_NOT_OBJECT, COMMAND_INPUT_UNREAD].includes(error?.code)) {
+      throw error;
+    }
+    return commandLineFailure(error.message, error.code, { exitCode: 2, stderr: `${error.message}\n\n${usageText()}` });
+  }
 }
 
 /**
  * Refuses what an env operation does not read (an option, an argument past its own, a value on stdin) and an argument
- * it needs that is missing, naming what it takes; an argument's text is never repeated, as it can be a value.
+ * it needs that is missing, naming what it takes. Each reaches refuseUnreadFields under its name in OPERATION_INPUTS,
+ * an argument past them by its count, never by its text, as it can be a value.
  * @param {ReturnType<typeof parseCommandArgs>} parsed @param {string} stdin
  */
-function refuseUnreadInput(parsed, stdin) {
+function refuseUnreadOperationInput(parsed, stdin) {
   const inputs = OPERATION_INPUTS[parsed.command];
   if (!inputs || parsed.help) {
     return null;
   }
-  const reads = (flag) => inputs.options.includes(flag);
-  const extra = parsed.positionals.length - 1 - inputs.arguments.length;
-  const unread = [
-    ...new Set(parsed.flags.filter((flag) => !reads(flag))),
-    ...(extra > 0 ? [`${extra === 1 ? "an argument" : `${extra} arguments`} after ${inputs.arguments.at(-1) || parsed.command}`] : []),
-    ...(stdin !== "" && !inputs.stdin ? ["a value on stdin"] : [])
-  ];
-  const takes = operationTakes(parsed.command);
-  if (unread.length > 0) {
-    const message = `env ${parsed.command} does not read ${unread.join(", ")}: nothing changed. It takes ${takes}.`;
-    return commandLineFailure(message, "vibe64_agent_env_command_input_unknown", {
-      exitCode: 2,
-      stderr: `${message}\n\n${usageText()}`
-    });
+  const names = inputs.arguments.map((name) => name.replace(/\?$/u, ""));
+  const given = Object.fromEntries(names.filter((name, index) => toText(parsed.positionals[index + 1])).map((name) => [name, true]));
+  const extra = parsed.positionals.length - 1 - names.length;
+  if (extra > 0) {
+    given[`${extra === 1 ? "an argument" : `${extra} arguments`} after ${names.at(-1) || parsed.command}`] = true;
   }
-  const missing = inputs.arguments.filter((name, index) => !name.endsWith("?") && !toText(parsed.positionals[index + 1]));
-  if (missing.length > 0) {
-    const message = `env ${parsed.command} takes ${takes}: ${missing.join(" and ")} ${missing.length === 1 ? "is" : "are"} `
-      + "missing, so nothing changed.";
-    return commandLineFailure(message, "vibe64_agent_env_command_input_missing", {
-      exitCode: 2,
-      stderr: `${message}\n\n${usageText()}`
-    });
-  }
-  return null;
+  for (const flag of parsed.flags) given[flag] = true;
+  if (stdin !== "") given.stdin = true;
+  return inputRefusal(() => refuseUnreadFields(given, {
+    operation: `env ${parsed.command}`,
+    fields: [...names, ...inputs.options, ...(inputs.stdin ? ["stdin"] : [])],
+    required: names.filter((name, index) => !inputs.arguments[index].endsWith("?"))
+  }));
 }
 
 /**
- * The command's refusal before anything is read or written, or null to run it.
- * @param {ReturnType<typeof parseCommandArgs>} parsed @param {{ stdin?: string }} [input] the value on stdin
+ * The command's refusal before anything is read or written, or null to run it: a request field it does not read first.
+ * @param {ReturnType<typeof parseCommandArgs>} parsed @param {{ stdin?: string }} [request] the request, its value on stdin
  */
-function validateParsedCommand(parsed = {}, { stdin = "" } = {}) {
+function validateParsedCommand(parsed = {}, request = {}) {
+  const agentFields = Object.fromEntries(Object.entries(request).filter(([name]) => !REQUEST_IDENTITY.includes(name)));
+  const unreadRequest = inputRefusal(() => refuseUnreadFields(agentFields, REQUEST_CONTRACT));
+  if (unreadRequest) {
+    return unreadRequest;
+  }
+  const stdin = request.stdin ?? "";
   if (parsed.valueFlags.length > 0 || (parsed.command === "set" && parsed.positionals.length > 3)) {
     return syntaxFailure(VALUE_ON_STDIN);
   }
-  const unread = refuseUnreadInput(parsed, String(stdin ?? ""));
+  const unread = refuseUnreadOperationInput(parsed, String(stdin ?? ""));
   if (unread) {
     return unread;
   }

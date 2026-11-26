@@ -632,7 +632,7 @@ test("agent Env never reads production back, takes values on stdin only and repo
   assert.equal(refused.stderr, `${owner}\n`);
 });
 
-test("every agent Env operation refuses an option, argument, stdin or request field it doesn't read, and a missing argument, naming what it takes, and changes nothing", async () => {
+test("every agent Env operation refuses an option, argument, stdin or request field it doesn't read, and a missing argument, through the helpers' one refusal once the session's binding is checked, naming what it takes, and changes nothing", async () => {
   const project = createProjectService({
     records: [{
       editable: true, key: "OLD_VALUE", owner: "user", requiredFor: [], scope: "dev", secret: false, source: "user",
@@ -649,42 +649,47 @@ test("every agent Env operation refuses an option, argument, stdin or request fi
   const first = (result) => result.stderr.split("\n")[0];
 
   // What an operation doesn't read: a misspelt option among them, named without what follows its =, and an extra
-  // argument or stdin by what it is, never its text.
+  // argument or stdin by what it is, never its text; each through refuseUnreadFields, as every helper command.
   for (const [args, stdin, words] of [
     [["set", "development", "APP_KEY", "--secrt"], "kept-private", "env set does not read --secrt: nothing changed. It takes "
-      + "<development|staging|production> <KEY> [--secret] [--services=<id>,<id> (production)] [--json], and the value on stdin."],
+      + "<development|staging|production>, <KEY>, --secret, --services=, --json, stdin."],
     [["set", "production", "APP_KEY", "--service=web"], "kept-private", "env set does not read --service=: nothing changed."],
     [["status", "development", "--secret"], "", "env status does not read --secret: nothing changed. It takes "
-      + "[<development|staging|production|all>] [--json]."],
+      + "<development|staging|production|all>, --json."],
     [["remove", "development", "OLD_VALUE", "kept-private"], "", "env remove does not read an argument after <KEY>: nothing "
-      + "changed. It takes <development|staging|production> <KEY> [--json]."],
-    [["remove", "development", "OLD_VALUE"], "kept-private", "env remove does not read a value on stdin: nothing changed."],
+      + "changed. It takes <development|staging|production>, <KEY>, --json."],
+    [["remove", "development", "OLD_VALUE"], "kept-private", "env remove does not read stdin: nothing changed."],
     [["saved", "kept-private", "kept-private"], "", "env saved does not read 2 arguments after saved: nothing changed. It "
-      + "takes [--json]."],
-    [["export", "staging", "--all"], "", "env export does not read --all: nothing changed. It takes staging [--json]."]
+      + "takes --json."],
+    [["export", "staging", "--all"], "", "env export does not read --all: nothing changed. It takes staging, --json."]
   ]) {
     const refused = await run(args, stdin);
-    assert.deepEqual([refused.ok, refused.exitCode, refused.code], [false, 2, "vibe64_agent_env_command_input_unknown"],
-      args.join(" "));
+    assert.deepEqual([refused.ok, refused.exitCode, refused.code], [false, 2, "vibe64_command_input_unread"], args.join(" "));
     assert.ok(first(refused).startsWith(words), `${args.join(" ")}: ${first(refused)}`);
-    assert.doesNotMatch(refused.stderr + refused.error, /kept-private|=web/u);
+    assert.doesNotMatch(refused.stderr + refused.error + JSON.stringify(refused), /kept-private|=web/u);
   }
   // A missing or empty argument, named among what the operation takes.
   for (const [args, words] of [
-    [["set", "development"], "env set takes <development|staging|production> <KEY>"],
-    [["remove"], "<development|staging|production> and <KEY> are missing, so nothing changed."],
-    [["link", "development", "API_KEY", "saved-id"], "<field-id> is missing, so nothing changed."],
-    [["get", "staging", ""], "env get takes staging <KEY> [--json]: <KEY> is missing, so nothing changed."]
+    [["set", "development"], "env set needs <KEY>: nothing changed. It takes <development|staging|production>, <KEY>"],
+    [["remove"], "env remove needs <development|staging|production>, <KEY>: nothing changed."],
+    [["link", "development", "API_KEY", "saved-id"], "env link needs <field-id>: nothing changed."],
+    [["get", "staging", ""], "env get needs <KEY>: nothing changed. It takes staging, <KEY>, --json."]
   ]) {
     const refused = await run(args, args[0] === "set" ? "value" : "");
-    assert.deepEqual([refused.ok, refused.exitCode, refused.code], [false, 2, "vibe64_agent_env_command_input_missing"],
-      args.join(" "));
+    assert.deepEqual([refused.ok, refused.exitCode, refused.code], [false, 2, "vibe64_command_input_missing"], args.join(" "));
     assert.ok(first(refused).includes(words), `${args.join(" ")}: ${first(refused)}`);
   }
   // A request field the command doesn't read: a value sent as `value` instead of on stdin is refused, not saved empty.
   const misnamed = await command.run({ args: ["set", "development", "APP_KEY"], sessionId: "unread-session", value: "kept-private" });
-  assert.deepEqual([misnamed.ok, misnamed.code], [false, "vibe64_agent_env_command_input_unknown"]);
-  assert.equal(misnamed.error, "The Env command does not read value: nothing changed. A request takes args and stdin.");
+  assert.deepEqual([misnamed.ok, misnamed.code], [false, "vibe64_command_input_unread"]);
+  assert.equal(misnamed.error, "env does not read value: nothing changed. It takes args, stdin.");
+  // Only once the session's binding is checked: a session the command isn't bound to hears that, not what it sent.
+  for (const request of [{ args: ["set", "development", "APP_KEY", "--secrt"], stdin: "kept-private" },
+    { args: ["set", "development", "APP_KEY"], value: "kept-private" }, { args: ["remove"] }]) {
+    const unbound = await command.run({ ...request, sessionId: "never-bound-session" });
+    assert.deepEqual([unbound.ok, unbound.code], [false, "vibe64_agent_env_command_project_binding_missing"],
+      JSON.stringify(request.args));
+  }
   assert.deepEqual(project.state.saves, [], "nothing changed");
   assert.deepEqual(productionEnvironmentProvider.state.sets, []);
   // What each operation reads still runs.
