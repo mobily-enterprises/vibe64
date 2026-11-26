@@ -70,8 +70,10 @@ for (const { viewport, providerBatch } of [
   { viewport: viewports.find((viewport) => viewport.name === "expanded")!, providerBatch: "google-docs" },
   { viewport: viewports.find((viewport) => viewport.name === "expanded")!, providerBatch: "calendar" },
   ...viewports.map((viewport) => ({ viewport, providerBatch: viewport.name === "expanded" ? "existing" : "responsive" })),
-  // The compact screen's Env, per-user and verification-input steps, from the file the tests above leave.
+  // The compact screen's Env and per-user steps, and its verification-input and second-account steps, each from the
+  // file the tests above leave.
   { viewport: viewports.find((viewport) => viewport.name === "compact")!, providerBatch: "compact-env" },
+  { viewport: viewports.find((viewport) => viewport.name === "compact")!, providerBatch: "compact-verification" },
   { viewport: viewports.find((viewport) => viewport.name === "expanded")!, providerBatch: "existing-tokens" },
   { viewport: viewports.find((viewport) => viewport.name === "expanded")!, providerBatch: "existing-google" },
   { viewport: viewports.find((viewport) => viewport.name === "expanded")!, providerBatch: "microsoft-excel" },
@@ -374,7 +376,9 @@ for (const { viewport, providerBatch } of [
     : providerBatch === "wordpress-com"
       ? `WordPress.com form saves OAuth registration and selected permissions (${viewport.name})`
     : providerBatch === "compact-env"
-      ? "compact integration form sets the callback and credentials in Env, switches to per-user accounts and checks verification inputs"
+      ? "compact integration form sets the callback and credentials in Env and switches to per-user accounts"
+    : providerBatch === "compact-verification"
+      ? "compact integration form checks each provider's verification input and keeps two Gmail accounts apart"
     : `integration form saves the CLI configuration and protects drafts (${viewport.name})`;
   test(name, async ({ page }) => {
     test.setTimeout(120_000);
@@ -485,7 +489,7 @@ for (const { viewport, providerBatch } of [
       const calendarFlow = ["calendar", "existing", "responsive"].includes(providerBatch);
       if (!calendarFlow && !["google-ads-search", "analytics", "bigquery", "aws"].includes(providerBatch)) {
         await writeFile(path.join(source, "integrations.json"),
-          providerBatch === "compact-env" ? INTEGRATIONS_AFTER_TOKEN_FLOW : INTEGRATIONS_AFTER_CALENDAR_FLOW);
+          ["compact-env", "compact-verification"].includes(providerBatch) ? INTEGRATIONS_AFTER_TOKEN_FLOW : INTEGRATIONS_AFTER_CALENDAR_FLOW);
       }
       await page.goto(`${DASHBOARD_PATH}/integrations`);
       const showProject = page.getByRole("button", { name: "Show project", exact: true });
@@ -936,7 +940,7 @@ for (const { viewport, providerBatch } of [
         expect(errors).toEqual([]);
         return;
       }
-      const tokenProviders = providerBatch === "resend" ? [["Resend", "resend"]] : providerBatch === "replicate" ? [["Replicate", "replicate"]] : providerBatch === "pipedrive" ? [["Pipedrive", "pipedrive"]] : providerBatch === "perplexity" ? [["Perplexity", "perplexity"]] : providerBatch === "notion" ? [["Notion", "notion"]] : providerBatch === "mapbox" ? [["Mapbox", "mapbox"]] : providerBatch === "mailgun" ? [["Mailgun", "mailgun"]] : providerBatch === "logo-dev" ? [["Logo.dev", "logo-dev"]] : providerBatch === "lexware" ? [["Lexware", "lexware"]] : providerBatch === "klipy" ? [["KLIPY", "klipy"]] : providerBatch === "incident-io" ? [["incident.io", "incident-io"]] : providerBatch === "google-maps" ? [["Google Maps Platform", "google-maps-platform"]] : ["gmail", "google-docs", "google-drive", "google-search-console", "google-sheets", "google-slides", "heygen", "hubspot", "lightspeed", "linear", "linkedin", "microsoft-excel", "microsoft-onedrive", "microsoft-onenote", "microsoft-outlook", "microsoft-sharepoint", "microsoft-teams", "fabric", "miro", "n8n", "oura", "existing-tokens", "existing-google", "compact-env"].includes(providerBatch) ? [] : providerBatch === "gitlab-api" ? [["GitLab API", "gitlab-api"]] : providerBatch === "github-api" ? [["GitHub API", "github-api"]] : providerBatch === "gatewayapi" ? [["GatewayAPI", "gatewayapi"]] : providerBatch === "fireflies" ? [["Fireflies", "fireflies"]] : providerBatch === "firecrawl" ? [["Firecrawl", "firecrawl"]] : providerBatch === "elevenlabs" ? [["ElevenLabs", "elevenlabs"]] : providerBatch === "contentful" ? [["Contentful", "contentful"]] : providerBatch === "clay" ? [["Clay", "clay"]] : providerBatch === "calendly" ? [["Calendly", "calendly"]] : providerBatch === "airtable" ? [["Airtable", "airtable"]] : providerBatch === "apify" ? [["Apify", "apify"]] : providerBatch === "apollo" ? [["Apollo.io", "apollo-io"]] : providerBatch === "asana" ? [["Asana", "asana"]] : providerBatch === "brevo" ? [["Brevo", "brevo"]] : providerBatch === "attention" ? [["Attention", "attention"]] : providerBatch === "ashby" ? [["Ashby", "ashby"]] : [["Resend", "resend"], ["Firecrawl", "firecrawl"]];
+      const tokenProviders = providerBatch === "resend" ? [["Resend", "resend"]] : providerBatch === "replicate" ? [["Replicate", "replicate"]] : providerBatch === "pipedrive" ? [["Pipedrive", "pipedrive"]] : providerBatch === "perplexity" ? [["Perplexity", "perplexity"]] : providerBatch === "notion" ? [["Notion", "notion"]] : providerBatch === "mapbox" ? [["Mapbox", "mapbox"]] : providerBatch === "mailgun" ? [["Mailgun", "mailgun"]] : providerBatch === "logo-dev" ? [["Logo.dev", "logo-dev"]] : providerBatch === "lexware" ? [["Lexware", "lexware"]] : providerBatch === "klipy" ? [["KLIPY", "klipy"]] : providerBatch === "incident-io" ? [["incident.io", "incident-io"]] : providerBatch === "google-maps" ? [["Google Maps Platform", "google-maps-platform"]] : ["gmail", "google-docs", "google-drive", "google-search-console", "google-sheets", "google-slides", "heygen", "hubspot", "lightspeed", "linear", "linkedin", "microsoft-excel", "microsoft-onedrive", "microsoft-onenote", "microsoft-outlook", "microsoft-sharepoint", "microsoft-teams", "fabric", "miro", "n8n", "oura", "existing-tokens", "existing-google", "compact-env", "compact-verification"].includes(providerBatch) ? [] : providerBatch === "gitlab-api" ? [["GitLab API", "gitlab-api"]] : providerBatch === "github-api" ? [["GitHub API", "github-api"]] : providerBatch === "gatewayapi" ? [["GatewayAPI", "gatewayapi"]] : providerBatch === "fireflies" ? [["Fireflies", "fireflies"]] : providerBatch === "firecrawl" ? [["Firecrawl", "firecrawl"]] : providerBatch === "elevenlabs" ? [["ElevenLabs", "elevenlabs"]] : providerBatch === "contentful" ? [["Contentful", "contentful"]] : providerBatch === "clay" ? [["Clay", "clay"]] : providerBatch === "calendly" ? [["Calendly", "calendly"]] : providerBatch === "airtable" ? [["Airtable", "airtable"]] : providerBatch === "apify" ? [["Apify", "apify"]] : providerBatch === "apollo" ? [["Apollo.io", "apollo-io"]] : providerBatch === "asana" ? [["Asana", "asana"]] : providerBatch === "brevo" ? [["Brevo", "brevo"]] : providerBatch === "attention" ? [["Attention", "attention"]] : providerBatch === "ashby" ? [["Ashby", "ashby"]] : [["Resend", "resend"], ["Firecrawl", "firecrawl"]];
       if (providerBatch === "existing-tokens") tokenProviders.push(
         ["Airtable", "airtable"], ["Notion", "notion"], ["Brevo", "brevo"],
         ["ElevenLabs", "elevenlabs"], ["GitHub API", "github-api"], ["Apify", "apify"],
@@ -4776,7 +4780,16 @@ for (const { viewport, providerBatch } of [
         await expect(personalDraft).toHaveValue(/not a shared administrator connection or a new application login method/);
         expect(setupRequests).toHaveLength(requestsBeforePersonalSave);
         expect(JSON.parse(await readFile(filePath, "utf8")).integrations["google-calendar"].accountMode).toBe("per-user");
-        await showProject.click();
+      }
+      if (providerBatch === "compact-verification") {
+        await page.clock.install();
+        const env = page.locator(".env-panel");
+        // These steps write nothing to Env: any write would be recorded here.
+        const writes: unknown[] = [];
+        await routeApiEndpoint(page, "/vibe64/env/user-values", async (route) => {
+          writes.push(route.request().postDataJSON());
+          await fulfillJson(route, { ok: true, env: { environment: "dev", records: [], unavailable: null } });
+        });
         await addIntegration(panel, "Google Sheets");
         await panel.getByRole("textbox", { name: "Client ID", exact: true }).fill("fixture-sheets-client");
         await panel.getByRole("button", { name: "Save configuration", exact: true }).click();
@@ -4792,7 +4805,7 @@ for (const { viewport, providerBatch } of [
         await expect(panel.getByText("Waiting for provider approval", { exact: true })).toBeVisible();
         expect(setupRequests.at(-1)).toMatchObject({ operation: "connect", verificationInput: { spreadsheetId: "sheet-check-only-123" } });
         expect(await readFile(filePath, "utf8")).not.toContain("sheet-check-only-123");
-        expect(writes).toHaveLength(3);
+        expect(writes).toEqual([]);
         for (const [name, field, key, value, oauth] of [
           ["Microsoft SharePoint", "Site search", "search", "Verification team", true],
           ["PostHog", "Verification user ID", "distinct_id", "verification-subject", false],
@@ -4849,7 +4862,7 @@ for (const { viewport, providerBatch } of [
         await accounts.getByText("Support mailbox", { exact: true }).click();
         await expect(panel.getByText("Connected account: support@example.test", { exact: true })).toBeVisible();
         expect(await readFile(filePath, "utf8")).not.toContain("business@example.test");
-        expect(writes).toHaveLength(3);
+        expect(writes).toEqual([]);
       }
       expect(errors).toEqual([]);
     } finally {
