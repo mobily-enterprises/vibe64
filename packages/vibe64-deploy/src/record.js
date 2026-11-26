@@ -174,7 +174,7 @@ function createRecordStore({ root, now = () => new Date() }) {
       );
     }
     const kept = { ...structuredClone(record), revision: current + 1, updatedAt: now().toISOString() };
-    writeFileAtomicSync(file, `${JSON.stringify(kept, null, 2)}\n`, { directoryMode: 0o700, durable: false, fileMode: 0o600 });
+    writeFileAtomicSync(file, `${JSON.stringify(kept, null, 2)}\n`, { directoryMode: 0o700, durable: false, createMode: 0o600 });
     return kept;
   }
 

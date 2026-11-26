@@ -28,7 +28,7 @@ function agentControlFilePath(wrapperHostDir, control) {
  * @param {{ socketPath: string, sessionId: string, token: string, generationId: string, contractVersion?: string }} identity
  */
 async function writeAgentControlFile(filePath, identity) {
-  await writeFileAtomic(filePath, `${JSON.stringify(identity)}\n`, { directoryMode: 0o700, durable: false, fileMode: 0o600 });
+  await writeFileAtomic(filePath, `${JSON.stringify(identity)}\n`, { directoryMode: 0o700, durable: false, createMode: 0o600 });
 }
 
 /**

@@ -68,6 +68,8 @@ async function downloadVerified(archive, directory, { fetchImpl = fetch, signal 
       }
     },
     createDirectory: false,
+    // A downloaded archive is created 0644 less the umask, as it always was.
+    createMode: 0o644,
     durable: false
   });
   return target;

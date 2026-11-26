@@ -259,7 +259,7 @@ function createSessionArchiveAccess({
                     }
                   },
                   createDirectory: false,
-                  fileMode: 0o600
+                  createMode: 0o600
                 });
               } finally {
                 await source.close();

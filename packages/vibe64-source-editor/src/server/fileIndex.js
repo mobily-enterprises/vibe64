@@ -57,7 +57,7 @@ function createSourceEditorFileIndex({
             beforePublish: () => entries.get(key) === entry,
             directoryMode: 0o700,
             durable: false,
-            fileMode: 0o600
+            createMode: 0o600
           });
         }
       }

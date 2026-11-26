@@ -308,7 +308,7 @@ export async function resetLearningForLearningSpace({
   if (!apply || !(pending.length + copied.length)) return;
   if (moves.length > saved.length) {
     await mkdir(backupRoot, { recursive: true, mode: 0o700 });
-    await writeJsonFileAtomic(manifestPath, { upgrade: UPGRADE_ID, moves }, { durable: false, fileMode: 0o600 });
+    await writeJsonFileAtomic(manifestPath, { upgrade: UPGRADE_ID, moves }, { durable: false, createMode: 0o600 });
   }
   const copy = { verifiedRoot: path.join(backupRoot, "verified"), removeTree };
   for (const move of copied) await finishCopy(move, copy);

@@ -41,6 +41,22 @@ test("atomic writes publish the exact mode and never leave a temporary file", as
   assert.deepEqual(await readdir(blocked), ["occupied"], "a failed rename removes its temporary file");
 });
 
+test("createMode is the mode a new file is created with, narrowed by the umask, in both writers; fileMode stays exact", async (t) => {
+  const root = await temporaryRoot(t);
+  const previous = process.umask(0o007);
+  try {
+    await writeFileAtomic(path.join(root, "created"), "text", { createMode: 0o644 });
+    writeFileAtomicSync(path.join(root, "created-sync"), "text", { createMode: 0o600 });
+    await writeFileAtomic(path.join(root, "default"), "text");
+    await writeFileAtomic(path.join(root, "exact"), "text", { createMode: 0o600, fileMode: 0o644 });
+  } finally {
+    process.umask(previous);
+  }
+  const modes = {};
+  for (const name of ["created", "created-sync", "default", "exact"]) modes[name] = (await stat(path.join(root, name))).mode & 0o777;
+  assert.deepEqual(modes, { created: 0o640, "created-sync": 0o600, default: 0o660, exact: 0o644 });
+});
+
 test("an atomic write is durable: its data reaches the disk before the rename, and its folder after", async (t) => {
   const root = await temporaryRoot(t);
   const filePath = path.join(root, "upgrades", "applied.json");

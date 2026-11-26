@@ -208,7 +208,7 @@ async function createWorkerMetadata() {
     workerScriptPath: path.resolve(process.argv[1] || "")
   };
   metadata.signature = metadataSignature(metadata);
-  await writeFileAtomic(metadataPath, JSON.stringify(metadata) + "\\n", { createDirectory: false, durable: false, fileMode: 0o600 });
+  await writeFileAtomic(metadataPath, JSON.stringify(metadata) + "\\n", { createDirectory: false, durable: false, createMode: 0o600 });
 }
 
 async function writeWorkerMetadata() {
@@ -231,7 +231,7 @@ async function writeWorkerMetadata() {
     browserProcessGroups: normalizedBrowserProcessGroups(browserProcessGroups)
   };
   nextMetadata.signature = metadataSignature(nextMetadata);
-  await writeFileAtomic(metadataPath, JSON.stringify(nextMetadata) + "\\n", { createDirectory: false, durable: false, fileMode: 0o600 });
+  await writeFileAtomic(metadataPath, JSON.stringify(nextMetadata) + "\\n", { createDirectory: false, durable: false, createMode: 0o600 });
   return true;
 }
 

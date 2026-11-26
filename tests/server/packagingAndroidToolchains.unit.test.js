@@ -90,6 +90,20 @@ test("downloads land only when their pinned checksum matches", async (t) => {
   assert.equal(await downloadVerified({ url: "https://dl.invalid/gone", file: "tool.zip", sha256 }, directory, { fetchImpl: fetchStub({}) }), file);
 });
 
+test("a download is created 0644 less the umask, as it always was: under the managed umask 0007 it is 0640", async (t) => {
+  const directory = await temporaryFolder(t, "vibe64-download-mode-");
+  const bytes = Buffer.from("toolchain bytes");
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  const previous = process.umask(0o007);
+  try {
+    const file = await downloadVerified({ url: "https://dl.invalid/tool.zip", file: "tool.zip", sha256 }, directory,
+      { fetchImpl: fetchStub({ "https://dl.invalid/tool.zip": bytes }) });
+    assert.equal((await stat(file)).mode & 0o777, 0o640);
+  } finally {
+    process.umask(previous);
+  }
+});
+
 test("toolchain descriptions say what is missing", async (t) => {
   const { javaHome, androidHome } = await fakeToolchains(await temporaryFolder(t, "vibe64-fake-tools-"));
   assert.deepEqual(await describeJdk({ baseEnvironment: process.env, javaHome }), { ok: true, javaHome, version: "21.0.9", major: 21, message: "Java 21.0.9." });

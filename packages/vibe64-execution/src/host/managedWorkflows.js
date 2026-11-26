@@ -144,7 +144,7 @@ function writeManagedWorkflowResult(workflow, result) {
   writeFileAtomicSync(resultPath, `${JSON.stringify({ ...result, schema: "vibe64.managed-workflow.result.v1" })}\n`, {
     createDirectory: false,
     durable: false,
-    fileMode: 0o600
+    createMode: 0o600
   });
 }
 

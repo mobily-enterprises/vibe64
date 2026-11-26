@@ -32,7 +32,7 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
    * directory never write or rename each other's partial registry.
    */
   async function save(next) {
-    await writeFileAtomic(registryPath, JSON.stringify({ sessions: [...next.values()] }), { durable: false, fileMode: 0o600 });
+    await writeFileAtomic(registryPath, JSON.stringify({ sessions: [...next.values()] }), { durable: false, createMode: 0o600 });
   }
 
   await save(sessions);

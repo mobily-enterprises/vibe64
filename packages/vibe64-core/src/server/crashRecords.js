@@ -68,7 +68,7 @@ function isMissing(error) {
 
 /** The value written whole as JSON, synced, before this returns; what the dying process uses. */
 function writeJsonFileAtomicSync(filePath, value) {
-  writeFileAtomicSync(filePath, `${JSON.stringify(value, null, 2)}\n`, { directoryMode: DIRECTORY_MODE, fileMode: FILE_MODE });
+  writeFileAtomicSync(filePath, `${JSON.stringify(value, null, 2)}\n`, { directoryMode: DIRECTORY_MODE, createMode: FILE_MODE });
 }
 
 function readRemovedSync(systemRoot) {
@@ -296,7 +296,7 @@ function writeRunningMarkerSync({ systemRoot, marker }) {
 async function rewriteRunningMarker({ systemRoot, marker }) {
   const file = path.join(runningFolder(systemRoot), `${marker.pid}-${marker.instance}.json`);
   try {
-    await writeFileAtomic(file, JSON.stringify(marker), { createDirectory: false, durable: false, fileMode: FILE_MODE });
+    await writeFileAtomic(file, JSON.stringify(marker), { createDirectory: false, durable: false, createMode: FILE_MODE });
     return true;
   } catch (error) {
     if (isMissing(error)) return false;

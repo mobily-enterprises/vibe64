@@ -18,7 +18,8 @@ const ATOMIC_WRITE_TEMPORARY_PATTERN = ".vibe64-write-*.tmp";
  * Publishes content at filePath in one step: an exclusively created temporary file beside it, named
  * .vibe64-write-<uuid>.tmp, is renamed into place. Made in the file's own folder by the same writer, it takes that
  * folder's group and inherited permissions before it becomes the file (docs/managed-session-filesystem-contract.md).
- * fileMode is applied exactly (not narrowed by umask); without it the file gets the usual 0666 less the umask.
+ * fileMode is applied exactly (not narrowed by umask); without it the file is created with createMode (0666 by
+ * default) less the umask, as any created file is.
  *
  * content is text (written as UTF-8), a Buffer, or anything else a FileHandle's writeFile takes (a stream, an
  * iterable), or a function that fills the temporary file itself, given its path: it writes into the file there (a
@@ -48,13 +49,13 @@ const ATOMIC_WRITE_TEMPORARY_PATTERN = ".vibe64-write-*.tmp";
  * @param {string} filePath
  * @param {string | Buffer | Iterable<any> | AsyncIterable<any> | ((temporaryPath: string) => Promise<void>)} content
  * @param {{ beforePublish?: (temporaryPath: string) => Promise<boolean | void> | boolean | void,
- *   createDirectory?: boolean, directoryMode?: number, durable?: boolean, exclusive?: boolean, fileMode?: number,
- *   removeStale?: boolean }} [options]
+ *   createDirectory?: boolean, createMode?: number, directoryMode?: number, durable?: boolean, exclusive?: boolean,
+ *   fileMode?: number, removeStale?: boolean }} [options]
  */
 async function writeFileAtomic(filePath, content, options = {}) {
   const {
-    beforePublish = null, createDirectory = true, directoryMode, durable = true, exclusive = false, fileMode,
-    removeStale = false
+    beforePublish = null, createDirectory = true, createMode = 0o666, directoryMode, durable = true, exclusive = false,
+    fileMode, removeStale = false
   } = options;
   const fs = process.getBuiltinModule("node:fs/promises");
   const path = process.getBuiltinModule("node:path");
@@ -74,7 +75,7 @@ async function writeFileAtomic(filePath, content, options = {}) {
   const temporaryPath = path.join(directory, `${prefix}${process.getBuiltinModule("node:crypto").randomUUID()}${suffix}`);
   let stats;
   try {
-    const handle = await fs.open(temporaryPath, "wx", fileMode);
+    const handle = await fs.open(temporaryPath, "wx", fileMode ?? createMode);
     try {
       if (typeof content === "function") await content(temporaryPath);
       else await handle.writeFile(content, "utf8");
@@ -107,10 +108,13 @@ async function writeFileAtomic(filePath, content, options = {}) {
  * @param {string} filePath
  * @param {string | Buffer} content
  * @param {{ beforePublish?: (temporaryPath: string) => boolean | void, createDirectory?: boolean,
- *   directoryMode?: number, durable?: boolean, exclusive?: boolean, fileMode?: number }} [options]
+ *   createMode?: number, directoryMode?: number, durable?: boolean, exclusive?: boolean, fileMode?: number }} [options]
  */
 function writeFileAtomicSync(filePath, content, options = {}) {
-  const { beforePublish = null, createDirectory = true, directoryMode, durable = true, exclusive = false, fileMode } = options;
+  const {
+    beforePublish = null, createDirectory = true, createMode = 0o666, directoryMode, durable = true, exclusive = false,
+    fileMode
+  } = options;
   const fs = process.getBuiltinModule("node:fs");
   const path = process.getBuiltinModule("node:path");
   const directory = path.dirname(filePath);
@@ -118,7 +122,7 @@ function writeFileAtomicSync(filePath, content, options = {}) {
   const temporaryPath = path.join(directory, `.vibe64-write-${process.getBuiltinModule("node:crypto").randomUUID()}.tmp`);
   let stats;
   try {
-    const descriptor = fs.openSync(temporaryPath, "wx", fileMode);
+    const descriptor = fs.openSync(temporaryPath, "wx", fileMode ?? createMode);
     try {
       fs.writeFileSync(descriptor, content);
       if (fileMode !== undefined) fs.fchmodSync(descriptor, fileMode);

@@ -238,7 +238,7 @@ function writeManagedExecutionResult(executionRoot = "", result = {}) {
   })}\n`, {
     createDirectory: false,
     durable: false,
-    fileMode: 0o600
+    createMode: 0o600
   });
 }
 

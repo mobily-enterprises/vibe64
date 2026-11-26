@@ -111,7 +111,7 @@ async function acquireUpgradeLock(lockPath) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       // Written whole first and linked into place only where no lock is, so the lock never exists without its holder.
-      await writeFileAtomic(lockPath, contents, { createDirectory: false, exclusive: true, fileMode: 0o600 });
+      await writeFileAtomic(lockPath, contents, { createDirectory: false, exclusive: true, createMode: 0o600 });
       return async () => {
         // Only this process's lock is removed.
         if (await readOptionalText(lockPath) === contents) await rm(lockPath);

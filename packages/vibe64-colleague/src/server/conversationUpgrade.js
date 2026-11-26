@@ -105,7 +105,7 @@ export async function upgradeColleagueConversations({
     if (!(await lstat(update.file)).isFile() || await readFile(update.file, "utf8") !== update.original) {
       throw new Error("Colleague history changed during upgrade. Stop all writers before retrying.");
     }
-    await writeFileAtomic(update.file, JSON.stringify(update.next), { durable: false, fileMode: 0o600 });
+    await writeFileAtomic(update.file, JSON.stringify(update.next), { durable: false, createMode: 0o600 });
   }
 }
 
@@ -206,7 +206,7 @@ export async function upgradeColleagueConversationRuntime({
     if (!(await lstat(update.file)).isFile() || await readFile(update.file, "utf8") !== update.original) {
       throw new Error("Colleague history changed during runtime upgrade. Stop all writers before retrying.");
     }
-    await writeFileAtomic(update.file, JSON.stringify(update.next), { durable: false, fileMode: 0o600 });
+    await writeFileAtomic(update.file, JSON.stringify(update.next), { durable: false, createMode: 0o600 });
   }
 }
 
@@ -295,6 +295,6 @@ export async function upgradeColleagueConversationHistory({
     if (!(await lstat(update.file)).isFile() || await readFile(update.file, "utf8") !== update.original) {
       throw new Error("Colleague history changed during upgrade. Stop all writers before retrying.");
     }
-    await writeFileAtomic(update.file, JSON.stringify(update.next), { durable: false, fileMode: 0o600 });
+    await writeFileAtomic(update.file, JSON.stringify(update.next), { durable: false, createMode: 0o600 });
   }
 }

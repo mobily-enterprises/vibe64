@@ -72,7 +72,7 @@ export async function writeSourceInterpretation(context, input, cacheKey, templa
     beforePublish: async () => Boolean(await isCurrent()),
     directoryMode: 0o700,
     durable: false,
-    fileMode: 0o600
+    createMode: 0o600
   });
 }
 

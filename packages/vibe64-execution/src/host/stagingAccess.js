@@ -100,7 +100,7 @@ function installStagingAccess(user, publicKey, helperPath, {
   writeFileAtomicSync(
     stagingKeysPath(user.username, keysRoot),
     `command="${helperPath} staging-shell",restrict,pty,from="127.0.0.1,::1" ${publicKey} vibe64-staging\n`,
-    { createDirectory: false, fileMode: 0o644 }
+    { createDirectory: false, createMode: 0o644 }
   );
   writeFileAtomicSync(
     stagingSudoersPath(user.username, sudoersRoot),
@@ -111,7 +111,7 @@ function installStagingAccess(user, publicKey, helperPath, {
         runRoot("visudo", ["-cqf", candidate]);
       },
       createDirectory: false,
-      fileMode: 0o440
+      createMode: 0o440
     }
   );
   if (user.shell !== STAGING_LOGIN_SHELL) {
