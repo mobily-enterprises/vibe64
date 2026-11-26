@@ -11,7 +11,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 
-import { spawnCommand as spawnFiniteCommand } from "@local/vibe64-execution/server";
+import { spawnCommand } from "@local/vibe64-execution/server/commandSpawner";
 
 import { canonicalJson, sha256 } from "./canonical.js";
 import { publishError } from "./errors.js";
@@ -92,13 +92,13 @@ function buildStageEnvironment({ baseEnvironment, declared = [], home, cacheDire
  * through the command gateway (projectCommands.js). An abort sends SIGTERM and
  * answers at once, as Node's spawn `signal` option does.
  */
-function spawnCommand({ command, args, cwd, env, stdin = null, signal }) {
+function runPackagingTool({ command, args, cwd, env, stdin = null, signal }) {
   return new Promise((resolve) => {
     if (signal?.aborted) {
       resolve({ ok: false, exitCode: null, stdout: "", stderr: "", error: "The operation was aborted" });
       return;
     }
-    const child = spawnFiniteCommand(command, args, {
+    const child = spawnCommand(command, args, {
       cwd,
       env,
       input: stdin,
@@ -440,7 +440,7 @@ export {
   readArtifacts,
   readBackTarget,
   runBuildStage,
-  spawnCommand,
+  runPackagingTool,
   storedArtifacts,
   verifyArtifacts,
   withStageCredentials,

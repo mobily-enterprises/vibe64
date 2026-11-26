@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { publishError } from "../../errors.js";
-import { spawnCommand } from "../../stages.js";
+import { runPackagingTool } from "../../stages.js";
 import { toolchainEnvironment } from "../../toolchains/download.js";
 
 const SIDELOAD_KEY_ALIAS = "vibe64-sideload";
@@ -28,7 +28,7 @@ function distinguishedName(commonName) {
   return `CN=${name || "Vibe64 app"}`;
 }
 
-async function runKeytool(javaHome, args, { cwd, password, runCommand = spawnCommand }) {
+async function runKeytool(javaHome, args, { cwd, password, runCommand = runPackagingTool }) {
   const result = await runCommand({
     command: keytool(javaHome),
     args,
@@ -57,7 +57,7 @@ function certificateDigest(der) {
  * writes the certificate into `cwd`, a private folder the caller removes.
  */
 async function exportCertificateSha256({ javaHome, keystore, alias, password, cwd }, options = {}) {
-  const { runCommand = spawnCommand } = options;
+  const { runCommand = runPackagingTool } = options;
   const certificate = path.join(cwd, "certificate.der");
   await runKeytool(javaHome, [
     "-exportcert", "-keystore", keystore, "-storetype", "PKCS12", "-alias", alias, "-storepass:env", PASSWORD_VARIABLE, "-file", certificate
@@ -71,7 +71,7 @@ async function exportCertificateSha256({ javaHome, keystore, alias, password, cw
  * keep; they are zeroed after the sink returns). Returns only public facts.
  */
 async function generateSideloadKey({ javaHome, commonName, sink, tempRoot = os.tmpdir() } = {}, options = {}) {
-  const { runCommand = spawnCommand } = options;
+  const { runCommand = runPackagingTool } = options;
   // readable-check: allow method-probe - input validation: the publishing caller hands over the sink that keeps the new key
   if (typeof sink !== "function") throw publishError("VIBE64_PUBLISH_KEY_SINK_REQUIRED", "Creating a key needs a sink that keeps it.");
   const directory = await mkdtemp(path.join(tempRoot, "vibe64-sideload-key-"));

@@ -5,7 +5,7 @@
 import path from "node:path";
 
 import { publishError } from "../errors.js";
-import { spawnCommand } from "../stages.js";
+import { runPackagingTool } from "../stages.js";
 import { downloadVerified, exists, toolchainEnvironment, unpackInto } from "./download.js";
 
 const REQUIRED_JAVA = 21;
@@ -40,9 +40,9 @@ function hostPlatform(platform = process.platform, arch = process.arch) {
 /**
  * `java -version` of one Java home: { ok, javaHome, version, major, message }.
  * @param {{ javaHome?: string | null, baseEnvironment: import("../stages.js").BaseEnvironment }} input
- * @param {{ runCommand?: typeof spawnCommand }} [commands]
+ * @param {{ runCommand?: typeof runPackagingTool }} [commands]
  */
-async function describeJdk({ javaHome, baseEnvironment }, { runCommand = spawnCommand } = {}) {
+async function describeJdk({ javaHome, baseEnvironment }, { runCommand = runPackagingTool } = {}) {
   if (typeof javaHome !== "string" || !path.isAbsolute(javaHome)) return { ok: false, javaHome: null, message: "No Java home given." };
   const java = path.join(javaHome, "bin", "java");
   if (!await exists(java)) return { ok: false, javaHome, message: `${javaHome} has no bin/java.` };
@@ -66,7 +66,7 @@ async function describeJdk({ javaHome, baseEnvironment }, { runCommand = spawnCo
 /**
  * The Java home of `java` on PATH, read from the JVM itself.
  */
-async function javaHomeOnPath({ baseEnvironment }, { runCommand = spawnCommand } = {}) {
+async function javaHomeOnPath({ baseEnvironment }, { runCommand = runPackagingTool } = {}) {
   const result = await runCommand({
     command: "java",
     args: ["-XshowSettings:properties", "-version"],
@@ -81,7 +81,7 @@ async function javaHomeOnPath({ baseEnvironment }, { runCommand = spawnCommand }
  * The first usable JDK: Vibe64's own install in `directory`, then JAVA_HOME, then PATH.
  * @param {{ directory?: string | null, baseEnvironment: import("../stages.js").BaseEnvironment, platform?: string }} input
  *   baseEnvironment supplies JAVA_HOME and the PATH `java` is looked up on
- * @param {{ runCommand?: typeof spawnCommand }} [commands]
+ * @param {{ runCommand?: typeof runPackagingTool }} [commands]
  */
 async function findJdk({ directory = null, baseEnvironment, platform = hostPlatform() }, { runCommand } = {}) {
   const candidates = [];
@@ -107,7 +107,7 @@ async function findJdk({ directory = null, baseEnvironment, platform = hostPlatf
 /**
  * Installs the pinned Temurin JDK into `directory` (idempotent) and returns it.
  * @param {{ directory: string, platform?: string, baseEnvironment: import("../stages.js").BaseEnvironment, signal?: AbortSignal }} input
- * @param {{ fetchImpl?: typeof fetch, runCommand?: typeof spawnCommand }} [commands]
+ * @param {{ fetchImpl?: typeof fetch, runCommand?: typeof runPackagingTool }} [commands]
  */
 async function installJdk(
   { directory, platform = hostPlatform(), baseEnvironment, signal },

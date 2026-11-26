@@ -12,7 +12,7 @@ import { inflateRawSync } from "node:zlib";
 
 import { writeFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { publishError } from "../errors.js";
-import { passthroughEnvironment, spawnCommand } from "../stages.js";
+import { passthroughEnvironment, runPackagingTool } from "../stages.js";
 
 async function exists(file) {
   return Boolean(await stat(file).catch(() => null));
@@ -83,7 +83,7 @@ function toolchainEnvironment(baseEnvironment, extra = {}) {
   return { ...passthroughEnvironment(baseEnvironment), ...extra };
 }
 
-async function runOrFail(argv, { cwd, env, label, runCommand = spawnCommand }) {
+async function runOrFail(argv, { cwd, env, label, runCommand = runPackagingTool }) {
   const result = await runCommand({ command: argv[0], args: argv.slice(1), cwd, env });
   if (result?.ok !== true) {
     const exit = result?.exitCode == null ? "" : ` with exit code ${result.exitCode}`;

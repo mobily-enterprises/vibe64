@@ -8,6 +8,7 @@
     ".": "./src/server/index.js",
     "./server": "./src/server/index.js",
     "./server/capture": "./src/server/engines/capture.js",
+    "./server/commandSpawner": "./src/server/engines/commandSpawner.js",
     "./server/credentialHomes": "./src/server/credentialHomes.js",
     "./server/gitIdentityEnv": "./src/server/env/gitIdentityEnv.js",
     "./server/gitTurnCheckpoint": "./src/server/gitTurnCheckpoint.js",
@@ -45,6 +46,10 @@
           {
             "subpath": "./server",
             "summary": "Runs Vibe64 commands through one actor, environment, runtime path, policy, and execution gateway."
+          },
+          {
+            "subpath": "./server/commandSpawner",
+            "summary": "Starts one finite command as Node's spawn or execFile would, with exactly the environment given, in the editor's command spawner once the server has started it at boot: for Vibe64's own fixed tools; a project's commands go through the gateway."
           },
           {
             "subpath": "./server/hostProfile",

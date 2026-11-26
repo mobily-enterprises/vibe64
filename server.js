@@ -27,7 +27,8 @@ import {
 } from "@local/vibe64-core/server/studioProjectContext";
 import { closeTerminalSessionsForNamespacePrefix } from "@local/vibe64-execution/server/terminalSessions";
 import { beginServerStop, resetServerStop } from "@local/vibe64-execution/server/serverStop";
-import { GITHUB_ACCOUNT_MODE_LOCAL, VIBE64_GITHUB_ACCOUNT_MODE_ENV, normalizeGithubAccountMode, startCommandSpawner } from "@local/vibe64-execution/server";
+import { GITHUB_ACCOUNT_MODE_LOCAL, VIBE64_GITHUB_ACCOUNT_MODE_ENV, normalizeGithubAccountMode } from "@local/vibe64-execution/server";
+import { startCommandSpawner } from "@local/vibe64-execution/server/commandSpawner";
 import {
   assertLocalhostCheckBypassAllowed,
   isLocalhostCheckBypassEnabled

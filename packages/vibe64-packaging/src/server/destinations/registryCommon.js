@@ -7,7 +7,7 @@ import path from "node:path";
 
 import { canonicalJson, sha256 } from "../canonical.js";
 import { publishError } from "../errors.js";
-import { passthroughEnvironment, spawnCommand } from "../stages.js";
+import { passthroughEnvironment, runPackagingTool } from "../stages.js";
 
 const HTTP_TIMEOUT_MS = 30_000;
 
@@ -110,7 +110,10 @@ function redact(text, secrets = []) {
 /**
  * Runs one tool; failures carry its redacted output, never a credential.
  */
-async function runTool({ argv, cwd, env, stdin = null, secrets = [], failureCode, failureMessage }, { runCommand = spawnCommand } = {}) {
+async function runTool(
+  { argv, cwd, env, stdin = null, secrets = [], failureCode, failureMessage },
+  { runCommand = runPackagingTool } = {}
+) {
   const result = await runCommand({ command: argv[0], args: argv.slice(1), cwd, env, stdin });
   const output = redact(`${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`, secrets).trim();
   if (result?.ok !== true) {

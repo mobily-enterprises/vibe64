@@ -3,7 +3,7 @@
 // Stage 2 receives a value only for one operation, as a private temporary file
 // the shared stage code removes. No value is ever returned to a caller here
 // except into that stage.
-import { execFileCommand } from "@local/vibe64-execution/server";
+import { execFileCommand } from "@local/vibe64-execution/server/commandSpawner";
 import { ANDROID_SIDELOAD_KEYSTORE, ANDROID_SIDELOAD_KEY_PASSWORD } from "@local/vibe64-packaging/server";
 
 import { publishingError } from "./publishingError.js";

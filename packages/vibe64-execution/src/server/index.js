@@ -38,12 +38,6 @@ export {
   runCaptureCommand
 } from "./engines/capture.js";
 export {
-  COMMAND_SPAWNER_FAILED,
-  execFileCommand,
-  spawnCommand,
-  startCommandSpawner
-} from "./engines/commandSpawner.js";
-export {
   executionCleanupRequired
 } from "./result.js";
 export {
