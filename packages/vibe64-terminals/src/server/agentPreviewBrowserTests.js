@@ -11,6 +11,10 @@ import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { commandFailure } from "./commandFailure.js";
 
+// Why Preview still shows the test target after a run (outputTargetPreviewTests.js), in the run's own output.
+const PREVIEW_RESTORE_PENDING_NOTE = "\nVibe64 keeps the test target in Preview for your next run. The previous Preview " +
+  "returns when this turn ends, or as soon as Preview is ensured, restarted or stopped.\n";
+
 /** @typedef {import("./types.js").AgentPreviewCommandState} AgentPreviewCommandState */
 /** @typedef {import("./types.js").AgentPreviewWorkerRegistry} AgentPreviewWorkerRegistry */
 /** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
@@ -275,6 +279,7 @@ function createAgentPreviewBrowserTests({
         result = { ...result, previewRecoveryRequired: true };
         if (pending) pending.state = "cleanup_required";
       }
+      if (result?.previewRestorePending) (options.onOutput || doNothing)(PREVIEW_RESTORE_PENDING_NOTE);
       return result;
     } catch (error) {
       result = commandFailure(error.message, error.code || "vibe64_managed_playwright_run_failed");

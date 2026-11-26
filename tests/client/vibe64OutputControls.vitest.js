@@ -81,6 +81,11 @@ describe("Vibe64 launch controls", () => {
     expect(launchPreviewTestNotice({}, { id: "app", dataMode: "test" }).title).toBe("Test Preview");
     expect(launchPreviewTestNotice({ previewTestRun: { state: "running" } }, { dataMode: "development" }).title).toBe("Browser tests in progress");
     expect(launchPreviewTestNotice({ previewTestRun: { state: "restoring" } }, { dataMode: "test" }).title).toBe("Restoring your app");
+    // Over the test app between an agent's runs, saying when the person's app returns and how to bring it back now.
+    expect(launchPreviewTestNotice({ previewTestRun: { state: "restore_pending" } }, { dataMode: "test" })).toEqual({
+      title: "Your app returns after the tests",
+      message: "The coding agent may run its tests again, so the test app stays for now. Your app returns when its turn ends; Restart brings it back now."
+    });
     for (const state of ["restore_failed", "cleanup_required"]) {
       expect(launchPreviewTestNotice({ previewTestRun: { state } }, { dataMode: "development" }).error).toBe(true);
     }

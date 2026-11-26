@@ -33,6 +33,8 @@ const MAIN_TURN_IDLE_ENGINES = new Map([
  * @param {ServiceGoals["cancelGoalIfMainAiChanged"]} dependencies.cancelGoalIfMainAiChanged
  * @param {ServiceGoals["continueGoalWhenLimitResets"]} dependencies.continueGoalWhenLimitResets
  * @param {ServiceGoals["resumeGoalAfterTurn"]} dependencies.resumeGoalAfterTurn
+ * @param {(sessionId: string) => Promise<unknown> | null} dependencies.restorePreviewAfterTurn restores the Preview a
+ *   finished browser test left to the agent's turn end
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProviderUsage} dependencies.providerUsage
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
@@ -47,6 +49,7 @@ function createServiceTurnPublication({
   cancelGoalIfMainAiChanged,
   continueGoalWhenLimitResets,
   resumeGoalAfterTurn,
+  restorePreviewAfterTurn,
   logger,
   providerUsage,
   publishSessionChanged,
@@ -109,7 +112,19 @@ function createServiceTurnPublication({
     // What follows a turn is Vibe64's own work: it runs without the request the engine's events last ran in, which
     // for a running engine is whichever request last read or used the session (a page's poll, say), never one that
     // asked for it.
-    if (payload.reason === "temporary-agent-turn-idle") {
+    const reason = String(payload.reason || "").trim();
+    if (reason === "temporary-agent-turn-idle" || MAIN_TURN_IDLE_ENGINES.has(reason)) {
+      // A restore that cannot start the app shows on the Preview as one that needs recovery.
+      state.trackShutdownWork(runWithoutActionRequest(async () => restorePreviewAfterTurn(sessionId)).catch((error) => {
+        logOperationalEvent(logger, "warn", {
+          component: "vibe64.preview_tests",
+          event: "vibe64.preview_tests.restore_after_turn_failed",
+          sessionId,
+          code: error.code
+        }, "The Preview a browser test left could not be restored after the turn.");
+      }));
+    }
+    if (reason === "temporary-agent-turn-idle") {
       state.trackShutdownWork(runWithoutActionRequest(() => afterTemporaryTurn(sessionId, payload.payload)).catch((error) => {
         logOperationalEvent(logger, "warn", {
           component: "vibe64.assistant_routing",
@@ -120,7 +135,7 @@ function createServiceTurnPublication({
       }));
       return;
     }
-    const engineId = MAIN_TURN_IDLE_ENGINES.get(String(payload.reason || "").trim());
+    const engineId = MAIN_TURN_IDLE_ENGINES.get(reason);
     if (!engineId) {
       return;
     }

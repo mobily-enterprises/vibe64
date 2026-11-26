@@ -21,9 +21,13 @@ test data. It remains visible above the app on desktop and mobile, even with
 the Preview toolbar collapsed. Changes in that target use its test data rather
 than the ordinary app database. The project launcher must enforce this separation.
 A generic **Browser tests in progress** bar means automated checks control
-Preview; it does not claim a separate database. **Restoring your app** remains
-visible while Vibe64 restores the previous target. The bar disappears when
-restoration succeeds. A red **Preview recovery required** bar means cleanup or
+Preview; it does not claim a separate database. Between the coding agent's test
+runs, **Your app returns after the tests** keeps the test app up, so a repeated
+run does not wait for your app to start again in between: your app returns when
+the agent's turn ends, **Restart** brings it back at once, and **Stop preview**
+stops the test app without starting yours.
+**Restoring your app** remains visible while Vibe64 restores the previous target.
+The bar disappears when restoration succeeds. A red **Preview recovery required** bar means cleanup or
 restoration failed: ask the coding agent to recover the managed browser run
 before using Preview. Colleague can inspect output status and explain recovery;
 it must not claim the normal app is restored from a test exit code alone.

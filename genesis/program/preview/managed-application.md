@@ -190,6 +190,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `tests/server/agentPreviewOpenCommand.unit.test.js`
 - `tests/server/previewPreparation.integration.test.js`
 - `tests/server/previewRestartPrepare.integration.test.js`
+- `tests/server/turnEndPreviewRestore.unit.test.js`
 - `tests/client/vibe64OutputControls.vitest.js`
 - `tests/client/vibe64OutputControlsSurface.vitest.js`
 - `tests/server/launchPreviewCrossSiteCookies.unit.test.js`
@@ -328,8 +329,9 @@ playwright test` or `npm-run`, and runs the project's own Playwright only when
 that command reports no managed browser runtime on the computer.
 Managed-session instructions and command help require browser suites and live
 Preview browser actions to run sequentially. The coding agent waits on the
-original suite through cleanup and restoration, confirms no active managed run
-and a ready restored Preview, then performs live inspection. Read-only status
+original suite through cleanup, confirms no active managed run, then performs
+live inspection; its `preview ensure` first restores a Preview a test target
+still holds. Read-only status
 and logs remain available while tests run. This guidance uses the existing test
 owner and recovery guard; it adds no execution or locking mechanism.
 For background commands, instructions and help prefer an existing execution
@@ -424,12 +426,28 @@ therefore remain separate from the short private socket directory.
 `vibe64-helper playwright --target <id> test ...` and `npm-run <script>` temporarily
 select an available web target through the same output controller. The server
 holds the session's target selection while the existing managed runner obtains
-its URL and native application identity and executes the suite. It restores a
-previously running target and waits for readiness, or stops the test Preview
-when there was no running target. Failures and cancellation use the same cleanup;
-restoration failures preserve the test failure and make the command fail.
-One command owns the entire suite: several tests share one startup and one
-restoration. Separate command invocations each perform that lifecycle.
+its URL and native application identity and executes the suite. Before the
+command ends it stops the test Preview when there was no running target, and
+keeps the target it tested when that was the running one. A previously running
+other target is not started again then: restarting the person's app after
+every run, only for the agent's next run to stop it, cost each repeated run that
+app's whole start. The command returns once its tests and cleanup end, and the
+run waits as `restore_pending` (`outputTargetPreviewTests.js`), its test target
+still serving, until the agent's turn ends (the turn publication's
+`restorePreviewAfterTurn`), which starts the previous target again with its
+parameters, or until a request starts, restarts, stops or closes Preview
+(`handPreviewBack`), which puts the person's saved target back and then does
+what it asked. A start or Restart that names no target starts the person's own
+over the still-running test target, with its parameters (a record with no process
+and no Stop reads as stale and is cleared, so the test target is not stopped
+first). Stop marks Preview stopped, closes the test target and keeps the person's
+target for the next Start. A request that finds nothing waiting takes no lock. A run still testing when a turn ends restores
+as it finishes. The next test run takes a waiting run's restore over and starts
+its own target afresh (`restartPreview`), never reusing the last run's server and
+data. Failures and cancellation use the same cleanup, and a cleanup failure
+still keeps the command waiting and makes it fail; a later restore that fails
+shows as `restore_failed` until a Preview start or restart takes over. One
+command owns the entire suite: several tests share one startup.
 `vibe64-helper playwright status` reads the current run ID, target, phase, start
 time and elapsed time. `cancel <run-id>` cancels only that run and waits for
 cleanup. A stale ID cannot cancel a replacement run. Concurrent cancellation

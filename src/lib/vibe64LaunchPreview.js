@@ -48,6 +48,12 @@ function launchPreviewTestNotice(status = {}, activeTarget = null) {
   if (state === "restoring") {
     return { title: "Restoring your app", message: "Browser tests have finished. Vibe64 is restoring the previous Preview." };
   }
+  if (state === "restore_pending") {
+    return {
+      title: "Your app returns after the tests",
+      message: "The coding agent may run its tests again, so the test app stays for now. Your app returns when its turn ends; Restart brings it back now."
+    };
+  }
   if (activeTarget?.dataMode === "test") {
     return { title: "Test Preview", message: "Using this app’s test configuration. Test data may be reset." };
   }
