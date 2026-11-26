@@ -92,9 +92,12 @@ it: the daemon checks it free and holds it until the run releases it
 (`reserveAvailableWebLaunchTargetPort`, `launchTargetTerminal.js`), and the Run
 command binds it later, in its own process. It is therefore never a port in the
 host's ephemeral range (`/proc/sys/net/ipv4/ip_local_port_range` wherever it
-exists, IANA's 49152-65535 off Linux), where an outgoing connection can take it
-in between and the run then cannot listen; a preferred port inside that range
-is passed over like a taken one. A run whose process exits with an error is
+exists, IANA's 49152-65535 off Linux; `ephemeralPortRange`, exported as
+`@local/vibe64-terminals/server/ephemeralPortRange` for a host's own port
+allocators), where an outgoing connection can take it in between and the run
+then cannot listen, nor one the host profile's `claimedPorts` ranges give to the
+host's own services, which their owner may bind after the check; a preferred
+port inside either is passed over like a taken one. A run whose process exits with an error is
 `failed`, and its message gives the exit code and the last error line its output
 printed (`previewExitMessage`, `launchPreviewStatus.js`), as `The preview process
 exited with code 1: listen EADDRINUSE: address already in use 127.0.0.1:4103.`

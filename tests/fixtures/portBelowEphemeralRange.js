@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { createServer } from "node:net";
 
-import { ephemeralPortRange } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
+import { ephemeralPortRange } from "@local/vibe64-terminals/server/ephemeralPortRange";
 
 const LOWEST = 24_000;
 

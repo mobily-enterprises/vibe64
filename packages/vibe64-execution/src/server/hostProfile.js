@@ -21,7 +21,10 @@ const LOCAL_HOST_PROFILE = Object.freeze({
   // Privileged helper that runs commands as other OS users.
   execHelperPath: "",
   // Several OS users share project files through one group.
-  sharedGroupAccess: false
+  sharedGroupAccess: false,
+  // The port ranges the host's own services bind, [{ first, last }], which a Preview is never offered: such a port
+  // can be free when a Preview's is chosen and taken by its owner later.
+  claimedPorts: Object.freeze([])
 });
 
 /**
@@ -68,6 +71,16 @@ function loginEnvironmentSetting(value) {
   });
 }
 
+/** A copy of the host's claimed port ranges, checked and frozen. */
+function claimedPortsSetting(value) {
+  const valid = ({ first, last, ...rest } = {}) => Object.keys(rest).length === 0 &&
+    [first, last].every((port) => Number.isInteger(port) && port >= 1 && port <= 65535) && first <= last;
+  if (!Array.isArray(value) || !value.every((range) => range && typeof range === "object" && valid(range))) {
+    throw new TypeError("Host profile claimedPorts must be a list of { first, last } port ranges within 1-65535.");
+  }
+  return Object.freeze(value.map(({ first, last }) => Object.freeze({ first, last })));
+}
+
 function configureVibe64Host(profile = null) {
   if (profile === null) {
     delete globalThis[HOST_PROFILE_KEY];
@@ -88,6 +101,7 @@ function configureVibe64Host(profile = null) {
     throw new TypeError("Host profile sharedGroupAccess must be true or false.");
   }
   configured.loginEnvironment = loginEnvironmentSetting(configured.loginEnvironment);
+  configured.claimedPorts = claimedPortsSetting(configured.claimedPorts);
   const frozen = Object.freeze(configured);
   globalThis[HOST_PROFILE_KEY] = frozen;
   setHostUmask(frozen.sharedGroupAccess);

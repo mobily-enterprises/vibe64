@@ -8,10 +8,10 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import {
-  ephemeralPortRange,
-  reserveAvailableWebLaunchTargetPort
-} from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
+import { configureVibe64Host } from "@local/vibe64-execution/server/hostProfile";
+// The package export Online's own port allocators read, the one owner of the range.
+import { ephemeralPortRange } from "@local/vibe64-terminals/server/ephemeralPortRange";
+import { reserveAvailableWebLaunchTargetPort } from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 
 const RANGE_FILE = "/proc/sys/net/ipv4/ip_local_port_range";
@@ -56,4 +56,19 @@ test("a Preview is never offered a port in the host's ephemeral range: a preferr
   const below = await reserveAvailableWebLaunchTargetPort(free, { rangeFile: narrow });
   t.after(() => below.release());
   assert.equal(below.port, free);
+});
+
+test("a Preview is never offered a port the host claims for its own services, which may be free when it is chosen", async (t) => {
+  t.after(() => configureVibe64Host(null));
+  const free = await portBelowEphemeralRange();
+  configureVibe64Host({ claimedPorts: [{ first: free - 5, last: free + 10 }, { first: free + 11, last: free + 12 }] });
+  // Inside the first claim, and across the claim right after it.
+  const past = await reserveAvailableWebLaunchTargetPort(free);
+  t.after(() => past.release());
+  assert.ok(past.port > free + 12, `${past.port} is claimed by the host (${free - 5}-${free + 12})`);
+  // The same port once nothing claims it.
+  configureVibe64Host(null);
+  const unclaimed = await reserveAvailableWebLaunchTargetPort(free);
+  t.after(() => unclaimed.release());
+  assert.equal(unclaimed.port, free);
 });

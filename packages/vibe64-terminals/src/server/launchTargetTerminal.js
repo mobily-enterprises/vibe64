@@ -1,5 +1,4 @@
 import { chmodSync, lstatSync, mkdirSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
 import path from "node:path";
 
@@ -7,6 +6,8 @@ import {
   shellQuote,
   stableHash
 } from "@local/vibe64-execution/server";
+import { vibe64Host } from "@local/vibe64-execution/server/hostProfile";
+import { ephemeralPortRange } from "./ephemeralPortRange.js";
 import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
@@ -58,40 +59,21 @@ function canListenOnPort(port) {
   });
 }
 
-// Where the kernel takes each outgoing connection's own port. Linux names it here; elsewhere IANA's range is the
-// default.
-const EPHEMERAL_PORT_RANGE_FILE = "/proc/sys/net/ipv4/ip_local_port_range";
-const IANA_EPHEMERAL_PORT_RANGE = Object.freeze({ first: 49152, last: 65535 });
-
-/**
- * The host's ephemeral port range, { first, last }: from rangeFile where it exists, IANA's off Linux.
- * @param {{ rangeFile?: string, platform?: string }} [host]
- */
-async function ephemeralPortRange({ rangeFile = EPHEMERAL_PORT_RANGE_FILE, platform = process.platform } = {}) {
-  const text = await readFile(rangeFile, "utf8").catch((error) => {
-    if (error?.code !== "ENOENT" || platform === "linux") throw error;
-    return "";
-  });
-  if (!text) return IANA_EPHEMERAL_PORT_RANGE;
-  const [first, last] = text.trim().split(/\s+/u).map(Number);
-  if (!Number.isInteger(first) || !Number.isInteger(last) || first < 1 || first > last || last > 65535) {
-    throw new Error(`${rangeFile} does not hold a port range: ${text.trim()}`);
-  }
-  return { first, last };
-}
-
 /**
  * A free localhost port at or after preferredPort for a Preview's Run command, held in this process until released.
  * The port is checked here and bound later by the Run command, in its own process, so it is never one in the host's
  * ephemeral range: there any outgoing connection may take it as its own port in between, and the Preview then cannot
- * listen (EADDRINUSE). A preferred port in that range is passed over like a taken one.
+ * listen (EADDRINUSE). Nor is it one the host's own services claim (the host profile's claimedPorts), which may be
+ * free when checked and bound later by their owner. A preferred port in either is passed over like a taken one.
  */
 async function reserveAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT, host = {}) {
   const startPort = normalizePort(preferredPort);
   const ephemeral = await ephemeralPortRange(host);
+  const passedOver = [ephemeral, ...vibe64Host().claimedPorts];
   for (let port = startPort; port <= 65535; port += 1) {
-    if (port >= ephemeral.first && port <= ephemeral.last) {
-      port = ephemeral.last;
+    const range = passedOver.find(({ first, last }) => port >= first && port <= last);
+    if (range) {
+      port = range.last;
       continue;
     }
     if (reservedWebLaunchTargetPorts.has(port)) {
@@ -116,8 +98,8 @@ async function reserveAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_L
       }
     };
   }
-  throw new Error(`No localhost port outside the ephemeral range ${ephemeral.first}-${ephemeral.last} is available at or `
-    + `after ${startPort}.`);
+  throw new Error(`No localhost port outside the ephemeral range ${ephemeral.first}-${ephemeral.last} and the host's claimed `
+    + `ports is available at or after ${startPort}.`);
 }
 
 function normalizeUrlPath(value = "/") {
@@ -697,7 +679,6 @@ const __testables = Object.freeze({ commandWithHttpReadiness, httpReadinessProbe
 export {
   WEB_LAUNCH_READINESS_TIMEOUT_SECONDS,
   createVibe64WebLaunchTargetTerminalSpec,
-  ephemeralPortRange,
   reserveAvailableWebLaunchTargetPort,
   __testables
 };

@@ -39,7 +39,8 @@ test("a person's own computer needs no host configuration", () => {
     sharedCacheRoot: "",
     loginEnvironment: null,
     execHelperPath: "",
-    sharedGroupAccess: false
+    sharedGroupAccess: false,
+    claimedPorts: []
   });
   assert.deepEqual(vibe64SharedModes(), { inheritingDirectory: 0o700, directory: 0o700, file: 0o600 });
   assert.equal(vibe64ProcessUmask(), "");
@@ -69,6 +70,12 @@ test("a host profile is validated, frozen and replaces the local defaults", (t) 
     .loginEnvironment, { env: { GOPATH: "/srv/%u/.tools/go" }, path: ["/srv/%u/.tools/go/bin"] });
   assert.ok(Object.isFrozen(vibe64Host().loginEnvironment.env) && Object.isFrozen(vibe64Host().loginEnvironment.path));
   assert.throws(() => configureVibe64Host({ sharedGroupAccess: "yes" }), /true or false/u);
+  for (const claimedPorts of [{ first: 1, last: 2 }, [{ first: 0, last: 10 }], [{ first: 20, last: 10 }], [{ first: 1, last: 65536 }],
+    [{ first: 1.5, last: 2 }], [{ first: 1, last: 2, owner: "redis" }], [null]]) {
+    assert.throws(() => configureVibe64Host({ claimedPorts }), /claimedPorts must be a list of \{ first, last \} port ranges/u);
+  }
+  assert.deepEqual(configureVibe64Host({ claimedPorts: [{ first: 16379, last: 22378 }] }).claimedPorts, [{ first: 16379, last: 22378 }]);
+  assert.ok(Object.isFrozen(vibe64Host().claimedPorts) && Object.isFrozen(vibe64Host().claimedPorts[0]));
   assert.throws(() => configureVibe64Host({ packRoot: "/srv/packs" }), /Unknown host profile setting: packRoot/u);
 
   const previousUmask = process.umask();

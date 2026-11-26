@@ -15,6 +15,7 @@
     "./server/codexGitCommand": "./src/server/codexGitCommand.js",
     "./server/vibe64OutputTargets": "./src/server/vibe64OutputTargets.js",
     "./server/launchPreviewProxy": "./src/server/launchPreviewProxy.js",
+    "./server/ephemeralPortRange": "./src/server/ephemeralPortRange.js",
     "./server/previewDiagnosticFiles": "./src/server/previewDiagnosticFiles.js",
     "./server/openedFileWithin": "./src/server/openedFileWithin.js",
     "./server/projectExecutionEnv": "./src/server/projectExecutionEnv.js",
