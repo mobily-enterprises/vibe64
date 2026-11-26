@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
@@ -342,7 +342,7 @@ test("archive saves each connected copy's commits and unsaved work, removes the 
     assert.deepEqual(Object.keys(recovery).sort(), ["library", "tools"]);
     assert.deepEqual(recovery.library, {
       baseCommit, branch: `vibe64/${sessionId}`, branchBundleArtifact: "recovery/connected/library/branch.bundle",
-      checkpointBundleArtifact: "", dirty: true, head: libraryHead, patchArtifact: "recovery/connected/library/worktree.patch",
+      checkpointBackup: "", checkpointBackupError: "", dirty: true, head: libraryHead, patchArtifact: "recovery/connected/library/worktree.patch",
       repository: "example/library", sourcePath: library, untrackedArtifact: "recovery/connected/library/untracked-files.tar.gz",
       untrackedCount: 1
     });
@@ -439,7 +439,60 @@ test("archiving a session whose source creation failed removes its emptied folde
   });
 });
 
-test("archives and proves restoration of hidden turn checkpoint refs before removing source", async (t) => {
+/**
+ * A project whose main has `historyLength` more commits, each adding its own file.
+ * @returns {Promise<string>} main's commit
+ */
+async function createProjectWithHistory(root, historyLength) {
+  const initial = await createGitProject(root);
+  const stream = [];
+  for (let index = 1; index <= historyLength; index += 1) {
+    const message = `history ${index}\n`;
+    const content = `history file ${index}\n`;
+    stream.push(
+      "commit refs/heads/main",
+      `committer Vibe64 Test <vibe64@example.test> ${1_700_000_000 + index} +0000`,
+      `data ${Buffer.byteLength(message)}`,
+      message,
+      ...(index === 1 ? [`from ${initial}`] : []),
+      `M 100644 inline history/file-${index}.txt`,
+      `data ${Buffer.byteLength(content)}`,
+      content
+    );
+  }
+  const streamPath = path.join(path.dirname(root), `history-${historyLength}.fast-import`);
+  await writeFile(streamPath, `${stream.join("\n")}\n`, "utf8");
+  await execFileAsync("sh", ["-c", "git fast-import --quiet < \"$1\"", "sh", streamPath], { cwd: root });
+  await rm(streamPath, { force: true });
+  await git(root, ["reset", "--hard", "main"]);
+  return git(root, ["rev-parse", "--verify", "HEAD"]);
+}
+
+/** The number of objects a bundle's pack holds, from the pack's own header. */
+async function bundleObjectCount(bundlePath) {
+  const bytes = await readFile(bundlePath);
+  const packStart = bytes.indexOf(Buffer.from("\n\nPACK")) + 2;
+  assert.ok(packStart > 1, `${bundlePath} holds no pack`);
+  return bytes.readUInt32BE(packStart + 8);
+}
+
+/** The session's archived turn checkpoints: the Project Backups file its recovery names. */
+function recordedCheckpointBundle(runtime, sessionId, metadata) {
+  if (metadata.source_recovery_checkpoint_backup) {
+    return path.join(runtime.store.paths().projectBackupsRoot, metadata.source_recovery_checkpoint_backup);
+  }
+  // Red only: where the archive put them before Project Backups, to show what that bundle held.
+  return metadata.source_recovery_checkpoint_bundle_artifact
+    ? path.join(runtime.store.paths(sessionId).artifactsRoot, metadata.source_recovery_checkpoint_bundle_artifact)
+    : "";
+}
+
+/**
+ * Archives a session of a project with `historyLength` commits of history and `checkpoints` turn
+ * checkpoints, each changing one file, and restores them from the Project Backups bundle into a
+ * plain clone of the project.
+ */
+async function archiveCheckpointedSession({ checkpoints, historyLength }) {
   const commandRequests = [];
   const releaseManagedExecution = installVibe64ManagedExecutionProvider({
     async runCommand(request, { runLocal }) {
@@ -450,10 +503,16 @@ test("archives and proves restoration of hidden turn checkpoint refs before remo
       return { ok: true, stopped: false };
     }
   });
-  t.after(releaseManagedExecution);
+  try {
+    return await archiveCheckpointedSessionIn({ checkpoints, commandRequests, historyLength });
+  } finally {
+    releaseManagedExecution();
+  }
+}
 
-  await withTemporaryRoot(async (targetRoot) => {
-    const baseCommit = await createGitProject(targetRoot);
+async function archiveCheckpointedSessionIn({ checkpoints, commandRequests, historyLength }) {
+  return withTemporaryRoot(async (targetRoot) => {
+    const baseCommit = await createProjectWithHistory(targetRoot, historyLength);
     const runtime = new Vibe64SessionRuntime({
       projectContextRoot: targetRoot,
       projectRuntimeRoot: projectRuntimeRoot(targetRoot)
@@ -471,68 +530,69 @@ test("archives and proves restoration of hidden turn checkpoint refs before remo
       },
       sessionId
     });
-    await createSessionClone({
-      baseCommit,
-      branch: `vibe64/${sessionId}`,
-      sourcePath: worktreePath,
-      targetRoot
-    });
-    await writeProjectFile(worktreePath, "app.txt", "checkpointed only\n");
-    const checkpoint = await createGitTurnCheckpoint({
-      outerTurnId: "client-message-archive",
-      outcome: "completed",
-      sessionId,
-      runCommand: runVibe64Command,
-      timestamp: "2026-08-18T09:00:00.000Z",
-      worktreePath
-    });
-
-    const archiveSession = await runtime.getSession(sessionId);
-    const archiveResult = await runtime.archiveSessionSource(archiveSession, {
-      reason: "archived"
-    });
+    await runtime.store.writeSessionLabel(sessionId, "Checkout fixes");
+    await createSessionClone({ baseCommit, branch: `vibe64/${sessionId}`, sourcePath: worktreePath, targetRoot });
+    const turns = [];
+    for (let index = 1; index <= checkpoints; index += 1) {
+      await writeProjectFile(worktreePath, "app.txt", `turn ${index}\n`);
+      const outerTurnId = `client-message-${index}`;
+      const checkpoint = await createGitTurnCheckpoint({
+        outerTurnId,
+        outcome: "completed",
+        sessionId,
+        runCommand: runVibe64Command,
+        timestamp: `2026-08-18T09:${String(index).padStart(2, "0")}:00.000Z`,
+        worktreePath
+      });
+      turns.push({ commit: checkpoint.commit, ref: checkpointRefs({ outerTurnId, sessionId }).turnRef });
+    }
+    const latestRef = checkpointRefs({ outerTurnId: "client-message-1", sessionId }).latestRef;
+    const archiveResult = await runtime.archiveSessionSource(await runtime.getSession(sessionId), { reason: "archived" });
     assert.equal(archiveResult.removed, true);
     assert.equal(await pathExists(worktreePath), false);
-    const archivedMetadata = await runtime.store.readMetadata(sessionId);
-    assert.equal(
-      archivedMetadata.source_recovery_checkpoint_bundle_artifact,
-      "recovery/checkpoints.bundle"
-    );
-
-    const restoreRoot = path.join(targetRoot, "checkpoint-restore.git");
-    await mkdir(restoreRoot, { recursive: true });
-    await git(restoreRoot, ["init", "--bare"]);
-    const artifact = path.join(
-      runtime.store.paths(sessionId).artifactsRoot,
-      archivedMetadata.source_recovery_checkpoint_bundle_artifact
-    );
-    const refs = checkpointRefs({
-      outerTurnId: "client-message-archive",
-      sessionId
-    });
-    await git(restoreRoot, [
-      "fetch",
-      artifact,
-      `${refs.turnRef}:${refs.turnRef}`,
-      `${refs.latestRef}:${refs.latestRef}`
-    ]);
-    assert.equal(await git(restoreRoot, ["rev-parse", refs.turnRef]), checkpoint.commit);
-    assert.equal(await git(restoreRoot, ["rev-parse", refs.latestRef]), checkpoint.commit);
-    assert.equal(await git(restoreRoot, ["show", `${checkpoint.commit}:app.txt`]), "checkpointed only");
-
+    const metadata = await runtime.store.readMetadata(sessionId);
+    const bundlePath = recordedCheckpointBundle(runtime, sessionId, metadata);
+    assert.ok(bundlePath, "the archive records where the session's turn checkpoints went");
+    const objectCount = await bundleObjectCount(bundlePath);
     const restoreVerificationCommands = commandRequests.filter(({ args = [] }) => (
       args.includes("--git-dir") || (args[0] === "init" && args[1] === "--bare")
     ));
-    assert.equal(restoreVerificationCommands.length, 3);
-    assert.equal(restoreVerificationCommands.filter(({ args }) => args.includes("for-each-ref")).length, 1);
+    // The restore proof runs from the worktree, never from the artifacts it writes.
+    assert.ok(restoreVerificationCommands.length > 0);
     assert.ok(restoreVerificationCommands.every(({ cwd }) => cwd === worktreePath));
-    assert.ok(restoreVerificationCommands.every(({ cwd }) => !cwd.startsWith(
-      runtime.store.paths(sessionId).artifactsRoot
-    )));
+
+    // Restore: a plain clone of the project has the history the bundle leaves out.
+    const restored = path.join(targetRoot, "checkpoint-restore.git");
+    await git(targetRoot, ["clone", "--bare", "--quiet", targetRoot, restored]);
+    await git(restored, ["fetch", bundlePath, "refs/vibe64/checkpoints/*:refs/vibe64/checkpoints/*"]);
+    for (const { commit, ref } of turns) {
+      assert.equal(await git(restored, ["rev-parse", ref]), commit);
+    }
+    assert.equal(await git(restored, ["rev-parse", latestRef]), turns.at(-1).commit);
+    assert.equal(await git(restored, ["show", `${turns.at(-1).commit}:app.txt`]), `turn ${checkpoints}`);
+    await git(restored, ["fsck", "--connectivity-only", "--no-dangling"]);
+
+    const archived = await runtime.archiveSession(sessionId);
+    assert.equal(archived.status, "archived");
+    return { metadata, objectCount, turns };
   });
+}
+
+test("archive backs up turn checkpoints to Project Backups with only their own objects, whatever the history, and they restore into a clone of the project", async () => {
+  const short = await archiveCheckpointedSession({ checkpoints: 6, historyLength: 20 });
+  const long = await archiveCheckpointedSession({ checkpoints: 6, historyLength: 400 });
+  const moreTurns = await archiveCheckpointedSession({ checkpoints: 12, historyLength: 400 });
+  // Each checkpoint adds its commit, its root tree and the one file it changed; the project's
+  // history, 20 or 400 commits, adds nothing.
+  assert.deepEqual(
+    { short: short.objectCount, long: long.objectCount, moreTurns: moreTurns.objectCount },
+    { short: 18, long: 18, moreTurns: 36 }
+  );
+  assert.equal(long.metadata.source_recovery_checkpoint_backup, "session-checkpoints-checkout-fixes-checkpoint_archive.bundle");
+  assert.equal(long.metadata.source_recovery_checkpoint_backup_error, "");
 });
 
-test("checkpoint restore verification failures preserve the original source", async (t) => {
+test("a turn checkpoint backup that fails never fails the archive: it goes on without it and says why", async (t) => {
   for (const failure of ["changed_ref", "interrupted_command"]) {
     await t.test(failure, async (t) => {
       await withTemporaryRoot(async (targetRoot) => {
@@ -560,7 +620,7 @@ test("checkpoint restore verification failures preserve the original source", as
         });
         await writeProjectFile(worktreePath, "app.txt", "checkpointed only\n");
         const outerTurnId = "client-message-archive";
-        const checkpoint = await createGitTurnCheckpoint({
+        await createGitTurnCheckpoint({
           outerTurnId,
           outcome: "completed",
           sessionId,
@@ -588,21 +648,27 @@ test("checkpoint restore verification failures preserve the original source", as
         });
         t.after(releaseManagedExecution);
 
-        const session = await runtime.getSession(sessionId);
-        await assert.rejects(runtime.archiveSessionSource(session, { reason: "archived" }), {
-          code: failure === "changed_ref"
-            ? "vibe64_worktree_archive_checkpoint_restore_mismatch"
-            : "vibe64_worktree_archive_checkpoint_restore_verify_failed",
-          message: failure === "changed_ref"
-            ? /did not restore the exact checkpoint refs/u
-            : /simulated managed command interruption/u
-        });
+        const archiveResult = await runtime.archiveSessionSource(await runtime.getSession(sessionId), { reason: "archived" });
         assert.equal(failureInjected, true);
-        assert.equal(await pathExists(worktreePath), true);
-        assert.equal(await git(worktreePath, ["rev-parse", refs.turnRef]), checkpoint.commit);
-        assert.equal(await git(worktreePath, ["show", `${checkpoint.commit}:app.txt`]), "checkpointed only");
-        assert.equal(await git(worktreePath, ["status", "--porcelain"]), "M app.txt");
-        assert.notEqual((await runtime.store.readMetadata(sessionId)).source_removed, "yes");
+        const error = failure === "changed_ref"
+          ? /did not restore the exact checkpoint refs/u
+          : /simulated managed command interruption/u;
+        assert.equal(archiveResult.removed, true);
+        assert.equal(archiveResult.dirty, true);
+        assert.equal(archiveResult.checkpointBackupFailures.length, 1);
+        assert.equal(archiveResult.checkpointBackupFailures[0].repository, "source");
+        assert.match(archiveResult.checkpointBackupFailures[0].error, error);
+        assert.equal(await pathExists(worktreePath), false);
+        const metadata = await runtime.store.readMetadata(sessionId);
+        assert.equal(metadata.source_removed, "yes");
+        assert.equal(metadata.source_recovery_checkpoint_backup, "");
+        assert.match(metadata.source_recovery_checkpoint_backup_error, error);
+        // An unproven bundle is not left in Project Backups; the unsaved work is still recovered.
+        const backupsRoot = runtime.store.paths().projectBackupsRoot;
+        assert.deepEqual((await readdir(backupsRoot)).filter((name) => name.endsWith(".bundle")), []);
+        assert.equal(metadata.source_recovery_patch_artifact, "recovery/worktree.patch");
+        const archived = await runtime.archiveSession(sessionId);
+        assert.equal(archived.status, "archived");
       });
     });
   }
