@@ -77,7 +77,11 @@ current task.
 
 Genesis records a pass as completed only after a **Whole app**, **Since last
 completed** or **Deep** run of it finishes; a pass over a plan's changes or a
-section of the app is not recorded as the pass.
+section of the app is not recorded as the pass. It also waits for the
+whole-project checks: in a plan, Vibe64 asks you about them once the plan is
+finished, and the turn your **Yes** starts records the plan's passes once every
+check passes; after **No** they stay unrecorded (see [Run the whole-project
+checks after a plan](whole-project-checks.md)).
 
 The run buttons are unavailable while:
 
@@ -140,7 +144,9 @@ writes the failing test and then fixes the code; Deslop keeps its cleanups
 behaviour-neutral but fixes a real defect as a separate fix with its own test.
 What is outside the scope is fixed too when the session can fix it: data and
 files the AI created, small defects it found, a step that fails. A failing or
-flaky test is a defect to fix until it passes every run, never a leftover. The
+flaky test is a defect to fix until it passes every run, never a leftover, and
+never called pre-existing or environmental: a missing tool is a defect too,
+named. The
 plan's one **Leftovers** list in Progress holds only what needs you (a choice, a
 real device, an account, a click) or what the session can't reach, each with its
 reason; a choice is asked as a numbered question with a recommended answer.

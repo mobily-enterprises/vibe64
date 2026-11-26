@@ -1,9 +1,12 @@
+import { AFTER_PLAN_PASS_TITLES } from "@local/vibe64-runtime/shared/assistantFinishing";
 import {
   assistantAsksWholeChecks,
   assistantWholeChecksDeclinedNotice,
   assistantWholeChecksQuestionNotice
 } from "@local/vibe64-runtime/shared/assistantWholeChecks";
+import { workPlanPassItems } from "../shared/assistantWorkPlan.js";
 import { failure, read } from "./assistantRoutingRequests.js";
+import { RUN_SCOPES } from "./planPasses.js";
 
 /**
  * Routing's side of the question Vibe64 asks once a plan is finished, whether to
@@ -19,9 +22,32 @@ const wholeChecksNotAsked = () => failure(
   "vibe64_assistant_routing_whole_checks_not_asked"
 );
 
-/** Marks the request that finished `plan` as asking; its chat note follows the save's, after the lock. */
+const RECORDED_SCOPES = new Set(Object.values(RUN_SCOPES));
+const PASS_IDS = new Map(Object.entries(AFTER_PLAN_PASS_TITLES).map(([id, title]) => [title.toLowerCase(), id]));
+
+/**
+ * The ids of `plan`'s finished passes that Genesis records as the pass (its Passes items run over the whole app,
+ * since their last completion or deeply), each once, in the plan's order. Genesis records a pass only after its
+ * whole-suite run passed with the person's OK, so they wait for the person's answer; a pass over the plan's changes
+ * or a section is never recorded.
+ * @param {{ text?: string } | null} plan
+ * @returns {string[]}
+ */
+function planPassesToRecord(plan) {
+  const ids = workPlanPassItems(plan?.text || "")
+    .filter((item) => item.checked && RECORDED_SCOPES.has(item.scope))
+    .map((item) => PASS_IDS.get(item.title.toLowerCase()))
+    .filter(Boolean);
+  return [...new Set(ids)];
+}
+
+/**
+ * Marks the request that finished `plan` as asking, with the plan's passes that wait for the answer to be recorded;
+ * its chat note follows the save's, after the lock.
+ */
 function askWholeChecks(state, plan) {
-  state.wholeChecks = { status: "asked", plan: plan?.title || "" };
+  const passes = planPassesToRecord(plan);
+  state.wholeChecks = { status: "asked", plan: plan?.title || "", ...(passes.length ? { passes } : {}) };
 }
 
 /** The question's chat note, once the finished work's automatic save has noted its result. */
@@ -38,7 +64,7 @@ async function declineWholeChecks(records, context, sessionId, input) {
   if (state?.messageId !== input.messageId || !assistantAsksWholeChecks(state)) throw wholeChecksNotAsked();
   state.wholeChecks = { ...state.wholeChecks, status: "declined" };
   await records.save(context, state);
-  await records.writeNotice(context, state, assistantWholeChecksDeclinedNotice(state.turnId));
+  await records.writeNotice(context, state, assistantWholeChecksDeclinedNotice(state.turnId, { passes: state.wholeChecks.passes }));
   return { ok: true, delivered: false, messageId: input.messageId, wholeChecks: "declined" };
 }
 
@@ -55,7 +81,9 @@ function answerWholeChecks(saved, input) {
   const asked = newMessage && assistantAsksWholeChecks(saved) ? saved.wholeChecks : null;
   if (input.wholeChecks === "run" && newMessage && !asked) throw wholeChecksNotAsked();
   const runs = Boolean(asked) && input.wholeChecks === "run";
-  return { runs, fields: asked ? { wholeChecks: { status: runs ? "run" : "offered", plan: asked.plan || "" } } : {} };
+  // The Yes's turn records the plan's passes once every check passes; another message's turn records none.
+  const passes = runs && asked.passes?.length ? { passes: asked.passes } : {};
+  return { runs, fields: asked ? { wholeChecks: { status: runs ? "run" : "offered", plan: asked.plan || "", ...passes } } : {} };
 }
 
-export { answerWholeChecks, askWholeChecks, declineWholeChecks, writeWholeChecksQuestion };
+export { answerWholeChecks, askWholeChecks, declineWholeChecks, planPassesToRecord, writeWholeChecksQuestion };

@@ -253,7 +253,8 @@ function createAssistantRoutingDelivery({
       // Auto's Senior hands rework to Junior; a direct chat's own agent does it in its workflow.
       rework: state.mode === "auto" ? "junior" : state.workflow ? "self" : "report",
       planInstructions: pass ? passInstructions
-        : checks ? assistantWholeChecksInstructions({ autoSave: savesAutomatically(context.session.metadata) })
+        : checks
+          ? assistantWholeChecksInstructions({ autoSave: savesAutomatically(context.session.metadata), passes: state.wholeChecks?.passes })
           : includePlanInstructions
             ? workPlanInstructions(role, { autoOutcome, auto: state.mode === "auto", passTitles: await passTitlesFor(context, role) }) : ""
     });

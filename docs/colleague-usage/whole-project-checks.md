@@ -11,7 +11,15 @@ whole run of the test suite. They can take a long time, and the plan's passes
 would leave a run before them behind, so no step of a plan runs them: not
 Junior's implementation, not Senior's review (see [A plan's
 steps](plan-steps.md#a-plans-steps)) and not a pass. Each step runs the focused tests
-for what it changed.
+for what it changed. Outside a plan the AI follows the same rule: it runs the
+whole test suite only with your OK, which it asks for once the work is complete,
+saying what will run and roughly how long.
+
+Genesis records a pass as completed only after its whole run passed, or after
+you said to finish without it. So a plan's passes that Genesis records (run
+over the **Whole app**, **Since last completed** or **Deep**; see [Run a pass on
+your app](passes.md)) are not recorded in their own turns: they wait for your
+answer here.
 
 ## The question
 
@@ -32,11 +40,17 @@ reason beside them.
   passed and its counts.
   It fixes what they find as new work, each fix proven by a test that failed
   first, and never runs them a second time: after a fix it runs that fix's
-  focused tests. The plan stays completed. When it fixed something, the fixes
+  focused tests. It explains every failure and never calls one pre-existing or
+  environmental: a missing tool or a refusal by the environment is a defect to
+  fix, reported with what is missing. It runs them in the session, never
+  detached to outlive it. Once every check passes, it records the plan's passes
+  that waited for this answer. The plan stays completed. When it fixed something, the fixes
   are saved like any other finished work (with **Automatically save changes**
   on); when everything passed and nothing changed, nothing is saved.
 - **No** runs nothing. The chat notes **Whole-project checks not run. Vibe64
-  won't ask again for this plan.**
+  won't ask again for this plan.** When the plan ran passes that Genesis
+  records, the note names them, for example **Deslop stays unrecorded as
+  completed, since the whole-project checks didn't run.**
 - **Typing a message instead** ends the question too, and that message's turn is
   told what Vibe64 had asked: when it asks for the checks (**yes, run them**,
   say), the AI runs them once; otherwise it does what you asked.

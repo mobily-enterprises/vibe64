@@ -19,6 +19,13 @@ sending or its delivery is unconfirmed. **Set goal** and **Resume goal** wait
 until that message is sent, or until you check it with **Retry** or remove it
 with **Cancel**.
 
+A goal doesn't let the AI run your project's whole test suite on its own.
+While it works toward the goal it runs focused checks; once the work is
+complete and they pass, it asks you before one whole run, saying what will run
+and roughly how long, and waits for your answer as for any question it needs
+you for. It never detaches a run to outlive the session, and never calls a
+failure pre-existing or environmental: a missing tool is a defect too, named.
+
 In the standalone local editor, open a session, choose a connected assistant,
 and use **Send message** and **Set goal** in the same chat. These controls use
 the selected local project's access checks and do not require a separate login.

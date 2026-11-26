@@ -1096,7 +1096,9 @@ test("Senior's review of a plan verifies every item and leaves a plan with passe
   assert.match(framing, /Fix what you find within this pass's scope, each fix proven by a test that failed first/);
   assert.match(framing, /Deslop keeps its cleanups behaviour-neutral but fixes a real defect it finds as a separate fix with its own test/);
   // A pass runs no whole-project checks, whatever its guidance says: the person is asked about them once the plan is finished.
-  assert.match(framing, /Run no whole-project checks, such as one whole run of the test suite, even where this pass's guidance asks for one: run the focused tests for what you changed\. Once the plan is finished and saved, Vibe64 asks the person whether to run them once\./);
+  assert.match(framing, /Run no whole-project checks, such as one whole run of the test suite, even where this pass's guidance asks for one: run the focused tests for what you changed\. Once the plan is finished and saved, Vibe64 asks the person whether to run them once, so never ask about them yourself, and never take this pass's PASS RECORD step: the turn the person's Yes starts records the plan's passes once every check passes\./);
+  // A failure is explained, never waved through as pre-existing or environmental, and no check outlives the session.
+  assert.match(framing, /Explain every failure; never call one pre-existing or environmental: a missing tool or an environment's refusal is a defect to fix, reported with what is missing\. Never detach a check to outlive the session\./);
   assert.match(ASSISTANT_PLAN_COMPLETION_MESSAGE, /This review is a review: run no whole-project checks/);
   assert.match(framing, /In Plan change only this item's tick/);
   assert.match(framing, /Done: everything within the scope is fixed and proven; full-tick \(- \[x\]\) this item, then report complete\. Needs you: numbered questions/);
