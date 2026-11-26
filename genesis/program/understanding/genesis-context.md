@@ -17,6 +17,7 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-terminals/src/server/serviceAssistantPreparation.js`
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
+- `packages/vibe64-genesis/src/server/types.js`
 - Main: `packages/vibe64-system-graph/src/server/service.js`
 - `packages/vibe64-system-graph/src/server/genesisCities.js`
 - `packages/vibe64-system-graph/src/server/snapshotCache.js`
@@ -78,6 +79,12 @@ The pinned Genesis parser and installed catalog own interpretation; callers do
 not infer technologies from package files or treat a missing Stack as an empty
 successful selection. This read-only API does not migrate source or execute
 consumer operations.
+
+`inspectGenesisVerification` returns the Stack's declared Verification commands,
+each `{ label, argv }` in order, and the Stack identity (`stackHash`) Genesis's
+verify records with them, from Genesis's `inspectVerification`: one Stack read
+that runs, writes and checks nothing, so a host can recognise a declared check.
+A genesis-compiler without that operation fails it, naming the update.
 
 
 Code indexing uses Genesis's parser management interface. Standalone first use
