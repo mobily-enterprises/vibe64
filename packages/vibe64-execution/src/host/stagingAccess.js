@@ -18,7 +18,8 @@ import {
   runRootCommand,
   runRootCommandAllowFailure
 } from "./hostAccounts.js";
-import { helperAccountDatabase, helperStagingKeysRoot, helperSudoersRoot } from "./hostSettings.js";
+import { helperSettings } from "./commandEnvironment.js";
+import { helperAccountDatabase, helperPersonShell, helperStagingKeysRoot, helperSudoersRoot } from "./hostSettings.js";
 
 const STAGING_LOGIN_SHELL = "/bin/sh";
 const ROOT_UID = 0;
@@ -41,6 +42,16 @@ function filePresent(file = "") {
     if (error?.code === "ENOENT") return false;
     throw error;
   }
+}
+
+/**
+ * The login shells a staging account may have while root holds its staging key: the one granting gives it (/bin/sh), and
+ * the host's own login shell where its helper settings name one (VIBE64_PERSON_SHELL): a mobilynet machine's accounts
+ * build gives every account with a login shell, /bin/sh included, its own (/usr/lib/mobilynet/shell) at boot.
+ * @param {Record<string, string>} [settings] the host's helper settings
+ */
+function stagingLoginShells(settings = helperSettings()) {
+  return String(settings.VIBE64_PERSON_SHELL || "").trim() ? [STAGING_LOGIN_SHELL, helperPersonShell(settings)] : [STAGING_LOGIN_SHELL];
 }
 
 /** Whether root installed the account's staging key: the workspace owner allows its AI sessions in. */
@@ -171,5 +182,6 @@ export {
   installStagingAccess,
   removeStagingAccess,
   STAGING_LOGIN_SHELL,
-  stagingAccessGranted
+  stagingAccessGranted,
+  stagingLoginShells
 };

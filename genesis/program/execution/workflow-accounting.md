@@ -620,7 +620,15 @@ once left it `0640`, and every staging login was refused), a
 the account run exactly `vibe64-exec-helper staging-service *` (by the command
 its settings name), and the
 login shell `/bin/sh`, which the account check accepts only while that key
-file exists. sshd starts even the forced command through that shell, and
+file exists, as it accepts the host's own login shell where its helper settings
+name one (`VIBE64_PERSON_SHELL`; `stagingLoginShells`): a mobilynet machine's
+accounts build gives every login shell, `/bin/sh` included, its own at boot. A
+login shell whose key file is gone (a boot emptied the tmpfs a mobilynet
+machine keeps keys and sudo rules on) is access the boot ended: `ensure`,
+the registered account check and `retire` take it back as `revoke` does
+before they use the account, which they refused before (FINAL3's activation
+on mercmobily, 28 Nov 2026), and any other shell is still refused as it is.
+sshd starts even the forced command through that shell, and
 `/bin/sh -c` reads no file of the account's, where bash started by sshd would
 read the `~/.bashrc` the application can write. `revoke` removes all three,
 the key file and rule only where it finds them: it looks before it removes, so

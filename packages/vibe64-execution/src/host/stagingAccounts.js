@@ -53,7 +53,7 @@ import {
   REGISTRATION_LIMIT_BYTES,
   writeRegistration
 } from "./personRegistry.js";
-import { removeStagingAccess, STAGING_LOGIN_SHELL, stagingAccessGranted } from "./stagingAccess.js";
+import { removeStagingAccess, STAGING_LOGIN_SHELL, stagingAccessGranted, stagingLoginShells } from "./stagingAccess.js";
 import { helperAccountDatabase, helperAccountNumberOptions, helperSystemdUnitRoot } from "./hostSettings.js";
 import { STAGING_SANDBOX_ALLOWANCES } from "./systemdUnits.js";
 
@@ -179,6 +179,7 @@ function hostStagingAccountFacts(username = "") {
   return {
     groupGid: group.status === 0 ? Number(String(group.stdout).split(":")[2]) : -1,
     groups,
+    loginShells: stagingLoginShells(),
     loginUids,
     stagingAccess: stagingAccessGranted(username)
   };
@@ -191,7 +192,7 @@ function stagingAccountProblem(user = {}, identity = {}, facts = {}) {
     return `${user.username} is not a system account.`;
   }
   const shellAllowed = user.shell === STAGING_ACCOUNT_SHELL ||
-    (user.shell === STAGING_LOGIN_SHELL && facts.stagingAccess === true);
+    ((facts.loginShells || [STAGING_LOGIN_SHELL]).includes(user.shell) && facts.stagingAccess === true);
   if (user.home !== identity.home || !shellAllowed) {
     return `${user.username} does not have its application's home and no login.`;
   }
@@ -199,6 +200,24 @@ function stagingAccountProblem(user = {}, identity = {}, facts = {}) {
     return `${user.username} is in a group other than its own.`;
   }
   return "";
+}
+
+// Whether the account is the one the helper makes but for a login shell whose staging key root no longer holds:
+// access a boot ended. A host may keep the keys and sudo rules on tmpfs and give every login shell its own at boot
+// (a mobilynet machine does both), and nothing took the shell back, so the helper refused every use of the account
+// (FINAL3's activation on mercmobily, 28 Nov 2026, could not install daniela's unit, and the editor's grant at the
+// first staging login after a boot was refused the same way).
+function lapsedStagingLogin(user, identity = {}, facts = {}) {
+  return Boolean(user) && user.shell !== STAGING_ACCOUNT_SHELL && facts.stagingAccess !== true &&
+    !stagingAccountProblem(user, identity, { ...facts, stagingAccess: true });
+}
+
+// The account with access a boot ended taken back as revoke takes it (its login shell, linger, logins, crontab and at
+// jobs), so it is again exactly the account the helper makes; any other account as it is.
+function withoutLapsedStagingLogin(user, identity, facts, { endStagingAccess, resolveUser }) {
+  if (!lapsedStagingLogin(user, identity, facts)) return user;
+  endStagingAccess(user, user.username);
+  return resolveUser(user.username);
 }
 
 function readStagingAccountRegistration(workspace = "", username = "", {
@@ -353,6 +372,7 @@ function ensureStagingAccount(owner = {}, project = "", {
   createUser = (identity) => runRootCommand("useradd", [...accountDatabaseOptions(helperAccountDatabase()),
     ...helperAccountNumberOptions(), "--system", "--user-group", "--no-create-home", "--home-dir", identity.home,
     "--shell", STAGING_ACCOUNT_SHELL, identity.username]),
+  endStagingAccess = removeStagingAccess,
   facts = hostStagingAccountFacts,
   managedRoot = MANAGED_ROOT,
   registryRoot = STAGING_ACCOUNT_REGISTRY_ROOT,
@@ -377,7 +397,9 @@ function ensureStagingAccount(owner = {}, project = "", {
   }
   // An account left unregistered by an interrupted ensure is adopted only when
   // it is exactly the one the helper makes.
-  const problem = user ? stagingAccountProblem(user, identity, facts(identity.username)) : "it was not created.";
+  const accountFacts = facts(identity.username);
+  if (registration) user = withoutLapsedStagingLogin(user, identity, accountFacts, { endStagingAccess, resolveUser });
+  const problem = user ? stagingAccountProblem(user, identity, accountFacts) : "it was not created.";
   if (problem) {
     throw new Error(`Vibe64 exec helper refused staging account ${identity.username}: ${problem}`);
   }
@@ -446,9 +468,11 @@ function retireStagingAccount(owner = {}, project = "", {
   const registration = readStagingAccountRegistration(identity.workspace, identity.username, registry);
   const user = resolveUser(identity.username);
   if (user) {
+    // Access a boot ended goes with the rest of the account's staging access below.
+    const accountFacts = facts(identity.username);
     const problem = registration && registration.uid !== user.uid
       ? "it is not the registered account."
-      : stagingAccountProblem(user, identity, facts(identity.username));
+      : lapsedStagingLogin(user, identity, accountFacts) ? "" : stagingAccountProblem(user, identity, accountFacts);
     if (problem) {
       throw new Error(`Vibe64 exec helper refused to retire staging account ${identity.username}: ${problem}`);
     }
@@ -532,6 +556,7 @@ function assertStagingAreaNosuid(areaRoot = "", mountInfo = () => readFileSync("
 // workspace's application.
 function registeredStagingAccount(owner = {}, username = "", {
   areaRoot = stagingAreaRoot(),
+  endStagingAccess = removeStagingAccess,
   facts = hostStagingAccountFacts,
   mountInfo,
   resolveUser = resolveOsUser,
@@ -543,10 +568,11 @@ function registeredStagingAccount(owner = {}, username = "", {
     throw new Error(`${name} is not a staging account of this workspace.`);
   }
   const identity = stagingAccountIdentity(owner, registration.project, { areaRoot });
-  const user = resolveUser(name);
-  const problem = identity.username !== name || registration.uid !== user.uid || registration.gid !== user.gid
-    ? "it is not the registered account."
-    : stagingAccountProblem(user, identity, facts(name));
+  let user = resolveUser(name);
+  const registered = identity.username === name && registration.uid === user.uid && registration.gid === user.gid;
+  const accountFacts = facts(name);
+  if (registered) user = withoutLapsedStagingLogin(user, identity, accountFacts, { endStagingAccess, resolveUser });
+  const problem = !registered ? "it is not the registered account." : stagingAccountProblem(user, identity, accountFacts);
   if (problem) {
     throw new Error(`Vibe64 exec helper refused staging account ${name}: ${problem}`);
   }
