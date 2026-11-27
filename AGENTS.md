@@ -283,8 +283,10 @@ backups for you.
 
 ## Test Execution Safety
 
-Do not start tests unless they are relevant to the current work, and never
-overlap a test run already active for this checkout.
+Do not start tests unless they are relevant to the current work. Never start
+a broad run (`npm run test:full`, `npm run verify`, a whole browser suite) while
+another is active for this checkout; single-file runs may run beside anything,
+since every test file owns its state.
 
 - During development, run exactly one relevant test file with
   `npm test -- tests/server/<name>.test.js`. The root test command refuses to
