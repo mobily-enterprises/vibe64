@@ -353,7 +353,9 @@ overlap a test run already active for this checkout.
   Run them only after the human has confirmed that the feature works and has
   explicitly approved full verification: ask once, at the end, after focused
   checks pass, saying what will run and roughly how long. Run every check in
-  the session, never detached to outlive it. Explain every failure; never call
+  the session: never detach one yourself to outlive it. A host's own check
+  runner may keep a check going after the call that started it ends, when the
+  agent can still follow it to its real exit and stop it. Explain every failure; never call
   one pre-existing or environmental: a missing tool or an environment's
   refusal is a defect to fix, reported with what is missing.
 - Focused local tests are not the whole proof. After pushing to `main`, check
