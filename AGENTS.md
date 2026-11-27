@@ -22,7 +22,9 @@ checkout on the person's laptop. The Git workflow depends on which:
   fast-forward keeps it current, only when it has no local commits; never merge,
   reset or rebase it, and leave its local edits alone. Make each change in a
   `git worktree` created from current `origin/main`, push it, then remove your
-  worktree. Your own worktree has no other owner: run its focused tests there.
+  worktree. Your own worktree has no other owner. Run its tests where the
+  person's setup says: on their test hosts when they have them (then never on
+  the laptop), otherwise in the worktree.
 
 Either way, never discard or overwrite another person's or agent's work.
 
