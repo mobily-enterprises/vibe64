@@ -519,6 +519,14 @@ function createService({
     writeGlobalInput: (terminalSessionId, data, options) => terminals.writeGlobalCodexTerminal(terminalSessionId, data, options)
   });
 
+  /**
+   * A session's managed commands (vibe64-helper among them) for a command a host runs in that session for itself.
+   * @param {{ runtime: object, session: object, sessionId: string }} input
+   */
+  function prepareSessionCommands(input) {
+    return prepareSessionCommandEnvironment({ ...input, commands, env, project });
+  }
+
   return Object.freeze({
     temporaryConversationDataSchema: sessionConversations.temporaryConversationDataSchema,
     temporaryConversationSelectionSchema: sessionConversations.temporaryConversationSelectionSchema,
@@ -695,8 +703,7 @@ function createService({
     readOutputResult: terminals.readOutputResult,
     removeOutputResultsForSession: terminals.removeOutputResultsForSession,
     removeSessionCommandHelpers: terminals.removeSessionCommandHelpers,
-    // A session's managed commands (vibe64-helper among them) for a command a host runs in it for itself.
-    prepareSessionCommandEnvironment: (input) => prepareSessionCommandEnvironment({ ...input, commands, env, project }),
+    prepareSessionCommandEnvironment: prepareSessionCommands,
     selectPreviewIdentity: terminals.selectPreviewIdentity,
     verifyPreviewIdentity: terminals.verifyPreviewIdentity,
     restartPreviewAfterSetup: terminals.restartPreviewAfterSetup,

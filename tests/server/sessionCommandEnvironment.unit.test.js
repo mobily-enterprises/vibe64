@@ -52,7 +52,8 @@ test("a host's command in a session runs vibe64-helper from the session's wrappe
     commands,
     env,
     project: { readCurrentProject: async () => ({ slug: "catalogue" }) },
-    runtime: { stateRoot: root },
+    // A project runtime's own state folder and session store (this session keeps no drop zones).
+    runtime: { stateRoot: root, store: { paths: () => ({}), prepareProjectFileAreas: async () => {} } },
     session: { sessionId, metadata: { source_path: source } },
     sessionId
   });
