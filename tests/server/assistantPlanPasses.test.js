@@ -445,6 +445,62 @@ test("no pass runs without a plan, with a plan without passes, or with a plan al
   }
 });
 
+/** A plan an earlier request's Senior review already brought to its passes: its item proven, no pass run yet. */
+const reviewedPlan = (passes) => planWith(passes).replace("- [~] Required-name", "- [x] Required-name");
+
+for (const route of ["Implement plan", "a typed request to continue"]) test(`a plan found at its passes runs them once Senior's review completes it again, unchanged (${route}), and is saved only after the last`, async (t) => {
+  const saves = [];
+  const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true, onPlanCompleted: async () => {
+    saves.push((await planHistory(f)).length);
+    return "Saved automatically.";
+  } });
+  const passes = ["Review: the plan's changes", "Security pass: the plan's changes"];
+  await publishPlanFixture(f.context, reviewedPlan(passes));
+  const plan = await readWorkPlan(f.context);
+  await f.service.send("session-1", route === "Implement plan"
+    ? { messageId: "implement-1", message: "Implement the saved plan. I authorize implementation within its agreed scope.", planRevision: plan.revision, submissionKind: "send" }
+    : { messageId: "continue-1", message: "Continue the plan!", submissionKind: "send" }, f.context);
+  // Junior finds nothing left to build; Senior's review finds nothing new and reports complete, the plan unchanged.
+  await finish(f, "handoff");
+  assert.equal(f.sends[1].input.displayMessage, "Senior reviews the plan.");
+  await finish(f, "complete");
+  assert.equal((await readWorkPlan(f.context)).revision, plan.revision, "the review changed nothing");
+  assert.deepEqual([f.state().stage, f.state().pass?.id, f.state().status], ["pass", "review", "working"], "the plan's first pass starts");
+  assert.equal(f.sends[2].input.genesisTask, "review");
+  assert.equal(requestOf(f.sends[2]), since("Review", f.source.canonical));
+  assert.deepEqual(saves, [], "nothing is saved before the passes");
+  assert.ok(!noticeTexts(f).includes(SAVE_STARTED));
+  await passDone(f);
+  assert.equal(f.state().pass.id, "security-pass");
+  await passDone(f);
+  assert.equal(await readWorkPlan(f.context), null);
+  assert.deepEqual(saves, [1], "the plan is completed, archived and saved once, after its last pass");
+});
+
+test("a planning turn that finds the plan already at its passes reports it complete and the passes run; planning that brings it there itself still can't", async (t) => {
+  for (const found of [true, false]) {
+    const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
+    const passes = ["Review: the plan's changes"];
+    await publishPlanFixture(f.context, found ? reviewedPlan(passes) : planWith(passes));
+    f.router.respond = async () => ({ ok: true, text: '{"mode":"senior","reason":"planning"}' });
+    await f.service.send("session-1", { messageId: "go-1", message: "OK do them!", submissionKind: "send" }, f.context);
+    assert.deepEqual([f.state().stage, f.state().resolvedMode], ["planning", "senior"]);
+    if (!found) {
+      await tickItems(f, "senior");
+      await assert.rejects(reportOutcome(f, "complete", { involved: true }), { code: "vibe64_assistant_workflow_planning_outcome_refused" });
+      continue;
+    }
+    // Nothing is left to implement: handoff is refused, naming the outcome that runs the passes.
+    await assert.rejects(reportOutcome(f, "handoff", { involved: true }),
+      { code: "vibe64_assistant_workflow_planning_plan_at_passes", message: /report complete/u });
+    // Completing needs the plan read, as any plan's completion does.
+    await assert.rejects(reportOutcome(f, "complete"), { code: "vibe64_assistant_workflow_planning_plan_at_passes" });
+    await finish(f, "complete");
+    assert.deepEqual([f.state().stage, f.state().pass?.id, f.state().status], ["pass", "review", "working"]);
+    assert.equal(f.sends[1].input.genesisTask, "review");
+  }
+});
+
 test("a new plan's Passes section starts with the chat's After a plan ticks; a plan Senior writes with its own Passes keeps them", async (t) => {
   const f = await fixture(t, { mode: "auto", afterPlan: ["review", "security-pass", "ui-pass", "deslop"], afterPlanDeep: ["deslop"] },
     { readyPlan: false, source: true });
