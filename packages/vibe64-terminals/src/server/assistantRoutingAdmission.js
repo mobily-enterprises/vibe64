@@ -1,6 +1,6 @@
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import { workPlanAtPasses } from "../shared/assistantWorkPlan.js";
-import { applyPlanPasses, listSessionPasses, nextPlanPass, readPassRequest } from "./planPasses.js";
+import { applyPlanPasses, listSessionPasses, nextPlanPass, passesListedNote, readPassRequest } from "./planPasses.js";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
   assistantRoutingRequestCanBeReplaced,
@@ -482,10 +482,9 @@ function createAssistantRoutingAdmission({
           if (passRequest && passRequest.action !== "add" && current && !workPlanAtPasses(current)) {
             throw failure("This plan's passes start once Senior has reviewed the plan.", "vibe64_assistant_routing_plan_passes_not_yet");
           }
-          let added = [];
+          let applied = { added: [] };
           if (passRequest) {
-            const applied = await applyPlanPasses(context, passRequest, passListing);
-            added = applied.added;
+            applied = await applyPlanPasses(context, passRequest, passListing);
             current = await readWorkPlan(context);
             if (applied.notice) {
               await records.writeNotice(context, state, { messageId: `assistant-plan-passes:${input.messageId}`, text: applied.notice });
@@ -497,13 +496,12 @@ function createAssistantRoutingAdmission({
           // otherwise it is an ordinary request.
           if (next && !next.problem && (passRequest || next.item === waitingPass.item)) {
             planPass = { id: next.id, title: next.title, item: next.item, request: next.request };
-            if (waitingPass && added.length) planPassNote = `Vibe64 added ${added.join(", ")} to the plan's Passes for this message: each runs after this pass, in its own turn, so don't run it here.`;
+            if (waitingPass && applied.added.length) planPassNote = `Vibe64 added ${applied.added.join(", ")} to the plan's Passes for this message: each runs after this pass, in its own turn, so don't run it here.`;
           } else if (passRequest && next) {
             planPassNote = `${next.title} can't run: ${next.problem}`;
           } else if (passRequest) {
-            planPassNote = current?.status === "active" && added.length
-              ? `Vibe64 added ${added.join(", ")} to the current plan's Passes: they run once Senior has reviewed the plan.`
-              : "The plan has no pass left to run.";
+            const listed = passesListedNote(applied);
+            planPassNote = current?.status === "active" && listed ? `${listed}: they run once Senior has reviewed the plan.` : "The plan has no pass left to run.";
           }
         }
         const answering = Boolean(planPass && waitingPass && planPass.item === waitingPass.item &&

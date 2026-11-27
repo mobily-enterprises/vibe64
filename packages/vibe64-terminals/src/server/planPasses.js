@@ -333,14 +333,29 @@ async function readPassRequest(input, context, listPasses, { typed = true } = {}
 }
 
 /**
+ * What a turn tells the person of passes their message named before the plan reached its Passes step: those its
+ * Passes gained and those they list already; empty when neither.
+ * @param {{ added: string[], pending?: string[] }} applied what applyPlanPasses returned
+ * @returns {string}
+ */
+function passesListedNote({ added, pending = [] }) {
+  return [added.length ? `Vibe64 added ${added.join(", ")} to the current plan's Passes` : "",
+    pending.length ? `${pending.join(", ")} ${pending.length > 1 ? "are" : "is"} in the current plan's Passes already` : ""]
+    .filter(Boolean).join("; ");
+}
+
+/**
  * Applies what a message asks of the plan's passes. Added passes join the open plan's Passes
- * section (an identical item already there runs again rather than twice); with no open plan they
- * make a plan of their own at once, named after them, replacing a completed plan, which is
- * archived. Run again unticks that pass's items, Restart every pass item; Continue changes nothing.
+ * section (an identical item already there runs again rather than twice, and a pass named without
+ * a run that the Passes still have to run is that item, so "Run the Review pass" adds no second
+ * Review); with no open plan they make a plan of their own at once, named after them, replacing a
+ * completed plan, which is archived. Run again unticks that pass's items, Restart every pass item;
+ * Continue changes nothing.
  * @param {object} context the routing context
  * @param {ReturnType<typeof planPassRequest>} request
  * @param {{ passes: object[] }} listing
- * @returns {Promise<{ plan: object | null, added: string[], notice: string }>}
+ * @returns {Promise<{ plan: object | null, added: string[], pending?: string[], notice: string }>} added: the titles
+ *   of the passes the Passes gained; pending: those the message named that the open plan's Passes still have to run
  */
 async function applyPlanPasses(context, request, listing) {
   const plan = await readWorkPlan(context);
@@ -365,11 +380,16 @@ async function applyPlanPasses(context, request, listing) {
     const titles = request.ids.map(titleOf);
     if (plan?.status === "active") {
       const items = workPlanPassItems(plan.text);
+      // A pass named without a run that the plan's Passes still have to run is that item, never a second one.
+      const pending = request.ids.filter((id) => !request.run && !request.section &&
+        items.some((item) => !item.checked && item.title.toLowerCase() === titleOf(id).toLowerCase()));
+      const asked = lines.filter((_line, index) => !pending.includes(request.ids[index]));
+      const added = titles.filter((_title, index) => !pending.includes(request.ids[index]));
       const listed = (line) => items.some((item) => passLine(item.title, item.scope) === line || `- [ ] ${item.text}` === line);
-      const unticked = withWorkPlanPassesUnticked(plan.text, (item) => lines.includes(`- [ ] ${item.text}`));
-      const text = withWorkPlanPasses(unticked, lines.filter((line) => !listed(line)));
-      const written = await write("write", text);
-      return { plan: written, added: titles, notice: `Added to the plan's Passes: ${titleList(titles)}.` };
+      const unticked = withWorkPlanPassesUnticked(plan.text, (item) => asked.includes(`- [ ] ${item.text}`));
+      const text = withWorkPlanPasses(unticked, asked.filter((line) => !listed(line)));
+      const written = text === plan.text ? plan : await write("write", text);
+      return { plan: written, added, pending: pending.map(titleOf), notice: added.length ? `Added to the plan's Passes: ${titleList(added)}.` : "" };
     }
     const named = request.section ? `on ${request.section}` : request.run ? RUN_SCOPES[request.run] : base ? `since ${base.slice(0, 7)}` : RUN_SCOPES.whole;
     const text = [
@@ -444,6 +464,7 @@ export {
   applyPlanPasses,
   nextPlanPass,
   passesInMessage,
+  passesListedNote,
   planPassItemsCheck,
   listSessionPasses,
   planPassListing,
