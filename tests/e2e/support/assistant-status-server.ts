@@ -143,8 +143,11 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   const temporary = temporaryEngineId ? await temporaryConversationsFixture({
     engineId: temporaryEngineId, session, actions,
     publishSessionChanged: (sessionId, event) => publishSessionChanged(sessionId, event),
+    // Every turn event production's AI tasks follow (Vibe64AiTasksFeature): `admitted` moves a task to working when
+    // its AI takes the turn, before the send has recorded it.
     conversationTurns: {
       starting: (sessionId, turn) => aiTaskService.onTurnStarting({ sessionId, ...turn }),
+      admitted: (sessionId, turn) => aiTaskService.onTurnAdmitted({ sessionId, ...turn }),
       settled: (sessionId, conversationId, failure = null) => aiTaskService.onTurnSettled({ sessionId, conversationId, failure })
     },
     onSubscribe: conversationId => state.subscriptions.push(temporaryConversationId({
