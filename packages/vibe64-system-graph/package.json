@@ -60,9 +60,9 @@
   "dependencies": {
     "@vue-flow/core": "^1.48.2",
     "@jskit-ai/kernel": "0.2.35",
-    "@jskit-ai/http-web": "0.2.61",
-    "@jskit-ai/realtime": "0.2.55",
-    "@jskit-ai/shell-web": "0.2.52",
+    "@jskit-ai/http-web": "0.2.63",
+    "@jskit-ai/realtime": "0.2.57",
+    "@jskit-ai/shell-web": "0.2.54",
     "@local/vibe64-core": "0.1.0",
     "@local/vibe64-genesis": "0.1.0",
     "@local/vibe64-database-tools": "0.1.0",

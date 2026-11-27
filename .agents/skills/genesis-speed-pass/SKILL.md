@@ -141,6 +141,17 @@ Measure:
   expensive level (a browser) that a cheaper one (a unit or component test)
   proves as well.
 
+Take these numbers from one whole run of each part of the suite (the database
+tests, the browser tests and so on), its files in parallel at the machine's
+real test budget: its per-file times are the baseline table. After a batch of
+fixes, run the part again for the times after, and compare per file and in
+total. A single-file run is for one change's red and green, never the way to
+take a baseline or a before-and-after table, and never one of serial runs
+queued one after another. Run where the project's test machine runs (inside
+Vibe64, `vibe64-helper check`), not on a shared development host; a time taken
+while other work loads the machine is reported as such and never used as a
+baseline.
+
 Fix the cause, when possible in the shared harness so every file gains:
 
 - **Prepare once per run.** Build databases, fixtures, builds and servers once
@@ -180,7 +191,8 @@ faster. The whole suite runs only with the person's OK: take the time before
 from its last whole run (CI's, or one the person allowed), and when there is
 none, ask before running it, saying it is the measurement before and roughly
 how long it takes; the time after is the timed whole run at the end. During
-the work, time single files and phases.
+the work, time each part's whole run as Measure says; a single file's run
+proves only its own change.
 
 ## Client speed
 

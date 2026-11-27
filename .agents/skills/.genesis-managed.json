@@ -1,5 +1,5 @@
 {
-  "genesisVersion": "1.10.31",
+  "genesisVersion": "1.10.32",
   "schemaVersion": 1,
   "skills": {
     "genesis-data-pass": {
@@ -39,7 +39,7 @@
       "source": "genesis:skills/genesis-security-pass"
     },
     "genesis-speed-pass": {
-      "hash": "sha256:1406340019899f1e51e35eeadcd0cbd7c2cfbac3d644a6f6e3e87d81efe07634",
+      "hash": "sha256:7c102668ae83198e167fc7ef36017b8e41ca0e0cf358b82620a6a2ff365d43f8",
       "source": "genesis:skills/genesis-speed-pass"
     },
     "genesis-ui-pass": {
