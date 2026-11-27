@@ -146,7 +146,7 @@ const outputsExample = `
 - Mode: \`interactive\`
 - Data: \`test\`
 - Runtimes: \`nodejs\`
-- Run \`Start test application\`: \`node\` \`tests/support/start-test-app.mjs\` \`{host}\` \`{port}\`
+- Run \`Serve the built app on the test database\`: \`node_modules/.bin/jskit\` \`browser-test-server\` \`{host}\` \`{port}\` \`{workers}\`
 
 #### Presentation
 
@@ -220,7 +220,7 @@ ${list(OUTPUTS_ENTRY_FORMS.target)}
 - Ids use lowercase letters, digits and single hyphens. Target ids are unique; at most one target is \`- Default.\` (the normal Preview).
 - \`interactive\`: exactly one Run step, last, and one \`#### Presentation\`. \`finite\`: no Run, Presentation or Preview identity, and at least one \`#### Download\`.
 - Steps are ordered Prepare, Build, then Run. \`{host}\` and \`{port}\` may appear only in a web target's Run step; the application must listen there. \`{parameter:id}\` may appear in any step argument. \`{workers}\` may appear only in the Run step of a web target with \`- Data: test\`: the number of app servers a browser-test run asks for, worker *i* listening on \`{port}\`+*i* (1 for an ordinary Preview start); \`vibe64-helper spec browser-tests\` says how a run uses them.
-- \`\` - Data: \`test\` \`\` declares a target that enforces isolated test data (Test Preview banner; used by \`vibe64-helper playwright --target <id>\`). \`development\` is the other value; omitting Data asserts nothing.
+- \`\` - Data: \`test\` \`\` declares a test target, which enforces isolated test data (Test Preview banner; used by \`vibe64-helper playwright --target <id>\`) and serves the application's production build, never a development server: built once per tree and reused while a digest of its sources is unchanged, one app server per worker. JSKIT's \`jskit browser-test-server {host} {port} {workers}\` is one, as the example's \`test-app\`. \`development\` is the other value; omitting Data asserts nothing.
 - Workdir defaults to \`.\`.
 
 \`#### Parameter\` entries (at most ${VIBE64_OUTPUT_MAX_PARAMETERS} per target, each used in a step):

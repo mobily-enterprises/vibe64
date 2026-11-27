@@ -586,10 +586,15 @@ identity command must select the same data. The `browser-tests` spec
 (`vibe64-helper spec browser-tests`, which the provider-neutral session guidance
 names before any browser suite) explains these requirements, the commands, and
 the project work needed when a test target is absent. See `docs/managed-browser-tests.md` for the portable setup.
-Routine test launchers retain the isolated schema, apply pending migrations and
-reset fixture data. Fresh-schema proofs and production builds are separate from
-ordinary browser checks. The same spec asks agents to batch related cases and
-measure slow startup before retrying. The web readiness probe allows five minutes;
+A test target serves the application's production build, never a development
+server: built once per tree and reused while a digest of its sources is
+unchanged, one app server per worker, so a suite tests the code Staging and
+Production run; both specs say so (the outputs spec's Data rule, with JSKIT's
+`jskit browser-test-server` as its example, and the browser-tests spec), and
+the Outputs grammar accepts any Run step. Routine test launchers retain the
+isolated schema, apply pending migrations and reset fixture data. Fresh-schema
+proofs are separate from ordinary browser checks. The same spec asks agents to
+batch related cases and measure slow startup before retrying. The web readiness probe allows five minutes;
 the managed waiter has another thirty seconds to observe its final status and
 cleanup instead of racing the probe's deadline. The probe stops when its launch
 process exits, including when that process exits before the probe starts.
