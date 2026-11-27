@@ -246,6 +246,30 @@ test("a Data test target serves the production build, never a development server
   assert.doesNotMatch(program, /production builds are separate from\s+ordinary browser checks/u);
 });
 
+// What a check gets, wherever a host runs it, and how a project declares its whole suite: a project whose whole run
+// listed its browser suite (test:e2e:list) in place of running it, pinned its budgets and bound TEST_DB_NAMES had nothing
+// that told it otherwise. The session guidance names the spec before Verification or a test setup changes.
+test("the checks spec says what a check gets and that the declared Verification is the whole suite, part by part", async () => {
+  const everything = vibe64Driver({ conversationKind: "main", scope: "session", session: {
+    managedDatabaseRefresh: true, managedEnvironment: true, managedGit: true, managedPreview: true, managedPages: true
+  } });
+  assert.match(everything, /Before you change the Stack's Verification or how tests are set up, read `vibe64-helper spec checks`/u);
+  const { code, stdout: checks } = await cli(["checks"]);
+  assert.equal(code, 0);
+  for (const required of [
+    "possibly at another absolute path: never hard-code one", "`node_modules/.cache`",
+    "Prepare steps run again only when their inputs change", "Declare each step's inputs",
+    "`V64_TEST_CONCURRENCY`", "`PLAYWRIGHT_WORKERS`", "set by the host, never by the project", "`APP_ENV=development`",
+    "the names the Stack declares", "`TEST_DB_NAME`", "`BROWSER_TEST_DB_NAME`", "`testDatabase` and `browserTestDatabase`",
+    "never gets administrator credentials", "with more test workers than that, JSKIT runs that many database files at once",
+    "Declare every part of the project's checks as its own `- Verify` entry",
+    "A part missing from Verification is a part no whole run covers", "The declared Verification is the whole suite",
+    "never a listing", "owns its databases, ports and output folder", "never pin a worker or concurrency count",
+    "its 10 slowest files"
+  ]) assert.ok(checks.includes(required), required);
+  assert.doesNotMatch(checks, /hosted|Online|\/vibe64\/trees/u, "the public spec describes no hosting service");
+});
+
 test("the Preview identity protocol examples satisfy the real response validation", async () => {
   const spec = (await cli(["preview-identity-command"])).stdout;
   assert.match(spec, /runManagedPreviewIdentityCommand\(\{ env: process\.env, protocol: "vibe64\.preview-identity\.command\.v1", localHostnames: \[/u,
