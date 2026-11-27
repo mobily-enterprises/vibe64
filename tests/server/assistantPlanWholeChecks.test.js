@@ -29,9 +29,11 @@ async function finish(f, decision, options = {}) {
   await f.service.afterTurn("session-1", end(state), f.context);
 }
 const noticeTexts = (f) => [...f.notices.values()].map((turn) => turn.system.text);
-const QUESTION = "The plan is finished. Run the whole-project checks once now, on the finished plan's work? They are the checks the project " +
-  "runs as a whole, such as one whole run of the test suite, and can take a long time. Choose Yes or No above the message box.";
-const DECLINED = "Whole-project checks not run. Vibe64 won't ask again for this plan.";
+// The person reads only this: the question, its Yes's message and its notes say "the full test suite", nothing more.
+const QUESTION = "Run the full test suite?";
+const DECLINED = "Full test suite not run. Vibe64 won't ask again for this plan.";
+// The Yes's turn is an ordinary request on a session with no current plan: nothing it is told is about the plan.
+const PLAN_WORDS = /whole-project checks|finished plan|not one of its steps|completed and archived|the plan's pass|make no plan/u;
 const yes = (messageId) => ({ messageId, message: WHOLE_CHECKS_YES_MESSAGE, wholeChecks: "run", submissionKind: "send" });
 const no = (asked) => ({ messageId: asked.messageId, message: asked.input.message, reviewAction: "skip-checks" });
 const notAsked = { code: "vibe64_assistant_routing_whole_checks_not_asked" };
@@ -81,10 +83,11 @@ test("a finished plan is completed, archived and saved as before, and then Vibe6
   assert.equal(notices.at(-1), QUESTION, "the question follows the save's note");
   const archived = notices.indexOf("Completed plan archived: Required-field validation.\n\n[View plan history](#vibe64-plan-history)");
   assert.ok(archived >= 0 && archived < notices.indexOf("Saved automatically."), notices.join("\n"));
-  assert.equal(notices.filter((text) => text.startsWith("The plan is finished.")).length, 1, "asked once");
+  assert.equal(notices.filter((text) => text === QUESTION).length, 1, "asked once");
   // Above the message box: the question, with Yes and No.
   const notice = assistantRoutingNotice(f.state(), { mode: "auto" });
   assert.deepEqual([notice.shown, notice.label, notice.needsAction, notice.stop], [true, WHOLE_CHECKS_QUESTION, true, false]);
+  assert.deepEqual([WHOLE_CHECKS_QUESTION, WHOLE_CHECKS_YES_MESSAGE], [QUESTION, "Run the full test suite."]);
   assert.deepEqual(notice.action, { kind: "checks", label: "Yes", enabled: true, waits: "", progress: "" });
   assert.deepEqual(assistantRoutingNotice(f.state(), { busy: "turn" }).action,
     { kind: "checks", label: "Yes", enabled: false, waits: "available when this answer ends", progress: "" });
@@ -96,7 +99,7 @@ test("with Automatically save changes off, the finished plan is not saved and Vi
   const { f, saves } = await finishedPlan(t, { mode: "auto", autoSave: false });
   assert.deepEqual(saves, []);
   assert.equal(noticeTexts(f).at(-1), QUESTION);
-  assert.equal(noticeTexts(f).filter((text) => text.startsWith("The plan is finished.")).length, 1);
+  assert.equal(noticeTexts(f).filter((text) => text === QUESTION).length, 1);
   assert.equal(f.state().wholeChecks.status, "asked");
 });
 
@@ -113,25 +116,30 @@ test("Yes runs one Senior turn that runs the whole-project checks once; what it 
   assert.match(run.input.message, /Your final reply records the result: each check you ran, with its command, whether it passed and its counts/u);
   assert.ok(run.input.message.endsWith(`\n\n${WHOLE_CHECKS_YES_MESSAGE}`), "the person's Yes is its request");
   assert.doesNotMatch(run.input.message, /Auto workflow stage|Senior review of the plan|Ready to try/u);
+  assert.doesNotMatch(run.input.message, PLAN_WORDS, "an ordinary request: nothing about the finished plan");
+  assert.match(run.input.message, /Run each entry of the project's Verification once/u);
+  assert.match(run.input.message, /Report the results plainly: what ran and how it went\. Don't narrate the process\./u);
   assert.equal(run.input.genesisTask, undefined, "it runs no pass");
   const running = f.state();
   assert.deepEqual([running.messageId, running.stage, running.workflow, running.resolvedMode, running.reason, running.planInvolved, running.afterPlan],
     ["yes-1", "implementation", true, "senior", "implementation", false, null]);
+  assert.equal(running.workPlan, null, "no plan rides on it");
   assert.deepEqual(running.wholeChecks, { status: "run", plan: "Required-field validation" });
   assert.equal(assistantRoutingNotice(running).shown, false, "the question is answered");
   // A turn that runs out of room carries on, never running them again from the start.
   await finish(f, "continue", { involved: false });
   assert.equal(f.sends.length, 4);
-  assert.equal(f.sends[3].input.displayMessage, "Continue the whole-project checks.");
-  assert.equal(f.sends[3].input.turnMetadata.actorLabel, "Whole-project checks");
-  assert.match(f.sends[3].input.message, /Continue the whole-project checks the person asked for from where the last turn stopped: they run once in this request, never again/u);
+  assert.equal(f.sends[3].input.displayMessage, "Continue the full test suite.");
+  assert.equal(f.sends[3].input.turnMetadata.actorLabel, "Full test suite");
+  assert.match(f.sends[3].input.message, /Continue the full test suite from where the last turn stopped: it runs once in this request, never again/u);
+  assert.doesNotMatch(f.sends[3].input.message, PLAN_WORDS);
   assert.ok(f.sends[3].input.message.includes(ASSISTANT_WHOLE_CHECKS_INSTRUCTION));
   // The fix is new work: the turn reports handoff and Automatically save changes saves it.
   await f.source.commit("Fix the test the whole run found failing");
   await finish(f, "handoff", { involved: false });
   assert.equal(f.state().status, "complete");
   assert.deepEqual(saves, ["complete", "complete"], "saved like any finished work");
-  assert.equal(noticeTexts(f).filter((text) => text.startsWith("The plan is finished.")).length, 1, "never asked again");
+  assert.equal(noticeTexts(f).filter((text) => text === QUESTION).length, 1, "never asked again");
   await assert.rejects(f.service.send("session-1", yes("yes-2"), f.context), notAsked);
   await assert.rejects(f.service.send("session-1", no(f.state()), f.context), notAsked);
   assert.equal(f.sends.length, 4, "nothing runs them again");
@@ -162,7 +170,8 @@ test("a message typed instead of Yes or No ends the question; its turn hears wha
   assert.equal(f.sends.length, 3);
   assert.ok(sent.input.message.includes(`[Vibe64: ${WHOLE_CHECKS_OFFERED_NOTE}]\n\nYes, run them, with the agreed required-field rule too.`),
     "the note leads the person's own message");
-  assert.match(WHOLE_CHECKS_OFFERED_NOTE, /When it asks for them \("yes, run them", say\), run them once and fix what they find/u);
+  assert.match(WHOLE_CHECKS_OFFERED_NOTE, /When it asks for it \("yes, run it", say\), run each entry of the project's Verification once and fix what it finds/u);
+  assert.doesNotMatch(WHOLE_CHECKS_OFFERED_NOTE, PLAN_WORDS);
   assert.deepEqual(f.state().wholeChecks, { status: "offered", plan: "Required-field validation" });
   assert.equal(assistantRoutingNotice(f.state()).action?.kind, undefined, "no Yes or No any more");
   await assert.rejects(f.service.send("session-1", yes("yes-1"), f.context), notAsked);
@@ -215,16 +224,17 @@ test("the plan's passes Genesis records wait for the person's answer: the Yes re
   assert.deepEqual(answerWholeChecks(saved, { messageId: "other" }).fields.wholeChecks, { status: "offered", plan: "Tidy" });
   // The Yes's turn records them only once every check passes, and reports the records as changed files.
   const instructions = assistantWholeChecksInstructions({ autoSave: true, passes: ["security-pass", "deslop"] });
-  assert.match(instructions, /Once every check passes, record the plan's passes Security pass and Deslop, which waited for this run: take the Genesis `passes done` operation for `security-pass`, `deslop`, one pass each, invoked as each pass's skill says, and leave the records with your other changes\. Record none while a check fails\./u);
-  assert.match(instructions, /handoff: you fixed what the checks found or recorded the plan's passes \(files changed\); Vibe64 then saves the fixes\./u);
-  assert.doesNotMatch(assistantWholeChecksInstructions({ autoSave: true }), /passes done|record the plan's/u);
+  assert.match(instructions, /Once every check passes, record the passes Security pass and Deslop as completed, which waited for this run: take the Genesis `passes done` operation for `security-pass`, `deslop`, one pass each, invoked as each pass's skill says, and leave the records with your other changes\. Record none while a check fails\./u);
+  assert.match(instructions, /handoff: you fixed what the checks found or recorded those passes \(files changed\); Vibe64 then saves the fixes\./u);
+  assert.doesNotMatch(instructions, PLAN_WORDS);
+  assert.doesNotMatch(assistantWholeChecksInstructions({ autoSave: true }), /passes done|record the/u);
   // No: the note says which passes stay unrecorded.
   assert.equal(assistantWholeChecksDeclinedNotice("turn-1", { passes: ["deslop"] }).text,
-    "Whole-project checks not run. Vibe64 won't ask again for this plan. Deslop stays unrecorded as completed, since the whole-project checks didn't run.");
+    "Full test suite not run. Vibe64 won't ask again for this plan. Deslop stays unrecorded as completed, since the full test suite didn't run.");
   assert.equal(assistantWholeChecksDeclinedNotice("turn-1").text, DECLINED);
 });
 
-test("the whole-project checks run in the session, and every failure is explained, never called pre-existing or environmental", () => {
-  assert.match(ASSISTANT_WHOLE_CHECKS_INSTRUCTION, /through its own verification command, in this session, never detached to outlive it\./u);
+test("the full test suite runs in the session, and every failure is explained, never called pre-existing or environmental", () => {
+  assert.match(ASSISTANT_WHOLE_CHECKS_INSTRUCTION, /through its own command, in this session, never detached to outlive it\./u);
   assert.match(ASSISTANT_WHOLE_CHECKS_INSTRUCTION, /Explain every failure; never call one pre-existing or environmental: a missing tool or an environment's refusal is a defect to fix, reported with what is missing\./u);
 });

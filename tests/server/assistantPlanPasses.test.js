@@ -138,7 +138,7 @@ test("Senior's review leaves a plan with passes active; each Passes item runs in
   const notices = noticeTexts(f);
   assert.ok(notices.indexOf(SAVE_STARTED) < notices.indexOf("Saved automatically."));
   // No pass ran the whole-project checks: once the plan is finished and saved, Vibe64 asks whether to run them.
-  assert.match(notices.at(-1), /^The plan is finished\. Run the whole-project checks once now, on the finished plan's work\?/u);
+  assert.equal(notices.at(-1), "Run the full test suite?");
   // Genesis records only the whole-app run, and only after the whole-project checks pass: it waits for the answer.
   assert.deepEqual(f.state().wholeChecks, { status: "asked", plan: "Required-field validation", passes: ["ux-pass"] });
   for (const send of f.sends.slice(2)) {

@@ -151,9 +151,9 @@ describe("retained project conversation ownership", () => {
       f.receipt(runtime.identity, { user: { messageId: body.messageId, text: body.text } });
       return { ok: true };
     });
-    expect(await runtime.send({ message: "Yes, run the whole-project checks once now.", wholeChecks: "run", submissionKind: "send" },
+    expect(await runtime.send({ message: "Run the full test suite.", wholeChecks: "run", submissionKind: "send" },
       { messageId: "yes-1" })).toEqual({ ok: true });
-    expect(mocks.request.mock.lastCall[1].body).toMatchObject({ messageId: "yes-1", text: "Yes, run the whole-project checks once now.",
+    expect(mocks.request.mock.lastCall[1].body).toMatchObject({ messageId: "yes-1", text: "Run the full test suite.",
       data: { wholeChecks: "run" } });
   });
   it("refreshes a pinned foreign goal through the same binding on scoped product invalidations", async () => {

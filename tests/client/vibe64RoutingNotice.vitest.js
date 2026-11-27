@@ -189,7 +189,7 @@ it("asks once a plan is finished whether to run the whole-project checks, with Y
   const asked = { messageId: "finished-plan", status: "complete", stage: "pass", workflow: true, delivery: "accepted",
     resolvedMode: "senior", wholeChecks: { status: "asked", plan: "Required-field validation" } };
   const html = await render(asked);
-  expect(html).toContain("Run the whole-project checks once now?");
+  expect(html).toContain("Run the full test suite?");
   expect(html).toMatch(/>\s*Yes\s*</u); expect(html).toMatch(/>\s*No\s*</u);
   expect(html).not.toContain("Continue"); expect(html).not.toMatch(/>\s*Stop\s*</u);
   // While an answer runs, both wait, and Yes says when it can be pressed.
