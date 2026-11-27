@@ -173,3 +173,81 @@ test("preview identity command response preserves structured application failure
     statusCode: 404
   });
 });
+
+function failingRunner(result, env = {}) {
+  return createPreviewIdentityCommandRunner({
+    capability: capability(),
+    env,
+    runCommand: async () => ({ ok: false, timedOut: false, ...result }),
+    sourceRoot: "/workspace/app",
+    targetHref: "http://127.0.0.1:4100/home"
+  });
+}
+
+const LOGIN = Object.freeze({ operation: "login-as", selector: { type: "email", value: "ada@example.com" } });
+
+test("a failed identity command's error names its exit status and the protocol answer's code and error", async () => {
+  const runner = failingRunner({
+    exitCode: 1,
+    stderr: "",
+    stdout: `${JSON.stringify({
+      code: "browser_test_identity_failed",
+      error: "DB_NAME, TEST_DB_NAME and BROWSER_TEST_DB_NAME must name different databases.",
+      ok: false,
+      protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL,
+      requestId: "request-from-the-command",
+      setCookie: ["app_session=leaked-session-value; Path=/; HttpOnly"]
+    })}\n`
+  });
+  await assert.rejects(runner(LOGIN), (error) => {
+    assert.equal(error.code, "vibe64_preview_identity_command_failed");
+    assert.equal(error.message, "Application preview identity command failed (exit status 1): browser_test_identity_failed: "
+      + "DB_NAME, TEST_DB_NAME and BROWSER_TEST_DB_NAME must name different databases.");
+    assert.doesNotMatch(error.message, /leaked-session-value/u);
+    return true;
+  });
+});
+
+test("a failed identity command that writes only stderr shows its last lines, bounded", async () => {
+  const runner = failingRunner({
+    exitCode: 2,
+    stderr: `${"noise line\n".repeat(200)}Error: connect ECONNREFUSED 127.0.0.1:5432\n    at preview-identity.js:12\n`,
+    stdout: ""
+  });
+  await assert.rejects(runner(LOGIN), (error) => {
+    assert.match(error.message, /^Application preview identity command failed \(exit status 2\): …/u);
+    assert.match(error.message, /Error: connect ECONNREFUSED 127\.0\.0\.1:5432\n {4}at preview-identity\.js:12$/u);
+    assert.ok(error.message.length < 620, `${error.message.length} characters`);
+    return true;
+  });
+});
+
+test("a failed identity command's error never carries cookies, credentials or its Env's secret", async () => {
+  const runner = failingRunner({
+    exitCode: 1,
+    stderr: [
+      "\u001b[31mSet-Cookie: app_session=stderr-session-value; Path=/\u001b[0m",
+      "cookie app_session=another-session-value",
+      "APP_PREVIEW_IDENTITY_SECRET=env-assigned-secret",
+      "exchange used one-time-exchange-secret-value",
+      "postgres://app:database-password@127.0.0.1/app failed"
+    ].join("\n"),
+    stdout: "not json"
+  }, { APP_PREVIEW_IDENTITY_SECRET: "one-time-exchange-secret-value" });
+  await assert.rejects(runner(LOGIN), (error) => {
+    for (const secret of ["stderr-session-value", "another-session-value", "env-assigned-secret",
+      "one-time-exchange-secret-value", "database-password", "\u001b"]) {
+      assert.ok(!error.message.includes(secret), `${JSON.stringify(secret)} in ${error.message}`);
+    }
+    assert.match(error.message, /\(exit status 1\): Set-Cookie: \[redacted\]\n/u);
+    return true;
+  });
+});
+
+test("a timed-out identity command keeps its own message", async () => {
+  const runner = failingRunner({ exitCode: 1, stderr: "slow", stdout: "", timedOut: true });
+  await assert.rejects(runner(LOGIN), {
+    code: "vibe64_preview_identity_command_timed_out",
+    message: "Application preview identity command timed out."
+  });
+});

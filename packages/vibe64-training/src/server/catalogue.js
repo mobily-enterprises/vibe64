@@ -1,5 +1,6 @@
 import { realpath } from "node:fs/promises";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { commandFailureMessage } from "@local/vibe64-core/server/commandFailureDetail";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { courseSchema, topicSchema, validateContent } from "./contentSchemas.js";
 import { sha256Hex } from "@local/vibe64-core/server/sha256Hex";
@@ -24,7 +25,9 @@ async function readPinnedTopic(directory) {
       runtimes: ["git"],
       timeout: 60_000
     });
-    if (result.ok !== true) throw Object.assign(new Error(result.error || "Git could not read the pinned topic."), { code: result.code });
+    if (result.ok !== true) {
+      throw Object.assign(new Error(commandFailureMessage("Git could not read the pinned topic.", result)), { code: result.code });
+    }
     return outputEncoding === "base64" ? Buffer.from(result.stdout, "base64") : result.stdout.trim();
   };
   if (await realpath(await git(["rev-parse", "--show-toplevel"])) !== root) {

@@ -3,6 +3,7 @@ import { lstat, mkdir, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { commandFailureMessage } from "@local/vibe64-core/server/commandFailureDetail";
 import { canonicalJson } from "./content.js";
 import { courseSchema, id, list, text, validateContent } from "./contentSchemas.js";
 import { createTrainingContentInstaller } from "./contentInstaller.js";
@@ -190,7 +191,7 @@ function createTrainingCourseInstaller({
     });
     if (result?.ok !== true) {
       throw trainingInternalError(
-        String(result?.error || result?.stderr || "Git could not read the source.").slice(0, 300),
+        commandFailureMessage("Git could not read the source.", result),
         "VIBE64_TRAINING_SOURCE_FETCH_FAILED"
       );
     }

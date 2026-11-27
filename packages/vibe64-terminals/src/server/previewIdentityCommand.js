@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 
+import { commandFailureMessage, commandFailureSecrets } from "@local/vibe64-core/server/commandFailureDetail";
 import {
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
@@ -236,14 +237,23 @@ function createPreviewIdentityCommandRunner({
       session,
       timeout: capability.timeoutMs
     });
-    if (result?.ok !== true) {
+    if (result?.timedOut === true) {
       throw previewIdentityCommandError(
-        result?.timedOut === true
-          ? "Application preview identity command timed out."
-          : "Application preview identity command failed.",
-        result?.timedOut === true
-          ? "vibe64_preview_identity_command_timed_out"
-          : "vibe64_preview_identity_command_failed"
+        "Application preview identity command timed out.",
+        "vibe64_preview_identity_command_timed_out"
+      );
+    }
+    if (result?.ok !== true) {
+      // Its exit status and its own words (its protocol answer's code and error, or its stderr's last lines), never
+      // the cookies it set or its Env's secret: the person and the AI reading the error see why it failed.
+      throw previewIdentityCommandError(
+        commandFailureMessage("Application preview identity command failed.", result, {
+          secrets: [
+            ...commandFailureSecrets(env),
+            ...commandFailureSecrets(project.runtimeConfigEnv, { secretNamesOnly: true })
+          ]
+        }),
+        "vibe64_preview_identity_command_failed"
       );
     }
     return parsePreviewIdentityCommandResponse(result.stdout, {

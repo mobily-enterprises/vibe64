@@ -33,6 +33,7 @@
     "./server/launchPreviewProxyEnv": "./src/server/launchPreviewProxyEnv.js",
     "./server/localStudioRequest": "./src/server/localStudioRequest.js",
     "./server/logging": "./src/server/logging.js",
+    "./server/commandFailureDetail": "./src/server/commandFailureDetail.js",
     "./server/launchRestartRules": "./src/server/launchRestartRules.js",
     "./server/osUserIdentity": "./src/server/osUserIdentity.js",
     "./server/learningSpace": "./src/server/learningSpace.js",

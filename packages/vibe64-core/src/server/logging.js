@@ -247,5 +247,6 @@ export {
   sanitizeLogText,
   sanitizeOperationText,
   shouldRedactLogField,
+  VIBE64_LOG_REDACTED_VALUE,
   __testables
 };

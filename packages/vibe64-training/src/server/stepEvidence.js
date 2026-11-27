@@ -1,6 +1,7 @@
 import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { commandFailureMessage } from "@local/vibe64-core/server/commandFailureDetail";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { PRACTICE_AGENT_GUIDANCE_EXCLUDES } from "@local/vibe64-terminals/server/practiceAgentGuidance";
@@ -88,7 +89,8 @@ function createTrainingStepEvidence({
     });
     if (result?.ok !== true) {
       throw conflictFailure(
-        "Your practice project's changes could not be read. Nothing was recorded; try again in a moment.",
+        commandFailureMessage("Your practice project's changes could not be read. Nothing was recorded; try again in a "
+          + "moment. Git", result),
         "VIBE64_TRAINING_EVIDENCE_UNREADABLE"
       );
     }

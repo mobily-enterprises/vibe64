@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { runVibe64Command } from "@local/vibe64-execution/server";
+import { commandFailureMessage } from "@local/vibe64-core/server/commandFailureDetail";
 
 const require = createRequire(import.meta.url);
 const MAX_AGE_MS = 30_000;
@@ -56,7 +57,7 @@ function createSourceEditorSearchIndex() {
       maxBuffer: 1024 * 1024
     });
     if (result.exitCode !== 0 || result.ok === false) {
-      throw new Error(result.error || result.stderr || "The file index could not be updated. Use Refresh to retry.");
+      throw new Error(`${commandFailureMessage("The file index could not be updated.", result)} Use Refresh to retry.`);
     }
     return JSON.parse(result.stdout);
   }

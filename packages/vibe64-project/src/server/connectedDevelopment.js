@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { commandFailureMessage } from "@local/vibe64-core/server/commandFailureDetail";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import {
   connectedRepositoryName,
@@ -189,7 +190,8 @@ async function readConnectedSourceProjection({
   });
   if (!tracked.ok) {
     throw vibe64Error(
-      "Could not check whether the connected sources file is tracked. Preserve it and retry.",
+      `${commandFailureMessage("Could not check whether the connected sources file is tracked: git", tracked)} `
+        + "Preserve it and retry.",
       "vibe64_connected_source_file_git_unavailable"
     );
   }

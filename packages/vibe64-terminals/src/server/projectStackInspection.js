@@ -1,6 +1,7 @@
 import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PROJECT_REPOSITORY_MODE_GITHUB, PROJECT_REPOSITORY_MODE_MANAGED_GIT } from "@local/vibe64-core/server/projectRepository";
+import { commandFailureMessage } from "@local/vibe64-core/server/commandFailureDetail";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { inspectGenesisStackComponents } from "@local/vibe64-genesis/server";
 import { canonicalProjectSource, githubSourceCommandOptions, prepareGithubMirrorReference } from "./sessionSource.js";
@@ -59,7 +60,8 @@ async function inspectCanonicalProjectStack({
     });
     signal?.throwIfAborted();
     if (result?.ok !== true) {
-      throw inspectionError("vibe64_stack_repository_read_failed", "The saved project repository could not be verified or read.");
+      const message = commandFailureMessage("The saved project repository could not be verified or read: git", result);
+      throw inspectionError("vibe64_stack_repository_read_failed", message);
     }
     return String(result.stdout ?? result.output ?? "");
   }

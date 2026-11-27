@@ -1,6 +1,7 @@
 import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
+import { commandFailureMessage } from "@local/vibe64-core/server/commandFailureDetail";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { canonicalJson } from "./content.js";
@@ -225,7 +226,7 @@ function createTrainingDeclaredCheckOwner({
         const stdout = String(result.stdout ?? "");
         if (result.timedOut || result.signal || result.code || Buffer.byteLength(stdout) > 4096 || String(result.stderr || "").trim()) {
           throw failure(
-            "The declared check did not return a bounded successful execution result.",
+            commandFailureMessage("The declared check did not return a bounded successful execution result.", result),
             result.code || "VIBE64_TRAINING_CHECK_FAILED"
           );
         }
@@ -248,7 +249,10 @@ function createTrainingDeclaredCheckOwner({
             ]) ||
             row.check !== checkId || row.outcome !== "verified" || row.instanceId !== input.instanceId || row.interactionId !== input.interactionId ||
             row.requestId !== input.requestId || typeof row.message !== "string" || !row.message || row.message.length > 256) {
-          throw failure("The check result does not match this exact server interaction.", "VIBE64_TRAINING_CHECK_RESULT_INVALID");
+          throw failure(
+            commandFailureMessage("The check result does not match this exact server interaction.", result),
+            "VIBE64_TRAINING_CHECK_RESULT_INVALID"
+          );
         }
         return { checkResult: { check: checkId, observationId: input.observationId, outcome: "passed" } };
       } catch (error) {

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
+import { commandFailureStatus } from "@local/vibe64-core/server/commandFailureDetail";
 import { sourceEditorError } from "./sourceEditorPaths.js";
 
 const INTEGRATION_SETUP_PROTOCOL = "vibe64.integration-setup.command.v1";
@@ -394,7 +395,11 @@ async function runIntegrationSetupCommand({
     if (result?.timedOut) {
       throw sourceEditorError("Application integration setup timed out.", "vibe64_integration_setup_timed_out", {}, 502);
     }
-    throw sourceEditorError("Application integration setup failed.", "vibe64_integration_setup_failed", {}, 502);
+    // command-failure-detail: allow its output may carry OAuth and provider tokens, so only how it ended is shown
+    // (vibe64IntegrationSetupCommand.unit.test.js)
+    const status = commandFailureStatus(result);
+    const message = `Application integration setup failed${status ? ` (${status})` : ""}.`;
+    throw sourceEditorError(message, "vibe64_integration_setup_failed", {}, 502);
   }
   return parseIntegrationSetupResponse(result.stdout, request);
 }

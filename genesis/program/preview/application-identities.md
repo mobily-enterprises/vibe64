@@ -12,6 +12,9 @@ production app.
 - `packages/vibe64-project/src/server/settingsAssistantContracts.js`
 - `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-terminals/src/server/previewIdentityCommand.js`
+- `packages/vibe64-core/src/server/commandFailureDetail.js`
+- `tests/server/previewIdentityCommand.unit.test.js`
+- `tests/server/commandFailureDetailRule.unit.test.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommandLine.js`
 - `packages/vibe64-terminals/src/server/agentPreviewBrowserWorker.js`
@@ -108,7 +111,13 @@ or data. The Outputs parser is the only validator of that command contract
 (protocol, executable, identity types, environment names, runtimes and
 timeout); launch, Preview auth and the command runner use its result as given.
 This command is Preview's only authentication mode; a terminal recorded with any
-other mode gets no Preview authentication.
+other mode gets no Preview authentication. A failed command's error says why,
+for the person and the AI: its exit status and its own words, its protocol
+answer's `code` and `error` or else its stderr's last lines, bounded plain text
+with cookies, credentials and its Env's secret redacted
+(`commandFailureMessage`). Every Vibe64 site that turns a failed captured
+command into an error keeps the command's words the same way; a source check
+refuses one that drops them.
 
 Managed-browser identity selection always exchanges its grant at the canonical
 Preview proxy URL. If earlier browser navigation left that origin, selection
