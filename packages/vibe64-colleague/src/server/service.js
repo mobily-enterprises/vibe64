@@ -11,6 +11,7 @@ import { createColleagueHistory } from "./colleagueHistory.js";
 import { createColleagueFocusAndNavigation } from "./focusAndNavigation.js";
 import { createColleagueBrowserConversations } from "./browserConversations.js";
 import { createColleagueTurns } from "./colleagueTurns.js";
+import { COLLEAGUE_NATIVE_SEED_MESSAGES } from "./protocol.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").ActionCatalogue} ActionCatalogue */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEvents} RuntimeEvents */
@@ -31,6 +32,7 @@ import { createColleagueTurns } from "./colleagueTurns.js";
  * @param {ColleagueNameResolver} dependencies.resolveName
  * @param {number} [dependencies.watchPollMs]
  * @param {number} [dependencies.watchDebounceMs]
+ * @param {number} [dependencies.nativeSeedMessages] how many recent messages a fresh native conversation's seed quotes
  * @param {RuntimeLogger} dependencies.logger
  */
 function createColleagueService({
@@ -42,6 +44,7 @@ function createColleagueService({
   resolveName,
   watchPollMs = 30000,
   watchDebounceMs = 250,
+  nativeSeedMessages = COLLEAGUE_NATIVE_SEED_MESSAGES,
   logger
 }) {
   if (!path.isAbsolute(systemRoot || "")) throw new TypeError("Colleague needs the private application system root.");
@@ -65,7 +68,8 @@ function createColleagueService({
     terminals,
     serviceState,
     records,
-    threads
+    threads,
+    nativeSeedMessages
   });
   const watchSources = createWatchSources();
   const turnInputs = createColleagueTurnInputs({

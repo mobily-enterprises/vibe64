@@ -20,7 +20,7 @@ import { createColleagueUsageKnowledge } from "../../packages/vibe64-colleague/s
 import { NO_HOST_PANES } from "../../packages/vibe64-colleague/src/shared/navigationPanes.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "../../packages/vibe64-colleague/src/server/attention.js";
 import { createWatchSources, stateWatchUpdate } from "../../packages/vibe64-colleague/src/server/watchSources.js";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions, learnInstructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
+import { COLLEAGUE_NATIVE_SEED_MESSAGES, COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions, learnInstructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { createColleagueNavigationCoordination } from "../../packages/vibe64-colleague/src/server/navigationCoordination.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/terminalActions.js";
 import { createAiTaskActions } from "../../packages/vibe64-ai-tasks/src/server/aiTaskActions.js";
@@ -87,7 +87,7 @@ function reviewTaskActions(terminals, observations) {
   return createAiTaskActions({ aiTasks }).filter(({ id }) => ["vibe64.ai-tasks.start", "vibe64.ai-tasks.finish", "vibe64.ai-tasks.cancel"].includes(id));
 }
 
-async function fixture(t, responses, { systemRoot, discovery = false, discoveryQueries = false, watching = false, assigning = false, watchPollMs = 30000, native = false, extraActions = [], resolveName = nameColleague } = {}) {
+async function fixture(t, responses, { systemRoot, discovery = false, discoveryQueries = false, watching = false, assigning = false, watchPollMs = 30000, native = false, extraActions = [], resolveName = nameColleague, nativeSeedMessages } = {}) {
   watching ||= assigning;
   const root = systemRoot || await mkdtemp(path.join(os.tmpdir(), "colleague-test-"));
   let resources = fixtureResources.get(t);
@@ -292,7 +292,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     async initializeModelRouting(input) { observations.routingInitialized.push(input.vibe64User.username); return { ok: true, initialized: [] }; }
   };
   const service = createColleagueService({ actions, terminals, events, resolveName, watchPollMs, watchDebounceMs: 1, systemRoot: root, accounts,
-    logger: silentLogger });
+    nativeSeedMessages, logger: silentLogger });
   const operation = Object.freeze({
     extensions: { vibe64: WORKSPACE_OPERATION },
     id: "vibe64.test.operate", kind: "command",
@@ -4781,10 +4781,14 @@ test("R11 original scoped Claude receipt survives stopped product upgrade and cu
   assert.deepEqual(restored.observations.mutations, []);
 });
 
-test("Colleague fresh native seed retains the original 24-row window and 2000-character text bounds", { timeout: 30_000 }, async t => {
-  const replies = Array.from({ length: 14 }, (_, index) => ({ text: reply(`Reply ${index}: ` + "r".repeat(2_100)) }));
+// The seed's window is 24 messages (COLLEAGUE_NATIVE_SEED_MESSAGES); this test runs it at 3, which two exchanges
+// already exceed.
+test("Colleague fresh native seed retains its message window and the 2000-character text bounds", { timeout: 30_000 }, async t => {
+  assert.equal(COLLEAGUE_NATIVE_SEED_MESSAGES, 24, "A fresh native seed's real window is 24 messages");
+  const window = 3;
+  const replies = Array.from({ length: 2 }, (_, index) => ({ text: reply(`Reply ${index}: ` + "r".repeat(2_100)) }));
   const f = await fixture(t, [...replies, { text: reply("I have the recent discussion.") }, { text: reply("The watched work has answered.") }],
-    { native: true, watchPollMs: 15 });
+    { native: true, watchPollMs: 15, nativeSeedMessages: window });
   registerWorkspaceConversation(f);
   for (let index = 0; index < replies.length; index += 1) {
     await f.send(`Question ${index}: ` + "q".repeat(2_100), `seed-user-${index}`);
@@ -4794,7 +4798,7 @@ test("Colleague fresh native seed retains the original 24-row window and 2000-ch
   const file = path.join(f.root, "colleague", "NDI", "conversation.json");
   const before = JSON.parse(await readFile(file, "utf8"));
   const written = (await f.service.read({}, f.context)).messages;
-  assert.equal(written.length, 28);
+  assert.equal(written.length, replies.length * 2);
   const starts = (await f.native.trace()).filter(row => row.method === "turn/start");
   await f.actions.execute({ actionId: "vibe64.colleague.model.select", input: {
     assistantSelection: { ...before.assistantSelection, modelId: "another-model" }
@@ -4806,13 +4810,13 @@ test("Colleague fresh native seed retains the original 24-row window and 2000-ch
   const completed = await f.service.wait(f.context);
   assert.equal(completed.status, "ready", completed.error);
   const turns = (await f.native.trace()).filter(row => row.method === "turn/start");
-  assert.equal(turns.length, 15);
+  assert.equal(turns.length, replies.length + 1);
   const prompt = turns.at(-1).params.input[0].text;
   const history = prompt.split("\n").filter(line => line.startsWith("{")).map(JSON.parse)
     .filter(value => Array.isArray(value.messages));
   assert.equal(history.length, 1);
   assert.deepEqual(history[0].messages.map(({ role, text }) => ({ role, text })),
-    written.slice(-23).map(({ role, text }) => ({ role, text: text.slice(0, 2_000) })));
+    written.slice(-(window - 1)).map(({ role, text }) => ({ role, text: text.slice(0, 2_000) })));
   assert.equal(history[0].messages.some(message => message.messageId === "seed-current-user" || message.text === words), false);
   const currentInput = completedColleagueNativeInputs(await f.native.trace()).at(-1).data;
   assert.deepEqual(currentInput.userMessages, [{ messageId: "seed-current-user", text: words }],
@@ -4827,21 +4831,21 @@ test("Colleague fresh native seed retains the original 24-row window and 2000-ch
   await f.actions.execute({ actionId: "vibe64.colleague.model.select", input: {
     assistantSelection: { ...before.assistantSelection, modelId: "wake-model" }
   }, context: f.context });
-  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 15);
+  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, replies.length + 1);
   await f.service.watch(workspaceWatch, f.context);
   f.observations.target = { ok: true, status: "completed", runId: "seed-watch-run",
     messages: [{ id: "seed-watch-answer", role: "assistant", text: "The watched work is ready." }] };
   await until(async () => (await f.service.read({}, f.context)).status === "working");
   const awakened = await f.service.wait(f.context);
   assert.equal(awakened.status, "ready", awakened.error);
-  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, 16);
+  assert.equal((await f.native.trace()).filter(row => row.method === "turn/start").length, replies.length + 2);
   assert.equal(awakened.watches[0].status, "delivered");
   const wakePrompt = (await f.native.trace()).filter(row => row.method === "turn/start").at(-1).params.input[0].text;
   const wakeHistory = wakePrompt.split("\n").filter(line => line.startsWith("{")).map(JSON.parse)
     .filter(value => Array.isArray(value.messages));
   assert.equal(wakeHistory.length, 1);
   assert.deepEqual(wakeHistory[0].messages.map(({ role, text }) => ({ role, text })),
-    completed.messages.slice(-24).map(({ role, text }) => ({ role, text: text.slice(0, 2_000) })));
+    completed.messages.slice(-window).map(({ role, text }) => ({ role, text: text.slice(0, 2_000) })));
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")).conversationLog.slice(0, after.conversationLog.length), after.conversationLog);
   assert.deepEqual(f.observations.mutations, []);
 });

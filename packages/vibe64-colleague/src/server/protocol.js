@@ -6,6 +6,8 @@ const COLLEAGUE_TOOL_LIMITS = Object.freeze({
   maxToolArgumentBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT,
   maxToolResultBytes: COLLEAGUE_TOOL_PAYLOAD_LIMIT
 });
+// How many recent messages a fresh native conversation's seed quotes.
+const COLLEAGUE_NATIVE_SEED_MESSAGES = 24;
 
 const replyStyle = [
   "Keep replies short by default: usually one or two brief sentences. Give a detailed explanation only when the user asks for one; include essential outcomes, failures or a necessary clarification without padding.",
@@ -74,6 +76,7 @@ const nativeInstructions = nativeFor(instructions);
 const nativeLearnInstructions = nativeFor(learnInstructions);
 
 export {
+  COLLEAGUE_NATIVE_SEED_MESSAGES,
   COLLEAGUE_TOOL_LIMITS,
   COLLEAGUE_TOOL_PAYLOAD_LIMIT,
   instructions,
