@@ -1808,6 +1808,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/composables/useVibe64Passes.js`
 - `src/components/studio/vibe64-session/Vibe64PassesMenu.vue`
 - `src/components/studio/vibe64-session/Vibe64PassSuggestion.vue`
+- `src/components/studio/vibe64-session/Vibe64PlanPassesBar.vue`
 - `tests/server/projectPasses.unit.test.js`
 - `tests/client/vibe64Passes.vitest.js`
 
@@ -5896,7 +5897,14 @@ completed (only when every ticked pass offers it) and Deep; a run sends
 `useVibe64Passes.js`), and the passes join the plan as described with the
 routing workflow. With a plan open the list starts with **This plan's passes**,
 the state of each (`planPassesView`) and Continue, Run <title> again and Restart
-from the first pass, which send `passAction`. Several passes is never suggested.
+from the first pass, which send `passAction`. Continue names the passes left
+(**Continue (8 passes left)**, `planContinueLabel`), counted from that read
+(`planProgress`: done, total and left), and nothing more is stored. While the
+plan is at its passes with any left, in a chat whose plans run their passes
+(`chatRunsPlanPasses`: Main chat with a chat mode, outside lessons and Fix it),
+`Vibe64PlanPassesBar` shows them above the composer whenever a pass could start
+(no turn or goal running): **This plan's passes: 1 of 9 done** and the same
+Continue, which calls the list's own `planAction("continue")`. Several passes is never suggested.
 The session's `passes` read adds the commits on the session's source since each
 `lastRun` (`git rev-list --count`), and the list shows `Last completed: <date>` or
 `Never completed`. A run's button sends that run's
@@ -5916,7 +5924,9 @@ its `lastRun` and its commits since then reach the interval's commits; a pass
 that never completed needs only the commits, counted over the whole history. Of the passes
 due, one that never completed comes first, then the most overdue for its interval,
 with Genesis's order breaking ties; it is suggested above the composer while the
-chat is idle, has no draft and no goal. The project's `settings/pass-suggestions.json`
+chat is idle, has no draft and no goal, and while no open plan has passes left
+(`recommendation` is null then, whatever the read picked): those are the plan's
+next step, shown by the plan's passes bar instead. The project's `settings/pass-suggestions.json`
 holds only the suggestion's state: Later snoozes it for seven days, and Dismiss
 hides it until a `lastRun` later than the dismissal. The suggestion offers the
 pass's runs as the list does and never starts one itself. Besides a run's

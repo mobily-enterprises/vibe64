@@ -79,6 +79,7 @@
         />
         <div v-if="planStatusLine" class="vibe64-plan-status text-body-small mb-1 px-2" role="status" data-testid="vibe64-plan-status">{{ planStatusLine }}</div>
         <div v-if="composerHeldReason" :id="composerHeldReasonId" class="text-body-small mb-1 px-2" role="status" data-testid="vibe64-composer-held">{{ composerHeldReason }}</div>
+        <Vibe64PlanPassesBar v-if="planPassesBarAvailable" :passes="passes" :session="props.session" />
         <Vibe64PassSuggestion v-if="passSuggestionVisible" :passes="passes" :pass="passes.recommendation.value" />
         <Vibe64AutopilotPromptTextarea
           ref="composerInput"
@@ -277,6 +278,7 @@ import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe6
 import Vibe64StarredMenu from "@/components/studio/vibe64-session/Vibe64StarredMenu.vue";
 import Vibe64PassesMenu from "./Vibe64PassesMenu.vue";
 import Vibe64PassSuggestion from "./Vibe64PassSuggestion.vue";
+import Vibe64PlanPassesBar from "./Vibe64PlanPassesBar.vue";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 import { AssistantQuestionInputs, AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
@@ -379,6 +381,8 @@ const passes = useVibe64Passes({
   idle: () => !agentActive.value,
   send: (input) => props.sendAgentMessage(input)
 });
+// The open plan's unfinished passes and their Continue show while a pass could start: no turn or goal in the way.
+const planPassesBarAvailable = computed(() => passesAvailable.value && conversationLogVisible.value && !passesBlockedReason.value);
 // A pass is suggested only while the chat is idle and empty: no turn, goal or draft in the way.
 const passSuggestionVisible = computed(() => passesAvailable.value && conversationLogVisible.value && !passesBlockedReason.value &&
   !composerDraft.value.trim() && Boolean(passes.recommendation.value));

@@ -1790,7 +1790,10 @@ pass over a plan's changes never counts as a pass's completed run. Now and then 
 suggestion offers a pass that was never completed or is overdue: the interval Vibe64
 picks from Genesis's advice for it has passed, and the app has changed enough
 since. Later hides it for a week and Dismiss until the pass completes again; a
-suggestion never starts a pass by itself.
+suggestion never starts a pass by itself. While the open plan has passes left,
+nothing is suggested: above the composer the plan's passes show instead, such as
+"This plan's passes: 1 of 9 done", with the list's own Continue naming what is
+left ("Continue (8 passes left)").
 
 People can choose how cautiously the AI engineers a project. The choice follows
 the project's source, always keeps ordinary work simple and targeted, and makes

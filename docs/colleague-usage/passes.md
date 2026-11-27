@@ -133,13 +133,20 @@ the plan, the list says **These run once Senior has reviewed the plan.**
 
 Once the plan is at its passes:
 
-- **Continue** runs the plan's next pass: its first one not ticked.
+- **Continue**, which names the passes left, such as **Continue (8 passes
+  left)**, runs the plan's next pass: its first one not ticked.
 - **Run Review again**, under each done pass, unticks it and runs it now.
 - **Restart from the first pass** unticks every pass and runs the first.
 
 Each sends a short message as yours, such as **Continue the plan's passes.**
 Before Senior's review they are refused with **This plan's passes start once
 Senior has reviewed the plan.**
+
+While the plan is at its passes and some are not done yet, the line above the
+message box shows them too, whenever a pass could start (no turn or goal
+running): **This plan's passes: 1 of 9 done**, with the same **Continue (8
+passes left)**. It is the list's Continue, so either one does the same. Once
+every pass is done, the line goes.
 
 ### How each pass runs
 
@@ -275,7 +282,9 @@ Now and then a short suggestion appears above the message box, such as
 again? 42 commits in 25 days.**, or **Data pass has never been completed on
 this app. Run it? 64 commits so far.** It appears only while the chat is
 idle: no turn running, no goal, and nothing typed in the message box. One
-pass is suggested at a time.
+pass is suggested at a time. While a plan has passes left, no pass is
+suggested: the plan's own passes are the next step, and suggestions come back
+once they are all done.
 
 Each pass has an interval, from Genesis's advice on when to run it:
 

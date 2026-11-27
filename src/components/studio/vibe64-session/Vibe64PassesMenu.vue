@@ -49,7 +49,7 @@
               variant="flat"
               @click="act('continue')"
             >
-              Continue
+              {{ continueLabel }}
             </v-btn>
             <v-btn
               class="vibe64-passes__run"
@@ -192,7 +192,7 @@ import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { AFTER_PLAN_MANDATORY_PASSES, AFTER_PLAN_PASS_ORDER, ASSISTANT_FINISHING_DEFAULTS, inAfterPlanOrder } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
-import { runKey } from "@/composables/useVibe64Passes.js";
+import { chatRunsPlanPasses, planContinueLabel, runKey } from "@/composables/useVibe64Passes.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
@@ -232,6 +232,7 @@ const plan = computed(() => props.passes.plan.value);
 const planLine = computed(() => plan.value?.passes.map((pass) => pass.title + (STATE_WORDS[pass.state] || "")).join(" · ") || "");
 const planDone = computed(() => Boolean(plan.value?.passes.every((pass) => pass.done)));
 const donePasses = computed(() => plan.value?.passes.filter((pass) => pass.done) || []);
+const continueLabel = computed(() => planContinueLabel(props.passes.planProgress.value.left));
 
 // The chat's saved choice; a chat with no mode yet runs the defaults, and a lesson or Fix it with
 // AI runs no pass after a plan, so shows no tick.
@@ -246,7 +247,7 @@ const preferences = computed(() => {
 // Fix it with AI runs each pass as its own turn.
 const afterPlanShown = computed(() => Boolean(props.session) && props.session.purpose !== "learning" && preferences.value?.mode !== "fix");
 // A chat with no mode yet sends each message as it is, so its passes run as their own turns too.
-const plansPasses = computed(() => afterPlanShown.value && Boolean(preferences.value));
+const plansPasses = computed(() => chatRunsPlanPasses(props.session));
 const afterPlan = ref(/** @type {string[]} */ ([]));
 const afterPlanDeep = ref(/** @type {string[]} */ ([]));
 const afterPlanSaving = ref(false);

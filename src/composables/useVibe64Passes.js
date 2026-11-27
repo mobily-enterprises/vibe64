@@ -1,5 +1,6 @@
 import { computed, inject, ref, unref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { LOCAL_ASSISTANT_VIEWER, VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
@@ -47,6 +48,28 @@ const titleList = (titles) => titles.length < 2 ? titles.join("") : `${titles.sl
 const seriesMessage = (titles, runId) => `Run ${titleList(titles)} ${SERIES_WORDS[runId]}.`;
 
 /**
+ * The open plan's Continue, naming the passes it has left: "Continue (8 passes left)".
+ * @param {number} left
+ */
+const planContinueLabel = (left) => `Continue (${left} ${left === 1 ? "pass" : "passes"} left)`;
+
+/**
+ * Whether a chat's plans run their passes, so it shows the plan's passes with Continue: Main chat
+ * with a chat mode, outside lessons and Fix it with AI, which run each pass as its own turn, as does
+ * a chat with no mode yet.
+ * @param {{ purpose?: string, metadata?: object } | null} session
+ */
+function chatRunsPlanPasses(session) {
+  if (!session || session.purpose === "learning") return false;
+  try {
+    const routing = assistantRoutingFromMetadata(session.metadata || {});
+    return Boolean(routing) && routing.mode !== "fix";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The chat's Passes: the passes Genesis offers with their runs, the open plan's passes, the one the
  * server's rule suggests now, and the suggestion's Later and Dismiss. Run, a series of ticked passes,
  * Continue, Run this pass again and Restart from the first pass each send the person's own message to
@@ -84,15 +107,23 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
   const passes = computed(() => resource.data.value?.passes || []);
   // Why the Genesis serving the project runs no pass; empty when it runs them.
   const unavailable = computed(() => resource.data.value?.unavailable || "");
-  const recommendation = computed(() => passes.value.find(({ id }) => id === resource.data.value?.recommendation) || null);
+  /** @type {import("vue").ComputedRef<Vibe64PlanPasses | null>} */
+  const plan = computed(() => resource.data.value?.plan || null);
+  // The open plan's passes counted from its list: how many are done and how many are left.
+  const planProgress = computed(() => {
+    const listed = plan.value?.passes || [];
+    const done = listed.filter((pass) => pass.done).length;
+    return { done, total: listed.length, left: listed.length - done };
+  });
+  // No pass is suggested while the open plan has passes left: they are its next step.
+  const recommendation = computed(() => planProgress.value.left ? null
+    : passes.value.find(({ id }) => id === resource.data.value?.recommendation) || null);
   // Genesis's order for running several passes (its Master pass order), each pass's id once.
   const order = computed(() => {
     const ids = resource.data.value?.master?.passes || [];
     return [...ids.filter((id) => passes.value.some((pass) => pass.id === id)),
       ...passes.value.map(({ id }) => id).filter((id) => !ids.includes(id))];
   });
-  /** @type {import("vue").ComputedRef<Vibe64PlanPasses | null>} */
-  const plan = computed(() => resource.data.value?.plan || null);
   const starting = ref("");
   const changing = ref("");
   const error = ref("");
@@ -184,6 +215,7 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
     recommendation,
     order,
     plan,
+    planProgress,
     loading: resource.isLoading,
     loadError: resource.loadError,
     starting,
@@ -198,4 +230,4 @@ function useVibe64Passes({ session, sessionsApiPath, enabled, idle, send }) {
   };
 }
 
-export { runKey, seriesMessage, useVibe64Passes };
+export { chatRunsPlanPasses, planContinueLabel, runKey, seriesMessage, useVibe64Passes };
