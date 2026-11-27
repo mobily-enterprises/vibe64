@@ -15,6 +15,7 @@ import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/cod
 import { assistantRoutingStatusLabel, assistantModePrompt, assistantGoalObjective, assistantRoutingPreferences } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapter.js";
 import { createWritesWhileAssistantWorks } from "../../packages/vibe64-terminals/src/server/writesWhileAssistantWorks.js";
+import { fixture, planDocument, publishPlanFixture, reportOutcome } from "../fixtures/assistantRouting.js";
 
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
 // Every pass ticked After a plan, with automatic save: none of it runs after a turn that completes no plan.
@@ -64,10 +65,6 @@ function openCodePair(f) {
   const moved = (role) => ({ ...f.assignments[role], engineId: "opencode", agentId: "build" });
   return { senior: moved("senior"), junior: moved("junior") };
 }
-
-
-
-import { fixture, planDocument, publishPlanFixture, reportOutcome } from "../fixtures/assistantRouting.js";
 
 const { workPlanPath } = __testables;
 
