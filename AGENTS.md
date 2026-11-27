@@ -69,34 +69,9 @@ and `package-lock.json`.
   together, the JSKIT starter apps' included. A platform's own release ships
   the pins it finds: it releases and pins neither JSKIT nor Genesis. Never move
   them in development.
-- A user project moves its own JSKIT pins, and only with JSKIT's update
-  command, `npm run jskit:update`, which moves every `@jskit-ai` pin to one
-  published catalog and installs it. Never move a JSKIT package with
-  `npm install`, `npm update` or `npm audit fix`. Never run
-  `npm install --no-save` in a tree where Vibe64 put a connected copy: it puts
-  the published package back, so the checks then pass for code the session
-  does not run.
-
-With a JSKIT copy connected to a user project:
-
-- **The copy carries a newer published version than the pins.** `jskit check`
-  runs from the copy, with its catalog, so `npm run verify` refuses with
-  `JSKIT project graph is inconsistent` until the pins move. Run
-  `npm run jskit:update`, then start Preview
-  (`vibe64-helper preview ensure --wait`): its preparation puts the connected
-  copy back in place of the published one the update installed, and
-  `vibe64-helper session status --json` shows the copy `inEffect` again. Then
-  verify. **Save** would also move the pins, but only when it runs.
-- **The copy holds unpublished edits.** It keeps the version of its last
-  release, so with the pins at that version verification accepts the copy as
-  it is, and the pins stay. The edits reach Staging and Production once JSKIT
-  publishes them and the pins move to that release. Never change a version in
-  the copy by hand: JSKIT's release does that.
-- **An unrelated dependency update, such as an audit fix.** It leaves every
-  `@jskit-ai` entry as it was; if `git diff package.json package-lock.json`
-  shows one moved, restore both files and update only the packages the fix
-  names. Install the new lockfile with `npm ci`, then start Preview so
-  preparation puts the connected copy back before you verify.
+- A user project moves its own JSKIT pins only with `npm run jskit:update`;
+  how a JSKIT copy connected to it meets those pins is in
+  [`docs/colleague-usage/connected-jskit-pins.md`](docs/colleague-usage/connected-jskit-pins.md).
 
 ## Connected repositories
 
@@ -170,13 +145,9 @@ verification.
 - This repository's `origin/main` is the public Vibe64 source of truth; edit it
   only as described in **Where you're running**.
 - Genesis owns project intent, technology guidance, explanatory Program, agent skills, hooks, verification guidance, and Machine/Program Cities. Its portable files live below `genesis/`, `.genesis/`, `.agents/skills/`, `.codex/hooks.json`, `.claude/settings.json`, and the generated `.opencode/plugins/genesis-project-guidance.js`.
-- `vibe64.project.json` and `vibe64.runtime-lock.json` are unsupported obsolete contracts. Do not recreate or read them.
 - `.vibe64/` is not product, prompt, Stack, Program, indexing, or City authority. Keep only narrowly declared application helpers such as a Vibe64 Launch preview-identity executable when required.
 - Runtime/session state is Vibe64-owned runtime-local state, not source-owned repository content.
 - Do not create loose workboard files.
-- Do not restore `jskit doctor`, generator commands, scaffold provenance,
-  receipts, migration copies, or CLI-managed CI state. Verify current source,
-  runtime behavior, package boundaries, and tests through their direct owners.
 - Server code follows JSKIT's typed features guide
   (`https://mobily-enterprises.github.io/jskit-ai/guide/framework/typed-features`);
   `npm run lint` checks it, and each finding links its section. A rule that
