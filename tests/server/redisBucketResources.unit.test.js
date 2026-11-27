@@ -63,6 +63,32 @@ test("a bucket binds its five settings, may bind its driver, and is refused nami
     environmentAlternatives: [{ bindings: { url: "DATABASE_URL" }, preferred: true }] } }]), []);
 });
 
+// The test databases a host provisions beside a database reach the tests only under the names the test runners read
+// (JSKIT's jskit test --databases and browser-test servers, and every database Stack piece): a project that bound
+// `testDatabase` to TEST_DB_NAMES got a database no test opened, and its tests ran on another.
+test("a database binds its test databases to exactly TEST_DB_NAME and BROWSER_TEST_DB_NAME, and any other is refused naming the fix", () => {
+  const database = (optionalBindings, kind = "postgresql") => ({ component: "jskit", resource: { id: "database", kind,
+    environmentAlternatives: [{ bindings: { url: "DATABASE_URL" }, preferred: true }], optionalBindings } });
+  assert.deepEqual(resourceDeclarationDiagnostics([
+    database({ browserTestDatabase: "BROWSER_TEST_DB_NAME", testDatabase: "TEST_DB_NAME" }),
+    database({ testDatabase: "TEST_DB_NAME" }, "mysql"),
+    database({})
+  ]), []);
+  for (const optionalBindings of [{ testDatabase: "TEST_DB_NAMES" }, { browserTestDatabase: "E2E_DB_NAME" },
+    { testDatabases: "TEST_DB_NAME" }]) {
+    const [refused] = resourceDeclarationDiagnostics([database(optionalBindings)]);
+    assert.equal(refused?.code, "vibe64_database_resource_test_bindings_invalid", JSON.stringify(optionalBindings));
+    const [[semantic, name]] = Object.entries(optionalBindings);
+    assert.match(refused.message, new RegExp(`binds \`${semantic}\` to \`${name}\``, "u"));
+    assert.match(refused.message, /binds only `testDatabase` to `TEST_DB_NAME` and `browserTestDatabase` to `BROWSER_TEST_DB_NAME`/u);
+  }
+  // A declaration refused here is refused wherever its preferred alternative is read, a host's provisioning included.
+  assert.throws(() => normalizeResourceEnvironment([database({ testDatabase: "TEST_DB_NAMES" })], {
+    contract: CONTRACT,
+    resourceValues: [{ declaration: { component: "jskit", id: "database", kind: "postgresql" }, values: { url: "postgresql://app@db/app" } }]
+  }, { requireDatabaseTool: false }), { code: "vibe64_database_resource_test_bindings_invalid" });
+});
+
 test("a host serves a redis url to its declared name, and a bucket is never a host's to supply", () => {
   const redis = redisResource();
   const url = "redis://default:secret@127.0.0.1:16400";

@@ -332,7 +332,12 @@ grammar, checked wherever a declaration's preferred alternative is read. A
 (Valkey, for example), a host's or the person's own, answers at. A `bucket` resource is S3-compatible object storage
 and binds `bucket`, `region`, `endpoint`, `accessKeyId` and `secretAccessKey`,
 and may bind `driver`, which receives `s3`; neither kind takes optional
-bindings. `resourceDeclarationDiagnostics` names each missing and each unknown
+bindings. A database resource's optional bindings name only its test databases,
+`testDatabase` bound to `TEST_DB_NAME` and `browserTestDatabase` to
+`BROWSER_TEST_DB_NAME`, the names the test runners read
+(`validateDatabaseTestBindings`): a project that bound `TEST_DB_NAMES` got a
+test database no test opened, so any other name or semantic is refused.
+`resourceDeclarationDiagnostics` names each missing and each unknown
 semantic, so a host can refuse a declaration in the person's words before it
 provisions anything, and `preferredAlternative` gives a host a declaration's
 one preferred alternative, its bindings checked the same way, so a host that

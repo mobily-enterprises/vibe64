@@ -203,6 +203,12 @@ Keep ordinary browser startup incremental. Retain the isolated schema and its
 migration ledger, apply pending migrations, and reset test data deterministically
 before seeding fixtures. Preserve migration-owned baseline data required by the
 application. Fresh-schema migration checks remain a separate test operation.
+A project's Stack declares its browser suite as its own entry under
+`## Verification`, beside its lint, unit, database and client tests and build,
+so a whole run runs the suite, never a listing of it; `vibe64-helper spec
+checks` gives the coding agent that rule and what a check gets wherever a host
+runs it.
+
 Batch related browser cases into one managed invocation so they share startup,
 the build and restoration. If startup is slow, measure the build, migrations,
 fixture preparation and server startup before retrying or extending a deadline.
