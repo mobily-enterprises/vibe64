@@ -51,6 +51,15 @@ Production run, never a development server, and builds it again only when the
 app's code has changed. If a project's test target starts a development server,
 ask the coding agent to change it to serve the build.
 
+A test's own code never reaches your development database. When a test opens
+the database itself, as a fixture that adds or confirms a row does, on a test
+target it opens that target's test database, the copy the app's first server
+uses. Run against your own Preview or another target on development data, it
+opens no database at all: the test fails and names
+`vibe64_no_database_in_browser_runs`. Such a test belongs on the project's test
+target; ask the coding agent to run it with `--target`, or to change your data
+only through the app. Colleague can explain this and offer coding-agent help.
+
 A test target can run a suite in parallel when its Run step in
 `genesis/stack.md` takes `{workers}` (a JSKIT project's `test-app` does). It
 then serves one copy of your app per browser, each with its own copy of the

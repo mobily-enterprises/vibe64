@@ -187,6 +187,41 @@ test("a session's prompts are checked against the Env its commands receive, the 
   });
 });
 
+test("a browser suite's Env reaches its test-data target's database copy, or no database, never the session's development one", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "browser-suite-environment";
+    await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
+    const database = { component: "jskit-mysql", resource: { id: "database", kind: "mysql", environmentAlternatives: [{
+      preferred: true, bindings: { database: "DB_NAME", host: "DB_HOST", password: "DB_PASSWORD", port: "DB_PORT", username: "DB_USER" }
+    }], optionalBindings: { browserTestDatabase: "BROWSER_TEST_DB_NAME", testDatabase: "TEST_DB_NAME" } } };
+    const connection = { database: "session_db", host: "127.0.0.1", password: "pw-session", port: "3306", username: "session" };
+    const values = { ...connection, browserTestDatabase: "session_db_browser", testDatabase: "session_db_test" };
+    const provided = () => ({ contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
+      databaseToolEnvironment: { contract: "vibe64.database-tool-environment.v1", kind: "mysql",
+        read: { ...connection, password: "pw-reader", port: 3306, username: "reader" }, write: { ...connection, port: 3306 } },
+      resourceValues: [{ declaration: { component: "jskit-mysql", id: "database", kind: "mysql" }, values }] });
+    const service = project(targetRoot, {
+      inspectEnvironment: () => ({ components: [], environmentDefaults: [{ name: "DB_CLIENT", value: "mysql2" }],
+        files: [], resources: [database], status: "ready" }),
+      resourceEnvironmentProvider: { managedDevelopmentDatabase: true,
+        environmentForProvisionedResources: provided, environmentForResources: provided }
+    });
+    const runtime = await service.createRuntimeWithoutSource();
+    await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
+    const development = await service.projectInspectionEnvironment({ sessionId, target: "preview" });
+    assert.equal(development.DB_NAME, "session_db");
+    const onTestData = await service.projectInspectionEnvironment({ sessionId, target: "preview", browserSuiteData: "test" });
+    assert.deepEqual(onTestData, { ...development, DB_NAME: "session_db_browser", TEST_DB_NAME: "session_db_browser" });
+    for (const browserSuiteData of ["development", "unknown"]) {
+      const none = await service.projectInspectionEnvironment({ sessionId, target: "preview", browserSuiteData });
+      assert.deepEqual(none, { ...development, DB_HOST: "vibe64-no-database-in-browser-runs.invalid",
+        DB_NAME: "vibe64_no_database_in_browser_runs", DB_PASSWORD: "vibe64_no_database_in_browser_runs", DB_PORT: "1",
+        DB_USER: "vibe64_no_database_in_browser_runs", BROWSER_TEST_DB_NAME: "vibe64_no_database_in_browser_runs",
+        TEST_DB_NAME: "vibe64_no_database_in_browser_runs" }, browserSuiteData);
+    }
+  });
+});
+
 test("execution preparation rechecks current declarations after acquiring source admission", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const sessionId = "environment-recheck";

@@ -7,6 +7,7 @@ import {
   normalizeResourceEnvironment,
   resourceSemanticIsSecret
 } from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
+import { browserSuiteDatabaseEnvironment } from "../../packages/vibe64-project/src/server/browserSuiteDatabaseEnvironment.js";
 
 const { normalizeDatabaseToolEnvironment } = __testables;
 
@@ -315,4 +316,48 @@ test("speech resources map explicit endpoint and credential-file semantics and r
   ]) assert.throws(() => normalizeResourceEnvironment([declaration], provided({ ...values, ...bad })), { code: "vibe64_voice_resource_values_invalid" });
   declaration.resource.environmentAlternatives[0].bindings = { endpoint: "SPEECH_ENDPOINT", token: "INLINE_SECRET" };
   assert.throws(() => normalizeResourceEnvironment([declaration], provided({ endpoint: values.endpoint, token: "secret" })), { code: "vibe64_voice_resource_bindings_invalid" });
+});
+
+test("a browser suite's process reaches only its test-data target's test database, and no database anywhere else", () => {
+  const resource = databaseResource({ kind: "mysql" });
+  resource.resource.optionalBindings = { browserTestDatabase: "BROWSER_TEST_DB_NAME", testDatabase: "TEST_DB_NAME" };
+  const development = {
+    APP_DATABASE: "session_dev", APP_DATABASE_HOST: "127.0.0.1", APP_DATABASE_PASSWORD: "pw-session",
+    APP_DATABASE_PORT: "3306", APP_DATABASE_USERNAME: "session",
+    APP_DATABASE_URL: "mysql://session:pw-session@127.0.0.1:3306/session_dev?charset=utf8mb4",
+    BROWSER_TEST_DB_NAME: "session_browser", TEST_DB_NAME: "session_test", UNRELATED: "kept"
+  };
+  // The first app server's copy, on the session's own server with its credentials: every database name and the URL.
+  assert.deepEqual(browserSuiteDatabaseEnvironment([resource], development, { testData: true }), {
+    APP_DATABASE: "session_browser", APP_DATABASE_HOST: "127.0.0.1", APP_DATABASE_PASSWORD: "pw-session",
+    APP_DATABASE_PORT: "3306", APP_DATABASE_USERNAME: "session",
+    APP_DATABASE_URL: "mysql://session:pw-session@127.0.0.1:3306/session_browser?charset=utf8mb4",
+    BROWSER_TEST_DB_NAME: "session_browser", TEST_DB_NAME: "session_browser"
+  });
+  const none = {
+    APP_DATABASE: "vibe64_no_database_in_browser_runs", APP_DATABASE_HOST: "vibe64-no-database-in-browser-runs.invalid",
+    APP_DATABASE_PASSWORD: "vibe64_no_database_in_browser_runs", APP_DATABASE_PORT: "1",
+    APP_DATABASE_USERNAME: "vibe64_no_database_in_browser_runs",
+    APP_DATABASE_URL: "mysql://vibe64_no_database_in_browser_runs@vibe64-no-database-in-browser-runs.invalid:1/vibe64_no_database_in_browser_runs",
+    BROWSER_TEST_DB_NAME: "vibe64_no_database_in_browser_runs", TEST_DB_NAME: "vibe64_no_database_in_browser_runs"
+  };
+  // A suite against development data, a database without its own browser-test database, and one whose browser-test
+  // database is the development one open nothing.
+  assert.deepEqual(browserSuiteDatabaseEnvironment([resource], development, { testData: false }), none);
+  assert.deepEqual(browserSuiteDatabaseEnvironment([resource], { ...development, BROWSER_TEST_DB_NAME: "" }, { testData: true }), none);
+  assert.deepEqual(browserSuiteDatabaseEnvironment([resource], { ...development, BROWSER_TEST_DB_NAME: "session_dev" }, { testData: true }), none);
+  // A name the Env leaves out is not reached either; an empty password is the session's own.
+  const { APP_DATABASE_URL: _url, ...withoutUrl } = development;
+  const onTest = browserSuiteDatabaseEnvironment([resource], { ...withoutUrl, APP_DATABASE_PASSWORD: "" }, { testData: true });
+  assert.equal(onTest.APP_DATABASE_URL, none.APP_DATABASE_URL);
+  assert.equal(onTest.APP_DATABASE_PASSWORD, "");
+  // PostgreSQL's URL names its own scheme; SQLite's file cannot be made; other resources are not databases.
+  assert.equal(browserSuiteDatabaseEnvironment([databaseResource()], development).APP_DATABASE_URL,
+    "postgres://vibe64_no_database_in_browser_runs@vibe64-no-database-in-browser-runs.invalid:1/vibe64_no_database_in_browser_runs");
+  assert.deepEqual(browserSuiteDatabaseEnvironment([databaseResource({ kind: "sqlite", preferredBindings: { database: "DB_DATABASE" } })], {}), {
+    DB_DATABASE: "/nonexistent/vibe64_no_database_in_browser_runs.sqlite",
+    APP_DATABASE_URL: "file:/nonexistent/vibe64_no_database_in_browser_runs.sqlite"
+  });
+  assert.deepEqual(browserSuiteDatabaseEnvironment([{ component: "cache", resource: { id: "cache", kind: "redis",
+    environmentAlternatives: [{ preferred: true, bindings: { url: "REDIS_URL" } }] } }], { REDIS_URL: "redis://127.0.0.1" }), {});
 });

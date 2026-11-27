@@ -43,9 +43,16 @@ function createAgentPreviewWorkerRegistry({
     return normalizeText(projectRecord?.slug || projectRecord?.name);
   }
 
-  async function runBrowserCommand(request) {
+  /**
+   * Runs a browser test's command with the project's Env, as a suite's process gets it: its databases reach only its
+   * test-data target's test database (`testData`), or none, whatever the app's generated .env says.
+   * @param {object} request
+   * @param {{ testData?: boolean }} [options]
+   */
+  async function runBrowserCommand(request, { testData = false } = {}) {
     const runtimeConfigEnv = await project.runInProjectContext(request.project.slug, () => (
       project.projectInspectionEnvironment({
+        browserSuiteData: testData ? "test" : "development",
         sessionId: request.session.sessionId,
         target: "preview"
       })

@@ -135,6 +135,8 @@ function createOutputTargetPreviewTests({
       const target = findOutputTarget(targets, outputTargetId);
       const targetError = previewTargetError(target, outputTargetId);
       if (targetError) throw targetError;
+      // Only a test-data target's suite opens a database: the target's own (browserSuiteDatabaseEnvironment).
+      testRun.testData = target.dataMode === "test";
       if (namedTarget && target.servesWorkers) {
         testRun.workers = browserTestWorkerCount({
           servesWorkers: true,
@@ -188,7 +190,7 @@ function createOutputTargetPreviewTests({
       }
       changeState("running");
       testRun.tested = true;
-      result = await operation(testRun.token);
+      result = await operation(testRun.token, { testData: testRun.testData });
     } catch (error) {
       result = {
         ok: false,

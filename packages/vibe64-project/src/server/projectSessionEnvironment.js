@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { workspaceSetupStateFromMetadata } from "@local/vibe64-runtime/server/workspaceSetupState";
 import { normalizeRuntimeConfigRecord, runtimeConfigRecordsForScope } from "@local/vibe64-core/server/runtimeConfig";
 import { vibe64Error } from "@local/vibe64-core/server/core";
+import { browserSuiteDatabaseEnvironment } from "./browserSuiteDatabaseEnvironment.js";
 import { materializeProjectEnvironmentFiles, projectEnvironmentFilesAreCurrent } from "./projectEnvironmentFiles.js";
 import {
   applicationDatabaseToolEnvironment,
@@ -101,9 +102,22 @@ function createProjectSessionEnvironment({
       }, "prepare-project-environment", { waitMs: 10_000 });
     },
 
+    /**
+     * The project's Env as a session's processes get it. `browserSuiteData` asks for a browser-test suite's: the data
+     * its Preview serves, `test` (a test-data target) or `development`; every name the Stack's databases bind then
+     * reaches only that target's test database, or none (browserSuiteDatabaseEnvironment).
+     */
     async projectInspectionEnvironment(input = {}) {
       const records = await environment.userEnvRecords();
       const resolved = await environment.resolvedProjectEnvironment(input, records);
+      if (input.browserSuiteData) {
+        return {
+          ...resolved.projectEnvironment,
+          ...browserSuiteDatabaseEnvironment(resolved.resources, resolved.projectEnvironment, {
+            testData: input.browserSuiteData === "test"
+          })
+        };
+      }
       return projectEnvironmentResult(resolved, input, records);
     },
 
