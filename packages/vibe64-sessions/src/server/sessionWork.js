@@ -101,20 +101,6 @@ function connectedUpdateFailure(result) {
 }
 
 /**
- * A session's work, in its own repository and its connected copies: its
- * current changes, the Save that publishes them, the Update that rebases them
- * onto the saved versions, and a pull request for them.
- * @param {object} dependencies
- * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} dependencies.logger
- * @param {ProjectService} dependencies.project
- * @param {PublishSessionChanged} dependencies.publishSessionChanged
- * @param {SessionWorkRecovery} dependencies.recovery
- * @param {SessionUpdateChecks} dependencies.repositoryUpdates
- * @param {TerminalsService} dependencies.terminals
- * @param {SessionWorkOperations} dependencies.workOperations
- * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
- */
-/**
  * The commit message a caller in this process gives its Save, trimmed: one or more lines of at most 2000 characters,
  * without NUL. Only such a caller can give one, since Save's action input (its route and the assistant's tool) has no
  * `commitMessage` field. Absent, it is "" and the session's Quick helper names the commit, as before.
@@ -130,6 +116,20 @@ function callerCommitMessage(value) {
   );
 }
 
+/**
+ * A session's work, in its own repository and its connected copies: its
+ * current changes, the Save that publishes them, the Update that rebases them
+ * onto the saved versions, and a pull request for them.
+ * @param {object} dependencies
+ * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} dependencies.logger
+ * @param {ProjectService} dependencies.project
+ * @param {PublishSessionChanged} dependencies.publishSessionChanged
+ * @param {SessionWorkRecovery} dependencies.recovery
+ * @param {SessionUpdateChecks} dependencies.repositoryUpdates
+ * @param {TerminalsService} dependencies.terminals
+ * @param {SessionWorkOperations} dependencies.workOperations
+ * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
+ */
 function createSessionWork({
   logger,
   project,
