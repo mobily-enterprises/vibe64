@@ -28,7 +28,7 @@ import {
 import { closeTerminalSessionsForNamespacePrefix } from "@local/vibe64-execution/server/terminalSessions";
 import { beginServerStop, resetServerStop } from "@local/vibe64-execution/server/serverStop";
 import { GITHUB_ACCOUNT_MODE_LOCAL, VIBE64_GITHUB_ACCOUNT_MODE_ENV, normalizeGithubAccountMode } from "@local/vibe64-execution/server";
-import { startCommandSpawner } from "@local/vibe64-execution/server/commandSpawner";
+import { assertCommandSpawnerRuns, startCommandSpawner } from "@local/vibe64-execution/server/commandSpawner";
 import {
   assertLocalhostCheckBypassAllowed,
   isLocalhostCheckBypassEnabled
@@ -368,8 +368,10 @@ function targetRootForRuntimeProfile(options = {}, runtimeProfile = {}) {
 async function createServer(options = {}) {
   // This process's server starts unstopped, even after an earlier one in the same process stopped.
   resetServerStop();
-  // From now on this process sends every command to its spawner, started now, while the editor is small (commandSpawner.js).
+  // From now on this process sends every command to its spawner, started now while the editor is small; one that cannot
+  // run a command stops the start here, not after an editor that answers while every command fails (commandSpawner.js).
   startCommandSpawner();
+  await assertCommandSpawnerRuns();
   const runtimeEnv = resolveRuntimeEnv();
   const loggerOptions = createVibe64FastifyLoggerOptions({
     env: runtimeEnv,

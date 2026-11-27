@@ -59,7 +59,10 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 
 Every finite command, the ones Vibe64 waits for, starts in one executor, which
 runs Node's spawn with exactly the options it is given. The editor server sends
-every finite command to its spawner, started at boot; small short-lived
+every finite command to its spawner, started at boot, where the server runs one
+command (`node --version`) through it and refuses to start when it cannot, so
+an editor whose spawner runs nothing never answers while every command fails;
+small short-lived
 processes (the session work child, CLIs, tests) run the same executor in
 themselves, because a spawner there costs more than their own fork. So the
 editor never forks its own heap for a command, which held its main thread for

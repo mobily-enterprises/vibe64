@@ -43,17 +43,19 @@
 // nor bytes, a relative working directory, an option or stdio it does not take, an unknown signal) by throwing to that
 // caller, before anything is sent.
 //
-// The spawner's lifecycle. Started at boot, while the editor is small; held only while commands run, as a running
-// command is held, so it never keeps a process alive by itself. Each command is a session leader (setsid, outside
-// Windows), so it leads its own process group and has no controlling terminal: a terminal's Ctrl-C does not reach it,
-// and it cannot prompt on /dev/tty. The editor's stop needs nothing from the spawner: the stop ends each command's
-// process group itself (endCommands), with kill(2), and the spawner ignores SIGHUP, SIGINT and SIGTERM, so it reports
-// the commands still running until the editor exits. However the editor ends (a stop, a crash, kill -9, Ctrl-C), its
-// end closes the spawner's channel, and the spawner ends each command still running as the detached reaper does
-// (SIGTERM to its process group, then SIGKILL to a group still there after 3 s) and exits: no command outlives the
-// editor. When the spawner dies, sends a message the editor does not know, or leaves a spawn or kill unanswered for
-// STUCK_AFTER_MS, the editor kills it and sends it nothing more: the next command starts a new spawner. Once its
-// channel and its pipe of start records have both closed, each of its commands fails with
+// The spawner's lifecycle. Started at boot, while the editor is small, and checked there: the editor runs one command
+// through it (assertCommandSpawnerRuns) and refuses to start when it cannot, since an editor whose spawner runs nothing
+// answers every request while every command fails (a release without commandSpawnerProcess.js did); held only while
+// commands run, as a running command is held, so it never keeps a process alive by itself. Each command is a session
+// leader (setsid, outside Windows), so it leads its own process group and has no controlling terminal: a terminal's
+// Ctrl-C does not reach it, and it cannot prompt on /dev/tty. The editor's stop needs nothing from the spawner: the
+// stop ends each command's process group itself (endCommands), with kill(2), and the spawner ignores SIGHUP, SIGINT and
+// SIGTERM, so it reports the commands still running until the editor exits. However the editor ends (a stop, a crash,
+// kill -9, Ctrl-C), its end closes the spawner's channel, and the spawner ends each command still running as the
+// detached reaper does (SIGTERM to its process group, then SIGKILL to a group still there after 3 s) and exits: no
+// command outlives the editor. When the spawner dies, sends a message the editor does not know, or leaves a spawn or
+// kill unanswered for STUCK_AFTER_MS, the editor kills it and sends it nothing more: the next command starts a new
+// spawner. Once its channel and its pipe of start records have both closed, each of its commands fails with
 // vibe64_command_spawner_failed, naming it, and each one's process group is ended as a stop ends one (SIGTERM, then
 // SIGKILL, each signalled only while the group has members) before the command closes.
 //
@@ -91,6 +93,8 @@ const FORCE_KILL_DELAY_MS = 5_000;
 const STUCK_AFTER_MS = FORCE_KILL_DELAY_MS;
 // Node's execFile default.
 const EXEC_FILE_MAX_BUFFER = 1024 * 1024;
+// The boot check's command, a Node start, takes about 0.1 s through a new spawner; this only ends a hang.
+const BOOT_CHECK_TIMEOUT_MS = 30_000;
 const SPAWN_OPTIONS = new Set(["cwd", "env", "input", "stdio"]);
 const EXEC_FILE_OPTIONS = new Set(["cwd", "env", "maxBuffer", "timeout"]);
 const STDIO = new Set(["ignore", "pipe"]);
@@ -598,10 +602,27 @@ function execFileCommand(command, args, options) {
   });
 }
 
+/**
+ * Runs one command, `node --version`, as every command of this process runs (through its spawner once
+ * startCommandSpawner() has run), and throws when it cannot, saying so. The editor server checks its new spawner this
+ * way at boot.
+ */
+async function assertCommandSpawnerRuns() {
+  try {
+    await execFileCommand(process.execPath, ["--version"], { env: {}, timeout: BOOT_CHECK_TIMEOUT_MS });
+  } catch (error) {
+    throw Object.assign(
+      new Error(`Vibe64's command spawner could not run a command, and every command goes through it: ${error.message}`),
+      { code: COMMAND_SPAWNER_FAILED, cause: error }
+    );
+  }
+}
+
 export {
   COMMAND_SPAWNER_FAILED,
   FORCE_KILL_DELAY_MS,
   STUCK_AFTER_MS,
+  assertCommandSpawnerRuns,
   endCommands,
   execFileCommand,
   spawnCommand,
