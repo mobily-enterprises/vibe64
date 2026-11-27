@@ -243,6 +243,25 @@ test("a Passes item that names a pass Genesis doesn't have holds the plan at it,
   assert.equal(f.state().pass.item, "User experience pass: whole app");
 });
 
+test("a Passes item's scope in words of the plan's own runs its pass over those words, also on Continue after Stop; an item with no scope runs over the plan's changes", async (t) => {
+  const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
+  // whs2's Review item, as Senior wrote it: no Genesis run names this scope, so the pass reads it as written.
+  const scope = "the changes since commit fa01419e (the Work groups plan and this plan)";
+  await implementAndReview(f, [`Review: ${scope}`, "Security pass", "Deslop: the billing screens, deeply"]);
+  assert.deepEqual([f.sends.length, f.sends[2].input.genesisTask, requestOf(f.sends[2])], [3, "review", `Run the Review on ${scope}.`]);
+  assert.deepEqual([f.state().stage, f.state().status, f.state().pass.item], ["pass", "working", `Review: ${scope}`]);
+  const stopped = f.state();
+  await f.service.stop("session-1", f.context);
+  await f.service.afterTurn("session-1", end(stopped, "interrupted"), f.context);
+  await f.service.send("session-1", { messageId: "continue-1", message: "Continue the plan's passes.", passAction: "continue", submissionKind: "send" }, f.context);
+  assert.deepEqual([f.sends.at(-1).input.genesisTask, requestOf(f.sends.at(-1))], ["review", `Run the Review on ${scope}.`]);
+  await passDone(f);
+  assert.deepEqual([f.sends.at(-1).input.genesisTask, requestOf(f.sends.at(-1))],
+    ["security-pass", since("Security pass", f.source.canonical)]);
+  await passDone(f);
+  assert.deepEqual([f.sends.at(-1).input.genesisTask, requestOf(f.sends.at(-1))], ["deslop", "Run the Deslop on the billing screens, deeply."]);
+});
+
 test("a pass over the plan's changes, in a session whose history shows no start for them, holds the plan with the reason", async (t) => {
   const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
   delete f.metadata.canonical_commit;
