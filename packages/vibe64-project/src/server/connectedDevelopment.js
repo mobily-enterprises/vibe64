@@ -4,7 +4,7 @@ import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { sessionConnectedCopies } from "@local/vibe64-core/server/projectRepository";
+import { connectedRepositoryName, sessionConnectedCopies, sessionConnectedCopyPath } from "@local/vibe64-core/server/projectRepository";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import {
@@ -64,6 +64,47 @@ function connectedDevelopmentApplies(inspection, repositories) {
 }
 
 /**
+ * Each listed connection with its effective package type and the session's copy (`copyPath(connection)`) as its
+ * source, as the Sources file holds them; a connection without a copy refuses.
+ */
+async function resolvedConnections(connections, inspection, copyPath) {
+  const resolved = [];
+  for (const connection of connections) {
+    const copy = copyPath(connection);
+    if (!copy || !(await lstat(copy).catch(() => null))?.isDirectory()) {
+      throw vibe64Error(
+        `This session has no copy of ${connection.repository} yet. Prepare the workspace again.`,
+        "vibe64_connected_copy_missing",
+        { params: { repository: connection.repository } }
+      );
+    }
+    resolved.push({ ...connection, type: connectedPackageType(connection, inspection), sourceRoot: copy });
+  }
+  return resolved;
+}
+
+/**
+ * The session's connections as its folders alone give them, for a preparation step run outside Vibe64
+ * (`vibe64-connected`): the source's listed connections, with the Stack's Connected development (`inspection`) for
+ * their types and each copy at ../connected/<name> beside the source, the same inputs its Sources file is made from.
+ * @param {{ sourceRoot: string, inspection: object }} input
+ */
+async function connectedRepositoriesInFolders({ sourceRoot, inspection }) {
+  const configured = await readConnectedProjects(sourceRoot);
+  if (!(inspection?.status === "ready" || (inspection?.status === "unconfigured" && configured.repositories.length))) {
+    throw vibe64Error(
+      "Declare Connected development in this project's Stack before preparing its connected repositories.",
+      "vibe64_connected_development_required"
+    );
+  }
+  return resolvedConnections(
+    configured.repositories,
+    inspection,
+    connection => sessionConnectedCopyPath(sourceRoot, connectedRepositoryName(connection.repository))
+  );
+}
+
+/**
  * The Sources file value for this session: every listed connected repository
  * with its effective package type and this session's own copy as its source.
  * A Stack without a Sources file gets no file; the value still identifies the selection.
@@ -82,22 +123,11 @@ async function readConnectedDevelopmentInputs({
       "vibe64_connected_development_required"
     );
   }
-  const resolved = [];
-  for (const connection of configured.repositories) {
-    const copy = connectedCopyFor(session, connection);
-    if (!copy || !(await lstat(copy.path).catch(() => null))?.isDirectory()) {
-      throw vibe64Error(
-        `This session has no copy of ${connection.repository} yet. Prepare the workspace again.`,
-        "vibe64_connected_copy_missing",
-        { params: { repository: connection.repository } }
-      );
-    }
-    resolved.push({
-      ...connection,
-      type: connectedPackageType(connection, inspection),
-      sourceRoot: copy.path
-    });
-  }
+  const resolved = await resolvedConnections(
+    configured.repositories,
+    inspection,
+    connection => connectedCopyFor(session, connection)?.path
+  );
   const relativePath = inspection.sourcesFile || "";
   const value = { schema: CONNECTED_SOURCES_CONTRACT, sessionId: session.sessionId, repositories: resolved };
   const { filePath, existing } = relativePath ? await readConnectedSourceProjection({
@@ -349,6 +379,7 @@ async function inspectConnectedDevelopmentInputs(input = {}) {
 
 export {
   connectedDevelopmentApplies,
+  connectedRepositoriesInFolders,
   inspectConnectedDevelopmentInputs,
   inspectConnectedWorkspaceSetup,
   materializeConnectedDevelopmentInputs

@@ -15,6 +15,7 @@ file as ordinary source editing.
 - `packages/vibe64-project/src/server/connectedDevelopment.js`
 - `packages/vibe64-project/src/server/connectionsLock.js`
 - `packages/vibe64-project/src/server/connectedAdapters/index.js`
+- `packages/vibe64-project/bin/vibe64-connected`
 - `packages/vibe64-project/src/server/connectedAdapters/npm.js`
 - `packages/vibe64-project/src/server/connectedAdapters/npmPackages.js`
 - `packages/vibe64-project/src/server/connectedAdapters/sync.js`
@@ -152,6 +153,19 @@ two workspace preparation steps. `runConnectedAdapterStep` serializes applies
 (and syncs) per session source and returns a command-shaped result;
 `inspectConnectedAdapters` runs every proof without a command runner, from files
 only, for `isPrepared` and session status.
+
+Each step's argv, `vibe64-connected <type> keep|apply|proof <repository>`, is a
+program too (`bin/vibe64-connected`, a release runtime entry), so a machine that
+holds the session's folders at the same paths runs the recipe's steps without
+Vibe64's runner. Run in the session's source, it reads the connections as
+`connectedRepositoriesInFolders` (`connectedDevelopment.js`) gives them from
+those folders (the listed connections, the Stack's Connected development for
+their types, each copy at `../connected/<name>`; the same resolution
+`readConnectedDevelopmentInputs` uses with the session's recorded copies), runs
+`runConnectedAdapterStep` with a plain spawned command runner, takes the host
+profile from `VIBE64_HOST_PROFILE` (JSON for `configureVibe64Host`, so a shared
+group's modes hold) and exits 1 with the adapter's message, 2 for a usage or
+profile error.
 
 A connection nothing in the session installs is unused, not a failure: apply
 resolves to `{ lines, unused }` and the proof to `notUsed(reason)`
