@@ -212,23 +212,18 @@ function previewIdentityCommandRunnerForLaunchTerminal({
   if (!previewAuthIdentityAvailable(previewAuth || {})) {
     return null;
   }
-  return createPreviewIdentityCommandRunner({
+  const runner = (runtimeConfigEnv) => createPreviewIdentityCommandRunner({
     allowedRoots: [
       context.sessionSourceRoot,
       capability.sourceRoot
     ].filter(Boolean),
     capability,
-    // Identity exchange is a host-to-app protocol invocation, not another app
-    // launch. It needs only the one-time exchange secret and its declared
-    // aliases. Loading the complete project environment here can provision or
-    // inspect managed resources (notably a session database) while the user is
-    // waiting on a ten-second UI interaction.
     env: previewAuthEnvironment({
       ...previewAuth,
       previewIdentity: capability
     }),
     project: launchExecutionProject(context, {
-      runtimeConfigEnv: {}
+      runtimeConfigEnv
     }),
     runCommand,
     runtimes: capability.runtimes,
@@ -236,6 +231,24 @@ function previewIdentityCommandRunnerForLaunchTerminal({
     sourceRoot: capability.sourceRoot,
     targetHref
   });
+  if (terminal.metadata.outputDataMode !== "test") {
+    // Identity exchange is a host-to-app protocol invocation, not another app
+    // launch. It needs only the one-time exchange secret and its declared
+    // aliases. Loading the complete project environment here can provision or
+    // inspect managed resources (notably a session database) while the user is
+    // waiting on a ten-second UI interaction.
+    return runner({});
+  }
+  // On a test-data target the command's own process gets the target's test database in every name the Stack's
+  // databases bind, as the target's browser suite does (browserSuiteDatabaseEnvironment.js), so a command that opens
+  // the database itself never reaches the development one through the app's generated .env.
+  return async (selection) => runner(await context.project.runInProjectContext(context.projectSlug, () => (
+    context.project.projectInspectionEnvironment({
+      browserSuiteData: "test",
+      sessionId: terminal.metadata.sessionId,
+      target: "preview"
+    })
+  )))(selection);
 }
 
 export {

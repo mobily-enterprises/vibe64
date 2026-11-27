@@ -71,8 +71,11 @@ than at the end of the agent's turn. If the project's own Playwright
 configuration does not hand each browser its own copy (a JSKIT project's
 `browserTestConfig()` does), the agent's test command warns that every browser
 would share the first one. Ask the coding agent to fix the configuration or to
-run with `--workers 1`. Colleague can explain this and offer coding-agent help;
-it cannot change the computer's test budget.
+run with `--workers 1`. A JSKIT project whose JSKIT is older than 0.2.113 gives
+every browser the first copy too, so the test command refuses such a parallel
+run before any test starts; ask the coding agent to run `npm run jskit:update`,
+or to run with `--workers 1`. Colleague can explain this and offer coding-agent
+help; it cannot change the computer's test budget.
 
 Ask the coding agent to run browser-owning Node integration tests through
 `vibe64-helper playwright npm-run` as well. The project can declare these as

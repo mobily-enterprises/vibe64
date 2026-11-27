@@ -151,9 +151,14 @@ http.createServer((req, res) => {
 `);
   await mkdir(path.join(sourceRoot, "tools"));
   await writeFile(path.join(sourceRoot, "tools/test-identity"), `#!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 const request = JSON.parse(readFileSync(0, 'utf8'));
 const testData = JSON.parse(readFileSync('test.json', 'utf8'));
+// The database this command would open itself, as an app's command does through its knexfile, when the app has a .env.
+if (existsSync('.env')) {
+  process.loadEnvFile('.env');
+  writeFileSync('identity-database.json', JSON.stringify({ DB_HOST: process.env.DB_HOST, DB_NAME: process.env.DB_NAME }));
+}
 process.stdout.write(JSON.stringify({
   protocol: request.protocol, requestId: request.requestId, ok: true,
   identity: { userId: 'test-user', email: 'test@example.test' },
@@ -1278,7 +1283,7 @@ test('parallel slow test', async () => {
   });
 });
 
-test("a suite's own process opens only its test-data target's databases, and none on development data, whatever the app's .env says", async t => {
+test("a suite's own process, and its test target's identity command, open only its test-data target's databases, and none on development data, whatever the app's .env says", async t => {
   await runWithProjectRequestContext({ slug: "test-target" }, async () => {
     const f = await fixture(t, "database", { testBudget: () => 8, availableMemory: async () => 64 * 1024 ** 3 },
       { extraOutputs: parallelTarget });
@@ -1330,6 +1335,11 @@ test('opens the database', async () => {
       }, args.join(" "));
       assert.match(none.reached, /vibe64-no-database-in-browser-runs\.invalid/u, args.join(" "));
     }
+    // A test-data target's identity command, which may open the database itself, opens its test database too.
+    assert.match((await commands.execute(["--target", "authenticated-test", "--identity", "tester", "test"])).stdout,
+      /1 passed/u);
+    assert.deepEqual(JSON.parse(await readFile(path.join(f.sourceRoot, "identity-database.json"), "utf8")),
+      { DB_HOST: "127.0.0.1", DB_NAME: "session_browser" });
 
     // Two workers: each finds its own server's copy by PLAYWRIGHT_PORT, as JSKIT's browserTestConfig() does, and its
     // write lands there.

@@ -140,6 +140,35 @@ function warnWhenConfigIgnoresWorkers(applicationRoot = "", workerCount = 1) {
   }
 }
 
+// JSKIT's browserTestConfig() gives each Playwright worker of a managed run its own server's environment (its copy of
+// the test database) from @jskit-ai/jskit-catalog 0.2.113; an older one gives every worker the first server's, so their
+// data would mix. The version that harness has, when it is older, else "".
+function jskitHarnessWithoutWorkerDatabases(applicationRoot = "") {
+  const configName = ["playwright.config.mjs", "playwright.config.js", "playwright.config.ts", "playwright.config.cjs"]
+    .find((name) => existsSync(path.join(applicationRoot, name)));
+  if (!configName) {
+    return "";
+  }
+  const source = readFileSync(path.join(applicationRoot, configName), "utf8");
+  if (!source.includes("@jskit-ai/jskit-catalog/browser-tests") ||
+    !/(?<![\\w$.])browserTestConfig\\s*\\(/u.test(configCode(source))) {
+    return "";
+  }
+  // Node's resolution from the application: its own node_modules, else a parent's.
+  for (let directory = path.resolve(applicationRoot); ; directory = path.dirname(directory)) {
+    const manifest = path.join(directory, "node_modules", "@jskit-ai", "jskit-catalog", "package.json");
+    if (existsSync(manifest)) {
+      const version = String(JSON.parse(readFileSync(manifest, "utf8")).version || "");
+      const parts = version.split(".").map((part) => Number.parseInt(part, 10));
+      const first = [0, 2, 113].findIndex((minimum, index) => parts[index] !== minimum);
+      return first >= 0 && parts[first] < [0, 2, 113][first] ? version : "";
+    }
+    if (path.dirname(directory) === directory) {
+      return "";
+    }
+  }
+}
+
 // A config that never reads the supplied login runs every test signed out, which looks like broken
 // sign-in; saying which variable to read points at the one-line fix. A config reads it when its code, not a
 // comment, names PLAYWRIGHT_STORAGE_STATE, or when JSKIT's browserTestConfig() builds it: that harness passes
@@ -547,6 +576,15 @@ async function managedExecution(runtime = {}, applicationRoot = "", {
     fail(
       "This managed preview does not support application identity selection. " +
       "Project tests were not started."
+    );
+  }
+  const olderJskit = preview.workerUrls?.length > 1 ? jskitHarnessWithoutWorkerDatabases(applicationRoot) : "";
+  if (olderJskit) {
+    fail(
+      "Vibe64 refused to run this suite on " + preview.workerUrls.length + " app servers: this app's JSKIT " +
+      "(@jskit-ai/jskit-catalog " + olderJskit + ") gives every Playwright worker the first server's test database, so " +
+      "their data would mix; JSKIT 0.2.113 gives each worker its own. Run npm run jskit:update, or run with " +
+      "--workers 1. Project tests were not started."
     );
   }
   const suppliesLogin = preview.managed && preview.identityRequired;
