@@ -106,7 +106,9 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
   }
 }));
 
-vi.mock("@/composables/useVibe64SessionData.js", () => ({
+// The module's own helpers stay real: only the session list the panel's parent reads is a fixture.
+vi.mock("@/composables/useVibe64SessionData.js", async (importOriginal) => ({
+  ...await importOriginal(),
   useVibe64SessionData: () => ({
     createSessionRunning: ref(false),
     isSelectedSessionArchived: ref(false),
