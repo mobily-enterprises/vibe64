@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import path from "node:path";
+import { browserTestServerPeakBytes } from "@jskit-ai/jskit-catalog/browser-tests";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { closeTerminalSessionsForNamespace } from "@local/vibe64-execution/server/terminalSessions";
 import { browserTestNeedsCleanup, drainBrowserTestExecutions } from "./browserTestCleanup.js";
@@ -138,12 +140,15 @@ function createOutputTargetPreviewTests({
       // Only a test-data target's suite opens a database: the target's own (browserSuiteDatabaseEnvironment).
       testRun.testData = target.dataMode === "test";
       if (namedTarget && target.servesWorkers) {
+        // An app server's measure is the peak the last run's largest reached, which JSKIT's launcher records in the
+        // target's folder; until a run has recorded one, the target's Running high estimate.
+        const recordedPeak = browserTestServerPeakBytes({ cwd: path.resolve(context.sessionSourceRoot, target.workdir) });
         testRun.workers = browserTestWorkerCount({
           servesWorkers: true,
           requested: workers,
           budget: testBudget(),
           freeBytes: await availableMemory(),
-          runningHighBytes: target.runningHighBytes
+          runningHighBytes: recordedPeak || target.runningHighBytes
         });
       }
       state.previewTestRuns.set(sessionId, testRun);

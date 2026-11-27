@@ -9,9 +9,9 @@ import { MAX_EXECUTION_WORKERS, vibe64ManagedExecutionProvider } from "@local/vi
 import { commandFailure } from "./commandFailure.js";
 
 const MIB = 1024 * 1024;
-// One worker's Chromium, beside the app server the target's Running high estimate describes.
+// One worker's Chromium, beside the app server its measure (recorded peak or Running high estimate) describes.
 const CHROMIUM_BYTES = 512 * MIB;
-// One worker, app server and Chromium, for a target without a Running high estimate.
+// One worker, app server and Chromium, for a target with neither.
 const DEFAULT_WORKER_BYTES = 1536 * MIB;
 // The share of the free memory a run's workers may plan to take: the rest absorbs estimates that ran low.
 const MEMORY_SHARE = 0.8;
@@ -25,7 +25,8 @@ const MAX_BROWSER_TEST_WORKERS = MAX_EXECUTION_WORKERS;
  * @param {number} [input.requested] the run's --workers, 0 for the default
  * @param {number} input.budget the test budget (JSKIT's testConcurrency())
  * @param {number | null} input.freeBytes the memory free for the run's work; null when the host cannot tell
- * @param {number} [input.runningHighBytes] the target's Running high estimate, 0 without one
+ * @param {number} [input.runningHighBytes] one app server's memory: the last run's recorded peak, else the target's
+ *   Running high estimate, 0 without either
  * @returns {number} a whole number from 1 to MAX_BROWSER_TEST_WORKERS
  */
 function browserTestWorkerCount({ servesWorkers, requested = 0, budget, freeBytes, runningHighBytes = 0 }) {

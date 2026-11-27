@@ -490,9 +490,11 @@ Playwright worker, worker *i* on `{port}`+*i* with its own copy of the test
 database (`vibe64OutputTargets.js`, `launchTargetTerminal.js`). The run's count
 is decided once, under the session's launch lock, from the machine's test budget
 (JSKIT's `testConcurrency()`): half of it, or the run's `--workers` capped at
-it, never more than 80% of the free memory fits at the target's Running high
-estimate plus a Chromium per worker, at least one and at most 64
-(`browserTestWorkers.js`). The free memory is the managed host's own
+it, never more than 80% of the free memory fits at one app server's measure
+plus a Chromium per worker, at least one and at most 64
+(`browserTestWorkers.js`). The measure is the peak the last run's largest app
+server reached, which JSKIT's launcher records in the target's folder
+(`browserTestServerPeakBytes()`), else the target's Running high estimate. The free memory is the managed host's own
 (`availableMemoryBytes()` of its execution provider), and a host that cannot
 tell gets one; without a provider it is this process's. The launch reserves
 that many consecutive ports, waits for every server's readiness, and records

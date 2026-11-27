@@ -64,7 +64,8 @@ A test target can run a suite in parallel when its Run step in
 `genesis/stack.md` takes `{workers}` (a JSKIT project's `test-app` does). It
 then serves one copy of your app per browser, each with its own copy of the
 test database, so a long suite finishes sooner. How many depends on the
-computer's processors and free memory; the agent can ask for fewer or more with
+computer's processors and free memory, and on how much memory one copy of your
+app took in the last such run; the agent can ask for fewer or more with
 `--workers`, up to what the computer's test budget allows. Such a run closes its
 test target as soon as it ends and your own Preview comes back at once, rather
 than at the end of the agent's turn. If the project's own Playwright
