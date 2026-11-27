@@ -48,7 +48,7 @@ function terminalsServiceCollaborators({ publishSessionChanged = {}, projectServ
     env: process.env,
     stagingEnvironmentProvider: NO_STAGING_ENVIRONMENT,
     publishProjectRuntimeChanged: publishNothing,
-    conversationTurns: { starting: publishNothing, settled: publishNothing },
+    conversationTurns: { admitted: publishNothing, starting: publishNothing, settled: publishNothing },
     runtimeProfile: null,
     savedEnvValueLinks: NO_SAVED_ENV_VALUE_LINKS,
     ...dependencies,

@@ -148,6 +148,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
       publishSessionChanged: async () => {},
       publishConversation: (...args) => server.publishConversation(...args),
       conversationTurns: {
+        admitted: (sessionId, turn) => aiTasks.onTurnAdmitted({ sessionId, ...turn }),
         starting: (sessionId, turn) => aiTasks.onTurnStarting({ sessionId, ...turn }),
         settled: (sessionId, conversationId, failure = null) => aiTasks.onTurnSettled({ sessionId, conversationId, failure })
       }

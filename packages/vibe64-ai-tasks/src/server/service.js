@@ -239,6 +239,18 @@ function createAiTasksService({
   }
 
   /**
+   * The AI took the task's own message as its turn: the task works from now, while the send still records it.
+   * A person's message in the task's chat is followed when it starts (onTurnStarting).
+   * @param {{ sessionId: string, conversationId: string, messageId: string }} turn
+   */
+  async function onTurnAdmitted({ sessionId, conversationId, messageId }) {
+    const { store } = await project.createRuntimeWithoutSource();
+    const record = await store.readSessionConversation(sessionId, conversationId);
+    if (!record?.task || record.task.pending?.id !== messageId) return;
+    await runner.apply(sessionId, conversationId, { type: "turn_admitted" }, { found: true });
+  }
+
+  /**
    * A turn ended, or never started. A message that failed to send has no turn to read.
    * @param {{ sessionId: string, conversationId: string, failure: { messageId: string, error?: string } | null }} settled
    */
@@ -281,6 +293,7 @@ function createAiTasksService({
     finish,
     list,
     onSessionArchiving,
+    onTurnAdmitted,
     onTurnSettled,
     onTurnStarting,
     read,
