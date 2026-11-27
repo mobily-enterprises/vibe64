@@ -30,6 +30,8 @@ for (const engineId of ["codex", "opencode"]) {
     const composer = (page: Page) => workspace(page).getByRole("textbox", { name: "Message temporary AI" });
     const typing = (page: Page) => workspace(page).locator("[data-assistant-composer-support]")
       .filter({ hasText: "John is typing…" });
+    const working = (page: Page) => workspace(page).locator("[data-assistant-composer-support]")
+      .filter({ hasText: "AI is working…" });
     try {
       await server.temporary!.seed(chats);
       for (const [index, page] of pages.entries()) {
@@ -76,9 +78,19 @@ for (const engineId of ["codex", "opencode"]) {
       await composer(writer).fill("Ready to send");
       await expect(typing(reader)).toBeVisible();
       await workspace(writer).getByRole("button", { name: /^(Send message|Steer assistant)$/ }).click();
+      // Typing shows once the AI's turn has ended: while it works, the chat says so instead.
+      await expect(working(reader)).toBeVisible();
       await expect(typing(reader)).toHaveCount(0);
+      await expect.poll(() => server.temporary!.captured.startedTurns).toBe(1);
+      await server.temporary!.endNativeTurn("one", { text: "Answered.", message: "Answered." });
+      await expect(workspace(reader).getByText("Answered.", { exact: true })).toBeVisible();
+      await expect(working(reader)).toHaveCount(0);
+      // The heartbeat from before Send has expired by itself, so the typing below is the writer's next one.
+      await expect(typing(reader)).toHaveCount(0);
+      const heartbeats = presence.length;
       await composer(writer).fill("Close this conversation");
       await expect(typing(reader)).toBeVisible();
+      expect(presence.length).toBeGreaterThan(heartbeats);
       await workspace(writer).getByRole("button", { name: "Close Chat one", exact: true }).click();
       await expect(typing(reader)).toHaveCount(0);
       // Typing presence expires by itself; the client sends no "stopped typing" request.
