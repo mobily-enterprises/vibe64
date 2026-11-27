@@ -558,6 +558,24 @@ test("a reply to Senior's review of the plan that waited for the person goes bac
   }
 });
 
+test("only Main chat's own requests are told Vibe64 runs the plan's passes: a goal's turns are told the passes wait", async (t) => {
+  for (const goal of [false, true]) {
+    const f = await fixture(t, { mode: "senior" }, { readyPlan: false, source: true });
+    await publishPlanFixture(f.context, planWith(["Review: the plan's changes"]));
+    if (goal) {
+      const { pinned } = await f.service.prepareGoal("session-1", { action: "set", objective: "Finish validation" }, f.context);
+      f.metadata.assistant_routing_goal = JSON.stringify({ ...pinned, status: "active" });
+      f.agent.readGoal = async () => ({ status: "available", goal: { status: "active", objective: pinned.objective } });
+    }
+    await f.service.send("session-1", request, f.context);
+    const { message } = f.sends[0].input;
+    assert.equal(f.state().afterPlan === null, goal, `goal ${goal}: a goal's request never starts the plan's passes`);
+    assert.equal(/This request runs no plan passes \(it is a goal, a temporary chat or a lesson\)/u.test(message), goal, `goal ${goal}`);
+    assert.equal(/having full-ticked every item outside a plan's Passes or reported complete on a plan already there, Vibe64 runs its Passes items/u
+      .test(message), !goal, `goal ${goal}`);
+  }
+});
+
 test("a new plan's Passes section starts with the chat's After a plan ticks; a plan Senior writes with its own Passes keeps them", async (t) => {
   const f = await fixture(t, { mode: "auto", afterPlan: ["review", "security-pass", "ui-pass", "deslop"], afterPlanDeep: ["deslop"] },
     { readyPlan: false, source: true });

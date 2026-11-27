@@ -336,7 +336,7 @@ test("explicit closure by scope reduction is Senior's implementation, verified b
   assert.match(coding, /before removing it from Plan's current acceptance scope/);
   assert.match(coding, /Preserve completed implementation evidence and do not perform deferred work/);
   // No finishing turn follows: Senior verifies the reduced scope itself before completing the plan.
-  assert.match(coding, /verify every item outside its Passes section and full-tick it; then, when the plan has Passes items, leave it active and Vibe64 runs them, otherwise complete the plan yourself with the plan helper\. Leave it active with the gaps in Progress while any remain/);
+  assert.match(coding, /verify every item outside its Passes section and full-tick it; then, when the plan has Passes items, leave it active and report complete with the plan's revisions: Vibe64 then runs them; otherwise complete the plan yourself with the plan helper\. Leave it active with the gaps in Progress while any remain/);
 
 });
 
@@ -352,7 +352,14 @@ test("workflow instructions delegate outcomes to the admitted agent and retain r
   const direct = assistantWorkflowInstructions({ mode: "junior", stage: "implementation" });
   assert.match(direct, /continue, handoff, wait, or complete/);
   assert.match(direct, /Junior and Custom never complete a plan/);
-  assert.match(direct, /Once your turn ends, a plan whose items outside Passes are all ticked runs its Passes items, each in its own turn/);
+  // Only a Senior chat's turn in Main chat's own requests is told it starts a plan's passes; a Junior chat's never does.
+  assert.match(direct, /Your turns never start a plan's passes: they run in Main chat, once Senior has reviewed the plan in Auto or a Senior chat/);
+  assert.doesNotMatch(direct, /Vibe64 runs its Passes items/);
+  for (const [state, told] of [[{ mode: "senior", resolvedMode: "senior", afterPlan: {} }, true], [{ mode: "senior", resolvedMode: "senior", afterPlan: null }, false],
+    [{ mode: "custom", resolvedMode: "custom", afterPlan: {} }, false]]) {
+    assert.equal(/having full-ticked every item outside a plan's Passes or reported complete on a plan already there, Vibe64 runs its Passes items/u
+      .test(assistantWorkflowInstructions({ ...state, stage: "implementation" })), told, JSON.stringify(state));
+  }
   assert.doesNotMatch(direct, /Senior review back to Junior|in one more turn|Automatic (Review|Deslop)/);
   assert.match(assistantWorkflowInstructions({ mode: "senior", stage: "implementation" }), /handoff reports the requested work finished and changed files; the work then ends\./);
 });
