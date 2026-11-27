@@ -21,7 +21,7 @@
 
 - Runtimes: `nodejs` `cpp`
 - Ready when: `GET` `/api/health` returns `200`
-- Prepare `Install dependencies`: `npm` `install`
+- Prepare `Install dependencies`: `npm` `ci`
 - Build `Build`: `npm` `run` `build`
 - Serve `Start`: `npm` `start`
 
@@ -50,7 +50,7 @@
 
 ## Workspace setup
 
-- Prepare `Install dependencies` with `nodejs` `cpp` when `package.json` exists: `npm` `install`
+- Prepare `Install dependencies` with `nodejs` `cpp` when `package.json` exists: `npm` `ci`
 - Prepare `Build terminal native dependency` with `nodejs` `cpp` when `package.json` exists: `npm` `rebuild` `node-pty`
 
 ## Connected development

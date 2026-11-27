@@ -4,8 +4,8 @@ import { pathToFileURL } from "node:url";
 // `npm run verify`'s Genesis step: the project's own `genesis check`, with the Genesis it pins (npm exec --no runs
 // node_modules' genesis-compiler, never a downloaded one). It fails on what that check finds invalid (a Program module,
 // the managed-skill manifest, saved evidence) and on managed Agent Skill copies that are not exactly that Genesis's
-// (`genesis skills sync` refreshes them). Everything else the check reports, such as verification evidence never
-// saved, is the check's attention, which a verify run does not fail on.
+// (`npm exec --no -- genesis skills sync` refreshes them with the same Genesis). Everything else the check reports,
+// such as verification evidence never saved, is the check's attention, which a verify run does not fail on.
 
 /**
  * What a `genesis check --json` result fails verify for: one line each, empty when it passes.
@@ -21,8 +21,8 @@ export function genesisCheckFailures(result) {
   }
   if (result.skills !== "current") {
     failures.push(
-      `Agent Skills are ${result.skills}, not current: run \`genesis skills sync\` and commit the refreshed `
-      + ".agents/skills copies."
+      `Agent Skills are ${result.skills}, not current: run \`npm exec --no -- genesis skills sync\` `
+      + "(the pinned Genesis, never one on PATH) and commit the refreshed .agents/skills copies."
     );
   }
   return failures;

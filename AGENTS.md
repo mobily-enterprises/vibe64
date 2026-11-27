@@ -22,7 +22,9 @@ checkout on the person's laptop. The Git workflow depends on which:
   fast-forward keeps it current, only when it has no local commits; never merge,
   reset or rebase it, and leave its local edits alone. Make each change in a
   `git worktree` created from current `origin/main`, push it, then remove your
-  worktree. Your own worktree has no other owner: run its focused tests there.
+  worktree. Your own worktree has no other owner. Run its tests where the
+  person's setup says: on their test hosts when they have them (then never on
+  the laptop), otherwise in the worktree.
 
 Either way, never discard or overwrite another person's or agent's work.
 
@@ -40,22 +42,21 @@ development task. Do not ask again merely because the fix belongs in JSKIT. This
 supersedes a project-only editing restriction for that dependency work; a later
 explicit human restriction still takes precedence.
 
-In a Vibe64 session, edit JSKIT only in the session's connected copy listed in
-`.development/connected.json` (its `sourceRoot`); do not assume the active tab,
-a remembered session path or an Env value names it. On a laptop, use a JSKIT
-worktree as above. The copy belongs to this session: edit it and run its
-focused tests here, as for the session's own source, and the session's Save
-publishes it. Preserve existing work and coordinate overlapping files with any
-other agent changing them. Coordination establishes who edits and tests; it is
-not another permission request. Do not bypass the execution boundary or describe
-its refusal as missing human consent. These relevant checks do not need another
+This repository connects neither JSKIT nor Genesis (its
+`vibe64.connections.json` lists none), so a session of it has no copy of
+either. Edit JSKIT or Genesis in a Vibe64 session of that repository, or on a
+laptop in a worktree of its own checkout, as **Where you're running**
+describes. A change reaches this repository once that repository releases it
+and the lockstep pin run moves the pins here (**Who moves JSKIT pins**).
+Preserve existing work and coordinate overlapping files with any other agent
+changing them. Coordination establishes who edits and tests; it is not another
+permission request. Do not bypass the execution boundary or describe its
+refusal as missing human consent. These relevant checks do not need another
 human approval.
 
-Consume JSKIT source edits through connected repositories (below), and report
-missing support for that as an implementation gap. This permission alone does
-not authorize npm publication, deployment, destructive Git operations or
-unrelated framework work. Existing architectural boundaries and test-scope
-requirements still apply.
+This permission alone does not authorize npm publication, deployment,
+destructive Git operations or unrelated framework work. Existing architectural
+boundaries and test-scope requirements still apply.
 
 ### Who moves JSKIT pins
 
@@ -67,40 +68,16 @@ and `package-lock.json`.
   each JSKIT or Genesis release and moves every dependent repository's pins
   together, the JSKIT starter apps' included. A platform's own release ships
   the pins it finds: it releases and pins neither JSKIT nor Genesis. Never move
-  them in development, connected copy or not.
-- A user project moves its own JSKIT pins, and only with JSKIT's update
-  command, `npm run jskit:update`, which moves every `@jskit-ai` pin to one
-  published catalog and installs it. Never move a JSKIT package with
-  `npm install`, `npm update` or `npm audit fix`. Never run
-  `npm install --no-save` in a tree where Vibe64 put a connected copy: it puts
-  the published package back, so the checks then pass for code the session
-  does not run.
-
-With a JSKIT copy connected to a user project:
-
-- **The copy carries a newer published version than the pins.** `jskit check`
-  runs from the copy, with its catalog, so `npm run verify` refuses with
-  `JSKIT project graph is inconsistent` until the pins move. Run
-  `npm run jskit:update`, then start Preview
-  (`vibe64-helper preview ensure --wait`): its preparation puts the connected
-  copy back in place of the published one the update installed, and
-  `vibe64-helper session status --json` shows the copy `inEffect` again. Then
-  verify. **Save** would also move the pins, but only when it runs.
-- **The copy holds unpublished edits.** It keeps the version of its last
-  release, so with the pins at that version verification accepts the copy as
-  it is, and the pins stay. The edits reach Staging and Production once JSKIT
-  publishes them and the pins move to that release. Never change a version in
-  the copy by hand: JSKIT's release does that.
-- **An unrelated dependency update, such as an audit fix.** It leaves every
-  `@jskit-ai` entry as it was; if `git diff package.json package-lock.json`
-  shows one moved, restore both files and update only the packages the fix
-  names. Install the new lockfile with `npm ci`, then start Preview so
-  preparation puts the connected copy back before you verify.
+  them in development.
+- A user project moves its own JSKIT pins only with `npm run jskit:update`;
+  how a JSKIT copy connected to it meets those pins is in
+  [`docs/colleague-usage/connected-jskit-pins.md`](docs/colleague-usage/connected-jskit-pins.md).
 
 ## Connected repositories
 
 A project's `vibe64.connections.json` lists the repositories it develops with,
-for example JSKIT and Genesis. Every session keeps its own copy of each one in
+for example a library it uses or a repository it composes; this repository's
+lists none. Every session keeps its own copy of each one in
 `connected/<name>` beside its source, and `.development/connected.json` lists
 each copy's `sourceRoot`. No other session sees or changes this session's
 copies. Another session's work on the same repository arrives as new commits on
@@ -168,13 +145,9 @@ verification.
 - This repository's `origin/main` is the public Vibe64 source of truth; edit it
   only as described in **Where you're running**.
 - Genesis owns project intent, technology guidance, explanatory Program, agent skills, hooks, verification guidance, and Machine/Program Cities. Its portable files live below `genesis/`, `.genesis/`, `.agents/skills/`, `.codex/hooks.json`, `.claude/settings.json`, and the generated `.opencode/plugins/genesis-project-guidance.js`.
-- `vibe64.project.json` and `vibe64.runtime-lock.json` are unsupported obsolete contracts. Do not recreate or read them.
 - `.vibe64/` is not product, prompt, Stack, Program, indexing, or City authority. Keep only narrowly declared application helpers such as a Vibe64 Launch preview-identity executable when required.
 - Runtime/session state is Vibe64-owned runtime-local state, not source-owned repository content.
 - Do not create loose workboard files.
-- Do not restore `jskit doctor`, generator commands, scaffold provenance,
-  receipts, migration copies, or CLI-managed CI state. Verify current source,
-  runtime behavior, package boundaries, and tests through their direct owners.
 - Server code follows JSKIT's typed features guide
   (`https://mobily-enterprises.github.io/jskit-ai/guide/framework/typed-features`);
   `npm run lint` checks it, and each finding links its section. A rule that
@@ -283,8 +256,14 @@ backups for you.
 
 ## Test Execution Safety
 
-Do not start tests unless they are relevant to the current work, and never
-overlap a test run already active for this checkout.
+[`docs/testing.md`](docs/testing.md) explains the machinery below: the
+test budget, time budgets, hang handling, CI shards and what every test
+process loads.
+
+Do not start tests unless they are relevant to the current work. Never start
+a broad run (`npm run test:full`, `npm run verify`, a whole browser suite) while
+another is active for this checkout; single-file runs may run beside anything,
+since every test file owns its state.
 
 - During development, run exactly one relevant test file with
   `npm test -- tests/server/<name>.test.js`. The root test command refuses to
@@ -292,58 +271,29 @@ overlap a test run already active for this checkout.
   arguments in `--option=value` form.
 - Do not pass a glob, directory, or multiple test files to `npm test`, and do
   not bypass this guard with a direct broad `node --test` command.
-- Test suites run in parallel by default, bounded by the machine's test budget,
-  JSKIT's `testConcurrency()` from `@jskit-ai/jskit-catalog/test-budget`:
-  `V64_TEST_CONCURRENCY` when set to a whole number (a test
-  runner sharing a machine sets it for each of its slots), otherwise half the
-  CPUs, at least one. `npm run test:full` and `npm run test:client` run that
-  many test files at once; Playwright runs on JSKIT's browser-test harness,
-  `browserTestConfig()` from `@jskit-ai/jskit-catalog/browser-tests`, with one
-  worker and app server for every two of those threads, at least one, as each
-  worker also runs a browser. Inside a Vibe64 session, browser suites run
-  through `vibe64-helper playwright` (`vibe64-helper playwright npm-run
-  test:e2e`, or `vibe64-helper playwright test <args>` for chosen specs), never
-  through `npx playwright`, `playwright test` or `npm run test:e2e` directly.
+- Test suites run their files in parallel within the machine's test budget
+  (JSKIT's `testConcurrency()`, `V64_TEST_CONCURRENCY` where a host sets it).
   No script or command fixes its own concurrency. Every test file owns its
   ports, temporary folders, databases and other state, so it can run beside
   any other; fix a collision where it happens instead of making a file run
   alone.
-- Every test file, and each suite's files together, have a coarse time budget
-  in `tooling/test-time-budgets.json`: about five times the measured time, with
-  a floor for small files, and each suite's run a wall-clock bound of about
-  three times its parallel run on a busy test host. They fail only a run that
-  is clearly broken, never normal variation. Each suite prints its ten slowest
-  files against their budgets; look there for waste. When a run is over
-  budget, find what got slow and fix it. Change a budget only when the work
-  itself grew, with the new measurement, in the same change.
-- A hang fails fast instead of holding a run. In `npm run test:full`, each test
-  has the server suite's `testMs` as a hard deadline and fails by name past
-  it; its file then ends with its other tests, even when the hung test left a
-  server or timer open, and its whole report still reaches the runner: a file
-  whose report ends before its summary fails the run instead of losing its
-  last tests silently. The whole run stops at its wall-clock bound, and each
-  CI job has a `timeout-minutes` above the bounds of the suites it runs. A
-  test that waits for a hold, a child or an event also stops waiting when the
-  work it waits on has already ended.
-- CI runs every check of `npm run verify` in parallel jobs, the server suite
-  in shards: `npm run test:full -- --shard=I/N` runs every Nth server test
-  file from the Ith (Node's `--test-shard`), so the N shards together run
-  every file once.
+- Inside a Vibe64 session, browser suites run through `vibe64-helper
+  playwright` (`vibe64-helper playwright npm-run test:e2e`, or
+  `vibe64-helper playwright test <args>` for chosen specs), never through
+  `npx playwright`, `playwright test` or `npm run test:e2e` directly.
+- Every test file and suite has a coarse time budget in
+  `tooling/test-time-budgets.json`, which fails only a run that is clearly
+  broken. When a run is over budget, find what got slow and fix it. Change a
+  budget only when the work itself grew, with the new measurement, in the same
+  change.
 - `npm run verify` runs the project's own `genesis check` with the pinned
   Genesis (`npm run verify:genesis`, `tooling/verify-genesis-check.mjs`): an
   invalid Program module or managed Agent Skill copies that are not that
-  Genesis's (`genesis skills sync` refreshes them) fail it.
-- Every test process, `npm run test:full` included, loads
-  `tooling/test-host-path-guard.mjs` and runs with `APP_ENV=test`, as
-  `jskit test` gives it, whatever the shell says; a shell whose `APP_ENV` is
-  `staging` or `production` runs no tests.
-- Every server test process, and each Node child it starts, also loads
-  `tooling/test-skip-disk-flush.mjs`: a durable write's flush (fsync,
-  fdatasync) still checks its descriptor but no longer waits for the disk.
-  Nothing a test writes has to survive a power cut, and on a shared test host
-  those waits were most of a session test's time. A test that proves a write
-  durable still sees every flush call, in order
-  (`tests/server/durableWriteTrace.js`).
+  Genesis's fail it. Refresh them with the same pinned Genesis,
+  `npm exec --no -- genesis skills sync`, never a `genesis` on PATH, whose
+  newer copies this check refuses.
+- Tests run with `APP_ENV=test` whatever the shell says; a shell whose
+  `APP_ENV` is `staging` or `production` runs no tests.
 - A test removes every temporary folder it creates by the time it ends, so a
   passing run leaves nothing in the temp directory. It keeps an evidence folder
   (screenshots, traces, logs) only when it fails, and prints where it is.
@@ -351,9 +301,11 @@ overlap a test run already active for this checkout.
   Run them only after the human has confirmed that the feature works and has
   explicitly approved full verification: ask once, at the end, after focused
   checks pass, saying what will run and roughly how long. Run every check in
-  the session, never detached to outlive it. Explain every failure; never call
-  one pre-existing or environmental: a missing tool or an environment's
-  refusal is a defect to fix, reported with what is missing.
-- Focused local tests are not the whole proof. After pushing to `main`, check
-  that repository's GitHub CI run (`gh run list`, `gh run watch`) and, if it is
-  red, fix it before moving on.
+  the session: never detach one yourself to outlive it. A host's own check
+  runner may keep a check going after the call that started it ends, when the
+  agent can still follow it to its real exit and stop it. Explain every
+  failure; never call one pre-existing or environmental: a missing tool or an
+  environment's refusal is a defect to fix, reported with what is missing.
+- Focused local tests are not the whole proof. After a session's Save or a
+  push to `main`, check that repository's GitHub CI run (`gh run list`,
+  `gh run watch`) and, if it is red, fix it before moving on.

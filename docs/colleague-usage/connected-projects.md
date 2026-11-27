@@ -132,14 +132,11 @@ deployment, uses the published packages.
   `package.json` and `package-lock.json` to it (`npm install
   --package-lock-only`, so the swap stays) and keeps the registry's copy of
   that version aside for a later disconnection; until then it changes nothing.
-  While the copy carries another version than the project's pins, a check
-  that compares the two refuses: in a JSKIT app, `jskit check`, the first step of
-  `npm run verify`, says `JSKIT project graph is inconsistent`. There
-  `npm run jskit:update` moves the pins, and the next Preview start puts the
-  connected copy back in place of the published one the update installed.
-  `npm install --no-save`, like any ordinary install, puts the published
-  package back instead, so the checks then pass for code the session does not
-  run.
+  While the copy carries another version than the project's pins, checks that
+  compare the two refuse; [Connected JSKIT and its pins](connected-jskit-pins.md)
+  says what to do in a JSKIT app. `npm install --no-save`, like any ordinary
+  install, puts the published package back, so the checks then pass for code
+  the session does not run.
 
 - **composer**: Vibe64 writes `composer.connected.json` and
   `composer.connected.lock` (the tracked manifest with a first `path`
