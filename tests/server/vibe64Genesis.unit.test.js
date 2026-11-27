@@ -338,7 +338,7 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   );
 });
 
-test("managed Git reporting rules distinguish confirmed work, unattempted actions and unknown effects", () => {
+test("managed Git failures point to the managed-git spec, which keeps the reporting rules", () => {
   for (const conversationKind of ["main", "temporary"]) {
     const input = {
       conversationKind,
@@ -346,16 +346,11 @@ test("managed Git reporting rules distinguish confirmed work, unattempted action
       session: { managedDatabaseRefresh: false, managedEnvironment: false, managedGit: true, managedPreview: false }
     };
     const context = vibe64Driver(input);
-    assert.match(context, /which requested action failed, which earlier work is confirmed complete, what remains undone or unconfirmed, and the next safe action/u);
-    assert.match(context, /failure stage, execution budget and execution reference/u);
-    assert.match(context, /does not establish invalid authentication, exhausted AI quota, a GitHub outage or a suspension problem/u);
-    assert.match(context, /Separate recorded facts from hypotheses; say the cause is unknown/u);
-    assert.match(context, /Recommend reconnection only when the reported error explicitly calls for it/u);
-    assert.match(context, /commandSubmitted=false, the requested Git\/GitHub action was not attempted/u);
-    assert.match(context, /read-only check.*before repeating any write/u);
-    assert.match(context, /Never claim that a comment was posted or not posted/u);
-    assert.match(context, /If verification is unavailable, report the outcome as unknown and stop/u);
-    assert.doesNotMatch(vibe64Driver({ ...input, session: { ...input.session, managedGit: false } }), /commandSubmitted|which requested action failed/u);
+    // The rules themselves (confirmed work, unattempted actions, unknown effects) are in `vibe64-helper spec
+    // managed-git`, whose text vibe64AgentSpecs.unit.test.js checks, and a failed command's own output names it.
+    assert.match(context, /When a managed Git\/GitHub command fails or times out, read `vibe64-helper spec managed-git` before you report it or repeat a write/u);
+    assert.match(context, /checked read-only first, never repeated blind, and never claimed done or not done from the error alone/u);
+    assert.doesNotMatch(vibe64Driver({ ...input, session: { ...input.session, managedGit: false } }), /managed-git|commandSubmitted/u);
   }
 });
 
@@ -437,9 +432,7 @@ test("the Genesis boundary composes source-owned collaboration once with Vibe64 
     assert.match(output, /never decide it from `NODE_ENV`, which only picks optimised builds/u);
     assert.match(output, /Vibe64 gives this session `development` and the host gives a deployment its own/u);
     assert.match(output, /vibe64-helper database refresh/u);
-    assert.match(output, /which earlier work is confirmed complete/u);
-    assert.match(output, /commandSubmitted=false/u);
-    assert.match(output, /Separate recorded facts from hypotheses/u);
+    assert.match(output, /vibe64-helper spec managed-git/u);
     assert.doesNotMatch(output, /do not edit files or run state-changing commands|only for inspection/u);
   });
 });

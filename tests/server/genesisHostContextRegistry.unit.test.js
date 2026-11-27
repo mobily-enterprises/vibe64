@@ -49,14 +49,17 @@ test("a chat agent answers a message sent while it works in visible text, not on
 // host guidance, against the bound the installed Genesis exports, and keeps 2 KiB of it spare, so the next addition
 // fails here rather than being cut in production. genesis-compiler 1.10.27 and before export no bound (theirs was
 // 24 KiB, which this guidance passes): the platform release pins the Genesis that does, and its CI gate runs this.
+// It also keeps 4 KiB of room for the next rules (27 Nov 2026: 278 bytes were left): a rule that takes it moves
+// detail out of the always-loaded guidance into an on-demand `vibe64-helper spec` that the guidance names.
 const GENESIS_SESSION_BOUND = genesisCompiler.HOST_CONTEXT_MAX_BYTES?.session;
 
-test("every session capability combination stays 2 KiB under Genesis's host contribution bound", {
+test("every session capability combination stays 2 KiB under Genesis's host contribution bound, with 4 KiB of room for new rules", {
   skip: Number.isInteger(GENESIS_SESSION_BOUND) ? false
     : "the installed genesis-compiler exports no HOST_CONTEXT_MAX_BYTES; the platform release pins one that does"
 }, () => {
   const bound = GENESIS_SESSION_BOUND;
   const SPARE = 2 * 1024;
+  const ROOM = 4 * 1024;
   const hostGuidance = "é".repeat(640); // 1280 UTF-8 bytes, not characters.
   const capabilities = [...VIBE64_SESSION_CAPABILITIES, ...VIBE64_OPTIONAL_SESSION_CAPABILITIES];
   for (const conversationKind of ["main", "temporary"]) {
@@ -66,6 +69,8 @@ test("every session capability combination stays 2 KiB under Genesis's host cont
       const bytes = Buffer.byteLength(output.trim(), "utf8");
       assert.ok(bytes + SPARE <= bound,
         `${conversationKind} with ${JSON.stringify(session)} is ${bytes} bytes, less than ${SPARE} under Genesis's ${bound}`);
+      assert.ok(bytes + SPARE + ROOM <= bound, `${conversationKind} with ${JSON.stringify(session)} is ${bytes} bytes, ` +
+        `leaving less than ${ROOM} bytes for new rules: move detail into an on-demand spec (vibe64-helper spec) the guidance names`);
       assert.ok(output.includes(hostGuidance), "host guidance is retained in full");
     }
   }

@@ -768,8 +768,14 @@ environment, which holds secrets, is read.
 
 `vibe64-helper spec [<name>]` prints the exact contracts a coding agent
 implements: every Stack section Vibe64 interprets, the Preview identity command
-protocol, the managed app identity list, the integration setup command and the
-teaching content format. It runs the release's `vibe64 spec` command, which
+protocol, the managed app identity list, how a session runs browser suites
+(`browser-tests`) and managed Git (`managed-git`), the integration setup command
+and the teaching content format. The always-loaded session guidance names a
+spec for detail it does not carry, so Genesis's host-contribution bound keeps
+room for new rules: `tests/server/genesisHostContextRegistry.unit.test.js`
+requires every capability combination to stay 2 KiB under that bound and leave
+4 KiB more for the next rules, and a rule that takes that room moves detail into
+a spec the guidance names. It runs the release's `vibe64 spec` command, which
 `bin/run.js` routes to `server/lib/agentSpecCli.js`. That root module only joins
 the specs owned by vibe64-genesis, vibe64-terminals and vibe64-source-editor; it
 reads no session state and needs no control socket. Without a name it lists the

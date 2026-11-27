@@ -632,6 +632,8 @@ test("model-visible Git failures retain their stage, budget, execution reference
       assert.equal(diagnostic.commandSubmitted, commandSubmitted);
       assert.equal(calls.length, callCount);
       assert.doesNotMatch(result.stderr + result.stdout, /private-test-token|Reconnect/u);
+      // The reporting rules are on demand: a platform failure names the spec that holds them.
+      assert.match(result.stderr, /Before you report it or repeat a write: vibe64-helper spec managed-git\n/u);
       if (scenario === "command-timeout") {
         assert.match(result.stderr, /Managed Git command timed out/u);
         assert.match(result.stderr, /effects are unconfirmed.*Check the result before retrying a write/u);

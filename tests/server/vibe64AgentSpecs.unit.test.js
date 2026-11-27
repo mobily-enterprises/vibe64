@@ -21,6 +21,7 @@ import { __testables as stackOperationTestables } from "../../packages/vibe64-ge
 import { STAGING_DATA_ENTRY_FORMS, parseVibe64StagingDataLines } from "../../packages/vibe64-genesis/src/server/stagingData.js";
 import { parseVibe64WorkspaceSetupLines } from "../../packages/vibe64-genesis/src/server/workspaceSetup.js";
 import { PREVIEW_APPLICATION_IDENTITY_LIMIT } from "../../packages/vibe64-core/src/server/previewAuth.js";
+import { vibe64Driver } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 import { __testables as previewIdentityCommandTestables } from "../../packages/vibe64-terminals/src/server/previewIdentityCommand.js";
 
 const { VIBE64_AGENT_SPECS } = agentSpecCliTestables;
@@ -177,6 +178,51 @@ test("the Deployment spec gives a host's production mode to Serve only and lets 
   const serve = parseVibe64DeploymentLines(example.split("\n").slice(1)).steps.at(-1);
   assert.deepEqual(serve.argv, ["env", "NODE_ENV=production", "node", "server.js"]);
   assert.doesNotMatch(example.split("\n").filter((line) => !line.startsWith("- Serve ")).join("\n"), /NODE_ENV/u);
+});
+
+// Detail moved out of the always-loaded session guidance (which keeps room for new rules under Genesis's bound) stays
+// reachable: the guidance names each spec, and each spec carries every rule it took.
+test("the browser-tests and managed-git specs carry every rule the session guidance points to them for", async () => {
+  const everything = vibe64Driver({ conversationKind: "main", scope: "session", session: {
+    managedDatabaseRefresh: true, managedEnvironment: true, managedGit: true, managedPreview: true, managedPages: true
+  } });
+  const browser = (await cli(["browser-tests"])).stdout;
+  assert.match(everything, /Before you write, change or run a browser suite, read `vibe64-helper spec browser-tests`/u);
+  assert.match(everything, /Tests that write never use the person's development target\./u);
+  for (const required of [
+    "vibe64-helper preview targets --json", "vibe64-helper playwright --target", "npm-run <script>",
+    "restores the previous Preview", "application must verify the server's actual test database",
+    "preview-identity command must use the same database", "Never spoof safety checks",
+    "add one through the project's existing Outputs contract", "external-effect controls are missing",
+    "Each such target is a test server the project declares", "the project's own Run command and disposable data",
+    "points `PLAYWRIGHT_BASE_URL` at it", "Specs create the data they need in fixtures",
+    "tests that write never use the person's development target",
+    "Pin `@playwright/test` exactly to the `platformVersion` that `vibe64-helper playwright readiness` reports",
+    "pass `process.env.PLAYWRIGHT_STORAGE_STATE` unchanged to `use.storageState`", "that is a host defect",
+    "Batch related browser tests in one managed suite", "Never kill test/Preview PIDs or change locks",
+    "vibe64-helper playwright cancel <run-id>", "Keep test output small", "Do not rerun for output or reread unchanged logs"
+  ]) assert.ok(browser.includes(required), required);
+  for (const moved of ["Pin `@playwright/test`", "Batch related browser tests", "Keep test output small", "A target name is not proof"]) {
+    assert.equal(everything.includes(moved), false, `${moved} lives in the spec, not the always-loaded guidance`);
+  }
+  const git = (await cli(["managed-git"])).stdout;
+  assert.match(everything, /read `vibe64-helper spec managed-git` before you report it or repeat a write/u);
+  assert.match(everything, /Fetch GitHub attachments with managed `gh api`/u);
+  for (const pattern of [
+    /which requested action failed, which earlier work is confirmed complete, what remains undone or unconfirmed, and the next safe action/u,
+    /failure stage, execution budget and execution reference/u,
+    /does not establish invalid authentication, exhausted AI quota, a GitHub outage or a suspension problem/u,
+    /Separate recorded facts from hypotheses; say the cause is unknown/u,
+    /Recommend reconnection only when the reported error explicitly calls for it/u,
+    /commandSubmitted=false, the requested Git\/GitHub action was not attempted/u,
+    /read-only check.*before repeating any write/u,
+    /Never claim that a comment was posted or not posted/u,
+    /If verification is unavailable, report the outcome as unknown and stop/u,
+    /use authenticated managed `gh api` with the original attachment URL/u,
+    /an unauthenticated 404 does not prove a private attachment is missing/u,
+    /`--config-env`, `--exec-path`, `--upload-pack`, signing, submodule recursion/u
+  ]) assert.match(git, pattern);
+  assert.doesNotMatch(everything, /commandSubmitted|unauthenticated 404/u);
 });
 
 test("the Preview identity protocol examples satisfy the real response validation", async () => {
