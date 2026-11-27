@@ -38,6 +38,7 @@ import { createServiceShutdown } from "./serviceShutdown.js";
 import { createServiceHostSlots } from "./serviceHostSlots.js";
 import { createServiceTurnPublication } from "./serviceTurnPublication.js";
 import { createServiceCommandServices } from "./serviceCommandServices.js";
+import { prepareSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { createServiceAgentProviders } from "./serviceAgentProviders.js";
 import { sessionAssistantWorking } from "./serviceSessionRecords.js";
 import { createProjectPasses } from "./projectPasses.js";
@@ -694,6 +695,8 @@ function createService({
     readOutputResult: terminals.readOutputResult,
     removeOutputResultsForSession: terminals.removeOutputResultsForSession,
     removeSessionCommandHelpers: terminals.removeSessionCommandHelpers,
+    // A session's managed commands (vibe64-helper among them) for a command a host runs in it for itself.
+    prepareSessionCommandEnvironment: (input) => prepareSessionCommandEnvironment({ ...input, commands, env, project }),
     selectPreviewIdentity: terminals.selectPreviewIdentity,
     verifyPreviewIdentity: terminals.verifyPreviewIdentity,
     restartPreviewAfterSetup: terminals.restartPreviewAfterSetup,

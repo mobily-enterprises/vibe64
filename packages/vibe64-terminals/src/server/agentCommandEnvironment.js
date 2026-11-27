@@ -24,6 +24,7 @@ import {
   prepareCodexGitCommand
 } from "./codexGitCommand.js";
 import { createKeyedQueue, createSharedOperations } from "@local/vibe64-core/server/keyedOperations";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { normalizeObject, toText } from "@jskit-ai/kernel/shared/support/normalize";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
@@ -265,9 +266,42 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
   };
 }
 
+/**
+ * A session's managed commands for a command a host runs in that session for itself (a check, say), as the session's
+ * AI engines get them: the env that names the session's controls, and the folder of its wrappers (vibe64-helper among
+ * them), first in `shimDirs`, which runVibe64Command puts first on the command's PATH. The session's close releases
+ * them, as it does an engine's (closeAgentSessionCommandEnvironment).
+ * @param {object} input
+ * @param {object} input.commands the terminals' command services (serviceCommandServices.js)
+ * @param {RuntimeEnv} input.env the terminals' env, which an engine's commands start from too
+ * @param {{ readCurrentProject: () => Promise<object> }} input.project
+ * @param {object} input.runtime the session's project runtime
+ * @param {object} input.session the session's record, whose source the commands work in
+ * @param {string} input.sessionId
+ * @returns {Promise<{ env: Record<string, string>, hostWrapperDir: string, shimDirs: string[] }>}
+ */
+async function prepareSessionCommandEnvironment({ commands, env, project, runtime, session, sessionId }) {
+  const prepared = await prepareAgentSessionCommandEnvironment({
+    agentDatabaseCommand: commands.agentDatabaseCommand,
+    agentEnvCommand: commands.agentEnvCommand,
+    agentPagesCommand: commands.agentPagesCommand,
+    agentPreviewCommand: commands.agentPreviewCommand,
+    agentSessionCommand: commands.agentSessionCommand,
+    env,
+    gitCommand: commands.codexGitCommand,
+    project: await project.readCurrentProject(),
+    runtime,
+    sessionId,
+    worktreePath: sessionSourcePath(session)
+  });
+  if (prepared?.ok !== true) throw commandBoundaryError("session");
+  return { env: prepared.env, hostWrapperDir: prepared.hostWrapperDir, shimDirs: prepared.shimDirs };
+}
+
 export {
   agentSessionCommandEnvironmentIsHealthy,
   closeAgentSessionCommandEnvironment,
   prepareAgentSessionCommandEnvironment,
-  prepareOpenCodeSessionCommandEnvironment
+  prepareOpenCodeSessionCommandEnvironment,
+  prepareSessionCommandEnvironment
 };

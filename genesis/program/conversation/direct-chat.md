@@ -4598,7 +4598,12 @@ lifecycle. Product commands use the same common handle and native binding.
 
 All three preparations reuse `agentCommandEnvironment.prepareAgentSessionCommandEnvironment`
 and `projectExecutionEnv.loadProjectExecutionEnv` where their original contracts
-require them. `conversationExecution.createVibe64ConversationExecution` supplies
+require them. A command a composed host runs in a session for itself (a check, say)
+gets the same managed commands through the terminals service's
+`prepareSessionCommandEnvironment` (`agentCommandEnvironment.prepareSessionCommandEnvironment`):
+the env naming the session's controls and its wrappers' folder first in `shimDirs`,
+which `runVibe64Command` puts first on the command's PATH; the session's close
+releases them as it does an engine's. `conversationExecution.createVibe64ConversationExecution` supplies
 Claude/OpenCode managed run/stop/inspection; Codex's host uses the same execution
 gateway with its account-wide scope. Account access checks and provider `capabilities` /
 `resolveExecutionProfile` retain product account visibility, selected-model
