@@ -283,6 +283,10 @@ backups for you.
 
 ## Test Execution Safety
 
+[`docs/testing.md`](docs/testing.md) explains the machinery below: the
+test budget, time budgets, hang handling, CI shards and what every test
+process loads.
+
 Do not start tests unless they are relevant to the current work. Never start
 a broad run (`npm run test:full`, `npm run verify`, a whole browser suite) while
 another is active for this checkout; single-file runs may run beside anything,
@@ -294,60 +298,29 @@ since every test file owns its state.
   arguments in `--option=value` form.
 - Do not pass a glob, directory, or multiple test files to `npm test`, and do
   not bypass this guard with a direct broad `node --test` command.
-- Test suites run in parallel by default, bounded by the machine's test budget,
-  JSKIT's `testConcurrency()` from `@jskit-ai/jskit-catalog/test-budget`:
-  `V64_TEST_CONCURRENCY` when set to a whole number (a test
-  runner sharing a machine sets it for each of its slots), otherwise half the
-  CPUs, at least one. `npm run test:full` and `npm run test:client` run that
-  many test files at once; Playwright runs on JSKIT's browser-test harness,
-  `browserTestConfig()` from `@jskit-ai/jskit-catalog/browser-tests`, with one
-  worker and app server for every two of those threads, at least one, as each
-  worker also runs a browser. Inside a Vibe64 session, browser suites run
-  through `vibe64-helper playwright` (`vibe64-helper playwright npm-run
-  test:e2e`, or `vibe64-helper playwright test <args>` for chosen specs), never
-  through `npx playwright`, `playwright test` or `npm run test:e2e` directly.
+- Test suites run their files in parallel within the machine's test budget
+  (JSKIT's `testConcurrency()`, `V64_TEST_CONCURRENCY` where a host sets it).
   No script or command fixes its own concurrency. Every test file owns its
   ports, temporary folders, databases and other state, so it can run beside
   any other; fix a collision where it happens instead of making a file run
   alone.
-- Every test file, and each suite's files together, have a coarse time budget
-  in `tooling/test-time-budgets.json`: about five times the measured time, with
-  a floor for small files, and each suite's run a wall-clock bound of about
-  three times its parallel run on a busy test host. They fail only a run that
-  is clearly broken, never normal variation. Each suite prints its ten slowest
-  files against their budgets; look there for waste. When a run is over
-  budget, find what got slow and fix it. Change a budget only when the work
-  itself grew, with the new measurement, in the same change.
-- A hang fails fast instead of holding a run. In `npm run test:full`, each test
-  has the server suite's `testMs` as a hard deadline and fails by name past
-  it; its file then ends with its other tests, even when the hung test left a
-  server or timer open, and its whole report still reaches the runner: a file
-  whose report ends before its summary fails the run instead of losing its
-  last tests silently. The whole run stops at its wall-clock bound, and each
-  CI job has a `timeout-minutes` above the bounds of the suites it runs. A
-  test that waits for a hold, a child or an event also stops waiting when the
-  work it waits on has already ended.
-- CI runs every check of `npm run verify` in parallel jobs, the server suite
-  in shards: `npm run test:full -- --shard=I/N` runs every Nth server test
-  file from the Ith (Node's `--test-shard`), so the N shards together run
-  every file once.
+- Inside a Vibe64 session, browser suites run through `vibe64-helper
+  playwright` (`vibe64-helper playwright npm-run test:e2e`, or
+  `vibe64-helper playwright test <args>` for chosen specs), never through
+  `npx playwright`, `playwright test` or `npm run test:e2e` directly.
+- Every test file and suite has a coarse time budget in
+  `tooling/test-time-budgets.json`, which fails only a run that is clearly
+  broken. When a run is over budget, find what got slow and fix it. Change a
+  budget only when the work itself grew, with the new measurement, in the same
+  change.
 - `npm run verify` runs the project's own `genesis check` with the pinned
   Genesis (`npm run verify:genesis`, `tooling/verify-genesis-check.mjs`): an
   invalid Program module or managed Agent Skill copies that are not that
   Genesis's fail it. Refresh them with the same pinned Genesis,
   `npm exec --no -- genesis skills sync`, never a `genesis` on PATH, whose
   newer copies this check refuses.
-- Every test process, `npm run test:full` included, loads
-  `tooling/test-host-path-guard.mjs` and runs with `APP_ENV=test`, as
-  `jskit test` gives it, whatever the shell says; a shell whose `APP_ENV` is
-  `staging` or `production` runs no tests.
-- Every server test process, and each Node child it starts, also loads
-  `tooling/test-skip-disk-flush.mjs`: a durable write's flush (fsync,
-  fdatasync) still checks its descriptor but no longer waits for the disk.
-  Nothing a test writes has to survive a power cut, and on a shared test host
-  those waits were most of a session test's time. A test that proves a write
-  durable still sees every flush call, in order
-  (`tests/server/durableWriteTrace.js`).
+- Tests run with `APP_ENV=test` whatever the shell says; a shell whose
+  `APP_ENV` is `staging` or `production` runs no tests.
 - A test removes every temporary folder it creates by the time it ends, so a
   passing run leaves nothing in the temp directory. It keeps an evidence folder
   (screenshots, traces, logs) only when it fails, and prints where it is.
@@ -357,9 +330,9 @@ since every test file owns its state.
   checks pass, saying what will run and roughly how long. Run every check in
   the session: never detach one yourself to outlive it. A host's own check
   runner may keep a check going after the call that started it ends, when the
-  agent can still follow it to its real exit and stop it. Explain every failure; never call
-  one pre-existing or environmental: a missing tool or an environment's
-  refusal is a defect to fix, reported with what is missing.
+  agent can still follow it to its real exit and stop it. Explain every
+  failure; never call one pre-existing or environmental: a missing tool or an
+  environment's refusal is a defect to fix, reported with what is missing.
 - Focused local tests are not the whole proof. After pushing to `main`, check
   that repository's GitHub CI run (`gh run list`, `gh run watch`) and, if it is
   red, fix it before moving on.
