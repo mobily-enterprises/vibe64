@@ -15,8 +15,8 @@ import { MEMOBOT_DEPLOYMENT_LINES, MEMOBOT_RESOURCES } from "../fixtures/deploym
 // inspection carries them, the deploy engine refuses Production naming them, and Staging reads the section as before.
 const RESOURCE_RULES = Object.freeze({ preferredAlternative, resourceKindIsDatabase });
 const NAME = "Example Console";
-const URL = "https://console.example.com/deployments";
-const LINE = `- Production: managed by \`${NAME}\` at \`${URL}\``;
+const ADDRESS = "https://console.example.com/deployments";
+const LINE = `- Production: managed by \`${NAME}\` at \`${ADDRESS}\``;
 const STEPS = [
   "- Runtimes: `nodejs`",
   "- Prepare `Install`: `npm` `ci`",
@@ -43,7 +43,7 @@ function refusedAt(lines, line, pattern) {
 
 test("the Production line names who manages Production and where, alone or beside the steps, and leaves Staging's recipe as it was", () => {
   assert.ok(DEPLOYMENT_ENTRY_FORMS.includes("- Production: managed by `name` at `https://address`"), "the form is listed");
-  const managedBy = { name: NAME, url: URL };
+  const managedBy = { name: NAME, url: ADDRESS };
 
   // Alone, it runs nothing on a host, like `- Nothing.`: Staging has nothing to publish.
   const alone = parseVibe64DeploymentLines(["", LINE, ""]);
@@ -86,12 +86,12 @@ test("a malformed Production line is refused at its line, naming the fix", () =>
   const form = /Deployment Production says who deploys Production instead of a host, such as `- Production: managed by `Example Console` at `https:\/\/console\.example\.com\/deployments``; a service's `- Production: `N` instances` goes under its ### Service heading\./u;
   // Another form: a service's starting count above the services, or the values without their backticks.
   refusedAt([...STEPS, "- Production: `2` instances"], 5, form);
-  refusedAt([`- Production: managed by ${NAME} at ${URL}`], 1, form);
-  refusedAt([`- Production: managed by \`${NAME}\` at \`${URL}\` now`], 1, form);
+  refusedAt([`- Production: managed by ${NAME} at ${ADDRESS}`], 1, form);
+  refusedAt([`- Production: managed by \`${NAME}\` at \`${ADDRESS}\` now`], 1, form);
 
   const name = /Deployment Production names who manages it in 1 to 60 letters, digits, single spaces and \. & ' \+ \( \) _ -, starting with a letter or digit, such as `Example Console`;/u;
   for (const wrong of ["", " Console", "Console ", "Two  spaces", "-Console", "<b>Console</b>", "Ops/Releases", "Tab\tName", "a".repeat(61)]) {
-    refusedAt([STEPS[0], `- Production: managed by \`${wrong}\` at \`${URL}\``, ...STEPS.slice(1)], 2, name);
+    refusedAt([STEPS[0], `- Production: managed by \`${wrong}\` at \`${ADDRESS}\``, ...STEPS.slice(1)], 2, name);
   }
 
   const address = /Deployment Production gives the https address where Production is managed, such as `https:\/\/console\.example\.com\/deployments`, without a user name or password;/u;
@@ -118,10 +118,10 @@ test("a malformed Production line is refused at its line, naming the fix", () =>
 test("the deploy engine refuses Production of a project the Stack says is managed elsewhere, naming the manager, whatever else the Deployment says", () => {
   const expected = {
     code: "production_managed_elsewhere",
-    message: `genesis/stack.md says ${NAME} manages this app's Production, at ${URL}, so Vibe64 doesn't deploy it to `
+    message: `genesis/stack.md says ${NAME} manages this app's Production, at ${ADDRESS}, so Vibe64 doesn't deploy it to `
       + `production: deploy it with ${NAME}. To deploy it from Vibe64 instead, remove the Production line from `
       + "genesis/stack.md's Deployment section (the coding agent can do this), Save, then deploy to production.",
-    managedBy: { name: NAME, url: URL }
+    managedBy: { name: NAME, url: ADDRESS }
   };
   for (const lines of [[LINE], [STEPS[0], LINE, ...STEPS.slice(1)]]) {
     assert.deepEqual(needsOfStack(inspect(lines), RESOURCE_RULES), { needs: null, problem: expected }, lines.join("\n"));
