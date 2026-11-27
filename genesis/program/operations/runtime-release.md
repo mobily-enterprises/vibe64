@@ -326,7 +326,7 @@ tests the tarball and publishes that same file. Unchanged contents publish
 nothing. Direct `npm publish` or `npm pack` in the source checkout fails with an
 instruction to use these commands, avoiding publication of the development tree.
 Every external dependency version must already exist in the target registry.
-The release workflow's pin of JSKIT and Genesis (`jskit-release pin`) runs the
+The lockstep pin of JSKIT and Genesis after their release (`jskit-release pin`) runs the
 package's `jskitRelease.afterPin` after its install, the newly pinned
 genesis-compiler's `genesis skills sync` by the bin that package declares, so a
 Genesis bump and Vibe64's matching Genesis agent skill copies land in one pin

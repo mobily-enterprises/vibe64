@@ -63,8 +63,11 @@ A project's JSKIT pins are the `@jskit-ai/*` versions in its `package.json`
 and `package-lock.json`.
 
 - This repository, and a platform built on it, takes its JSKIT and Genesis
-  pins only from its release workflow (`jskit-release pin`). Never move them
-  in development, connected copy or not.
+  pins only from the one lockstep pin run (`jskit-release pin`) that follows
+  each JSKIT or Genesis release and moves every dependent repository's pins
+  together, the JSKIT starter apps' included. A platform's own release ships
+  the pins it finds: it releases and pins neither JSKIT nor Genesis. Never move
+  them in development, connected copy or not.
 - A user project moves its own JSKIT pins, and only with JSKIT's update
   command, `npm run jskit:update`, which moves every `@jskit-ai` pin to one
   published catalog and installs it. Never move a JSKIT package with
