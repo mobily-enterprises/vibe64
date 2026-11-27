@@ -81,7 +81,11 @@ async function stagingAccountHost(t) {
       deleted.push(username);
       accounts.delete(username);
     },
-    endStagingAccess: (_user, username) => ended.push(username),
+    // Revoke's own end of a login shell: the account's shell is no login again.
+    endStagingAccess: (_user, username) => {
+      ended.push(username);
+      if (accounts.has(username)) accounts.get(username).shell = "/usr/sbin/nologin";
+    },
     facts: (username) => ({ groupGid: GID, groups: [username], loginUids: LOGIN_UIDS }),
     grantDaemonSearch: (descriptor) => grants.push(descriptor),
     managedRoot,
@@ -154,12 +158,67 @@ test("a staging account has a login shell only while root holds its staging key"
     facts: (username) => ({ ...host.options.facts(username), stagingAccess })
   });
   user.shell = "/bin/sh";
-  assert.throws(() => registeredStagingAccount(host.owner, account.username, withAccess(false)),
-    /does not have its application's home and no login/u);
   assert.equal(registeredStagingAccount(host.owner, account.username, withAccess(true)).username, account.username);
   user.shell = "/bin/bash";
-  assert.throws(() => registeredStagingAccount(host.owner, account.username, withAccess(true)),
+  for (const stagingAccess of [true, false]) {
+    assert.throws(() => registeredStagingAccount(host.owner, account.username, withAccess(stagingAccess)),
+      /does not have its application's home and no login/u);
+  }
+  assert.deepEqual(host.ended, [], "a shell the helper never gives is refused, never changed");
+});
+
+// A boot can take the staging key away while the account keeps its login shell: a mobilynet machine keeps keys and sudo
+// rules on tmpfs, and its accounts build gives every login shell, /bin/sh included, its own (/usr/lib/mobilynet/shell)
+// at boot. The helper then refused the account for every use: FINAL3's activation on mercmobily (28 Nov) could not
+// install daniela's unit, and the editor's grant at the first staging login after a boot was refused the same way.
+const MOBILYNET_SHELL = "/usr/lib/mobilynet/shell";
+
+test("a login shell whose staging key a boot took away is access the boot ended: the helper ends it as revoke does, then " +
+  "uses the account; the host's own form of the login shell is a login shell too", async (t) => {
+  const host = await stagingAccountHost(t);
+  const account = host.ensure("shop");
+  const user = host.accounts.get(account.username);
+  const onHost = (stagingAccess) => ({
+    ...host.options,
+    facts: (username) => ({ ...host.options.facts(username), loginShells: ["/bin/sh", MOBILYNET_SHELL], stagingAccess })
+  });
+  // While root holds the key, either form is the login it allows, and nothing changes.
+  for (const shell of ["/bin/sh", MOBILYNET_SHELL]) {
+    user.shell = shell;
+    assert.equal(registeredStagingAccount(host.owner, account.username, onHost(true)).shell, shell);
+  }
+  assert.deepEqual(host.ended, []);
+  // Without the key, each is ended (revoke's end: no login shell, no linger, logins, crontab or at jobs) and the account
+  // is used as the one the helper makes.
+  for (const shell of ["/bin/sh", MOBILYNET_SHELL]) {
+    user.shell = shell;
+    assert.equal(registeredStagingAccount(host.owner, account.username, onHost(false)).shell, "/usr/sbin/nologin", shell);
+  }
+  assert.deepEqual(host.ended, [account.username, account.username]);
+  // ensure (Publish to staging) and retire take it the same way.
+  user.shell = MOBILYNET_SHELL;
+  assert.deepEqual(host.ensure("shop", onHost(false)), account);
+  assert.equal(user.shell, "/usr/sbin/nologin");
+  user.shell = MOBILYNET_SHELL;
+  assert.equal(host.retire("shop", onHost(false)).retired, true);
+  // An account that is not the helper's otherwise (another home) is refused with its login shell as it was.
+  const blog = host.ensure("blog");
+  const other = host.accounts.get(blog.username);
+  Object.assign(other, { home: path.join(host.root, "elsewhere"), shell: "/bin/sh" });
+  const ended = host.ended.length;
+  assert.throws(() => registeredStagingAccount(host.owner, blog.username, onHost(false)),
     /does not have its application's home and no login/u);
+  assert.equal(other.shell, "/bin/sh");
+  assert.equal(host.ended.length, ended);
+});
+
+test("the host's own login shell is a staging login shell where its helper settings name one (VIBE64_PERSON_SHELL, a " +
+  "mobilynet machine's)", async () => {
+  const { stagingLoginShells } = await import("../../packages/vibe64-execution/src/host/stagingAccess.js");
+  assert.equal(typeof stagingLoginShells, "function", "stagingAccess.js names the staging login shells");
+  assert.deepEqual(stagingLoginShells({}), ["/bin/sh"]);
+  assert.deepEqual(stagingLoginShells({ VIBE64_PERSON_SHELL: MOBILYNET_SHELL }), ["/bin/sh", MOBILYNET_SHELL]);
+  assert.throws(() => stagingLoginShells({ VIBE64_PERSON_SHELL: "relative/shell" }), /VIBE64_PERSON_SHELL/u);
 });
 
 test("the daemon names only a project of its own workspace", async (t) => {
