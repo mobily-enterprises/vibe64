@@ -911,8 +911,10 @@ test("only the Run step of a web target with test data takes {workers}, and only
   });
   assert.equal(views[0].servesWorkers, true);
   assert.equal(views[0].runningHighBytes, 300 * 1024 * 1024);
+  assert.equal(views[0].workdir, ".", "its folder, where its last run's servers recorded their peak");
   assert.equal(Object.hasOwn(views[1], "servesWorkers"), false);
   assert.equal(Object.hasOwn(views[1], "runningHighBytes"), false);
+  assert.equal(Object.hasOwn(views[1], "workdir"), false);
 });
 
 test("a test target serving workers renders {workers}, listens on consecutive ports, waits for each and records them", async (t) => {

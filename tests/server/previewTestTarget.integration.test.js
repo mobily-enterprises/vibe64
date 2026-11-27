@@ -1193,6 +1193,16 @@ test("a test target taking {workers} serves one app server per worker, each with
   freeBytes = 3.75 * GIB;
   ({ served } = await run(0));
   assert.equal(served.length, 2);
+  // Once a run's app servers have recorded their peak (JSKIT's launcher writes it in the target's folder), a worker is
+  // that peak and a Chromium: 256 MiB fits the budget's share of 3, 2.5 GiB only one.
+  const recorded = path.join(f.sourceRoot, "node_modules", ".cache", "jskit-browser-tests", "server-memory.json");
+  await mkdir(path.dirname(recorded), { recursive: true });
+  for (const [peak, count] of [[256 * 1024 ** 2, 3], [2.5 * GIB, 1]]) {
+    await writeFile(recorded, JSON.stringify({ serverPeakBytes: peak }));
+    ({ served } = await run(0));
+    assert.equal(served.length, count, `at a recorded peak of ${peak} bytes`);
+  }
+  await rm(recorded);
 
   // A host that cannot tell its free memory gets one server: the run is today's, its restore waiting for the turn's end.
   freeBytes = null;

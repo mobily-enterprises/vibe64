@@ -39,8 +39,12 @@ execution host's responsibility. Source inspections never rewrite declarations
 or mix host observations into the project contract.
 
 One reader plans with an estimate itself: a browser-test run on a test target
-that serves several app servers sizes their count by the target's Running high
-estimate, plus 512 MiB for each worker's Chromium, against the memory free for
-its work (1.5 GiB a worker without an estimate). The target's listing carries
-that estimate as `runningHighBytes` (`vibe64OutputTargets.js`,
-`browserTestWorkers.js`). The host still admits the run itself.
+that serves several app servers sizes their count by one app server's measure,
+plus 512 MiB for each worker's Chromium, against the memory free for its work.
+The measure is the peak the last run's largest app server reached, as JSKIT's
+launcher records it in the target's folder (`browserTestServerPeakBytes()` of
+`@jskit-ai/jskit-catalog/browser-tests`), else the target's Running high
+estimate, else 1.5 GiB a worker. The target's listing carries that estimate as
+`runningHighBytes` and its folder as `workdir` (`vibe64OutputTargets.js`,
+`outputTargetPreviewTests.js`, `browserTestWorkers.js`). The host still admits
+the run itself.

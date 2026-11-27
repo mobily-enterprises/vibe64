@@ -168,9 +168,15 @@ async function listVibe64OutputTargets(context = {}, options = {}) {
     .map((target) => {
       const view = vibe64OutputTargetView(target);
       if (!outputTargetServesWorkers(target)) return view;
-      // A browser-test run sizes its app servers by the target's Running high estimate (browserTestWorkers.js).
+      // A browser-test run sizes its app servers by the peak the last run's recorded in the target's folder, else by
+      // its Running high estimate (outputTargetPreviewTests.js, browserTestWorkers.js).
       const runningHighBytes = estimates.find((estimate) => estimate.targetId === view.id)?.running?.highBytes;
-      return { ...view, servesWorkers: true, ...(runningHighBytes ? { runningHighBytes } : {}) };
+      return {
+        ...view,
+        servesWorkers: true,
+        workdir: String(target.workdir || ".").trim() || ".",
+        ...(runningHighBytes ? { runningHighBytes } : {})
+      };
     })
     .filter((target) => target.id && target.label);
 }

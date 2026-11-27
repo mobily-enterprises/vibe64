@@ -74,10 +74,12 @@ target serves one server, as before.
   app server, so a run gets half of `V64_TEST_CONCURRENCY` (else half of the CPUs
   the process may use). `vibe64-helper playwright --target <id> --workers <n>`
   asks for another count, never above the budget. A run never plans more than
-  80% of the memory free for its work, at the target's Running high estimate
-  plus 512 MiB for Chromium per worker (1.5 GiB per worker without an estimate),
-  and gets at least one and at most 64. A host that cannot tell its free memory
-  runs one.
+  80% of the memory free for its work, at one app server's measure plus 512 MiB
+  for Chromium per worker, and gets at least one and at most 64. The measure is
+  the peak the last run's largest app server reached, which JSKIT's launcher
+  records in the target's folder (`browserTestServerPeakBytes()`), else the
+  target's Running high estimate; without either a worker is 1.5 GiB. A host
+  that cannot tell its free memory runs one.
 - **What the suite gets.** `PLAYWRIGHT_WORKER_TARGETS` lists each worker's
   server and signed-in state as JSON, `[{ "baseURL", "storageState" }]`; worker
   0's are also `PLAYWRIGHT_BASE_URL` and `PLAYWRIGHT_STORAGE_STATE`. Each worker
