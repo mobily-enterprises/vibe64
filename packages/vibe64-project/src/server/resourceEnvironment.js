@@ -23,6 +23,9 @@ const RESOURCE_ENVIRONMENT_CONTRACT = "vibe64.resource-environment.v2";
 const PROJECT_RESOURCE_ENVIRONMENT_TOKEN = "vibe64.project.resource-environment";
 const DATABASE_TOOL_ENVIRONMENT_CONTRACT = "vibe64.database-tool-environment.v1";
 const DATABASE_RESOURCE_KINDS = new Set(["mysql", "postgresql", "sqlite"]);
+// The test databases a host provisions beside a database resource, each under the one name the test runners read (JSKIT's
+// `jskit test --databases` and browser-test servers, as every database Stack piece binds them).
+const DATABASE_TEST_BINDINGS = Object.freeze({ browserTestDatabase: "BROWSER_TEST_DB_NAME", testDatabase: "TEST_DB_NAME" });
 // Redis: what an application's servers share live updates and other short-lived
 // state through. A host may serve one.
 const REDIS_RESOURCE_KIND = "redis";
@@ -189,6 +192,23 @@ function validateBindingKind(resource = {}, bindings = {}) {
   ].filter(Boolean).join(" "), `vibe64_${resource.kind}_resource_bindings_invalid`);
 }
 
+/**
+ * A database resource's optionalBindings bind only its test databases, each to the name the test runners read: another
+ * name (TEST_DB_NAMES) or another semantic would give the provisioned database a name no test opens.
+ */
+function validateDatabaseTestBindings(resource = {}) {
+  if (!DATABASE_RESOURCE_KINDS.has(resource.kind)) return;
+  const refused = Object.entries(objectRecord(resource.optionalBindings) || {})
+    .filter(([semantic, name]) => !Object.hasOwn(DATABASE_TEST_BINDINGS, semantic) || DATABASE_TEST_BINDINGS[semantic] !== name);
+  if (refused.length === 0) return;
+  throw vibe64Error([
+    `The ${resource.kind} resource ${toText(resource.id) || "(unknown)"} binds`,
+    `${refused.map(([semantic, name]) => `\`${semantic}\` to \`${toText(name)}\``).join(", ")}.`,
+    "A database resource's optionalBindings binds only `testDatabase` to `TEST_DB_NAME` and `browserTestDatabase` to",
+    "`BROWSER_TEST_DB_NAME`, the names the test runners read."
+  ].join(" "), "vibe64_database_resource_test_bindings_invalid");
+}
+
 /** A declared resource's one preferred alternative, its bindings checked for its kind. */
 function preferredAlternative(resource = {}) {
   const alternatives = Array.isArray(resource.environmentAlternatives) ? resource.environmentAlternatives : [];
@@ -201,6 +221,7 @@ function preferredAlternative(resource = {}) {
   }
   validateVoiceResource(resource, preferred[0].bindings);
   validateBindingKind(resource, preferred[0].bindings);
+  validateDatabaseTestBindings(resource);
   return preferred[0];
 }
 
