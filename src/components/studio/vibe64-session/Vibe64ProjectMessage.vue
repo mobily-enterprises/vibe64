@@ -52,8 +52,10 @@ const session = useEndpointResource({
   queryOptions: { refetchOnMount: false, refetchOnWindowFocus: false },
   realtime: {
     events: [VIBE64_SESSION_SUMMARY_CHANGED_EVENT, "connect"],
+    // Its own session's rename (or a change that names no reason), never another session's; a reconnect names none.
     matches: ({ payload = {} } = {}) =>
-      (!payload.projectSlug || payload.projectSlug === project.value) && (!payload.reason || payload.reason === "session-renamed")
+      (!payload.projectSlug || payload.projectSlug === project.value) && (!payload.sessionId || payload.sessionId === sessionId.value) &&
+      (!payload.reason || payload.reason === "session-renamed")
   }
 });
 const sessionLabel = computed(() => {

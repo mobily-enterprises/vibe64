@@ -1058,7 +1058,9 @@ Push of that upstream stay with the original folder.
   non-advertised worktree checkpoints without changing the user's index. Each
   checkpoint retains the preceding checkpoint as recoverable history while its
   tree reflects the current saveable worktree, so a newly ignored local file is
-  left on disk without remaining in later checkpoint trees.
+  left on disk without remaining in later checkpoint trees. A created checkpoint
+  answers the paths it changed from the preceding checkpoint (`changedPaths`,
+  one `git diff-tree`), or null for a session's first checkpoint or more than 100.
 - `packages/vibe64-project/src/server/projectSourceMutationLock.js` serializes
   canonical source mutations across processes.
 - `scopedSessionWorkCommand()` assigns one semantic operation identity plus

@@ -87,6 +87,30 @@ test("shared turn checkpoints preserve outcome and expose recovery failures", as
   assert.match(changes.at(-1).error, /Disk reserve/u);
 });
 
+test("a turn checkpoint tells project pages which source paths it changed, when Git could say", async () => {
+  const session = { sessionId: "session-1", sourcePath: "/tmp/session-source", metadata: {} };
+  const runtime = {
+    getSession: async () => session,
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    store: { writeBackgroundTaskEvent: async (_id, _task, { patch }) => patch }
+  };
+  const published = [];
+  const input = { trackShutdownWork, runtime, session, sessionId: session.sessionId, project: { readCurrentProject: async () => ({}) },
+    outerTurnId: "claude:conversation:turn", publishSessionChanged: async (_id, change) => { published.push(change); } };
+  const checkpointed = (changedPaths) => checkpointSessionTurn({ ...input, createCheckpoint: async () => (
+    { created: true, commit: "a".repeat(40), changedPaths }) });
+  await checkpointed(["genesis/engineering.md"]);
+  assert.equal(published.at(-1).reason, "session-turn-checkpoint-updated");
+  assert.deepEqual(published.at(-1).payload, { turnChangedPaths: ["genesis/engineering.md"] });
+  await checkpointed([]);
+  assert.deepEqual(published.at(-1).payload, { turnChangedPaths: [] });
+  await checkpointed(null);
+  assert.equal(published.at(-1).payload, undefined, "unknown paths name none");
+  await checkpointSessionTurn({ ...input, createCheckpoint: async () => { throw new Error("Disk reserve is too low"); } });
+  assert.equal(published.at(-1).reason, "session-turn-checkpoint-failed");
+  assert.equal(published.at(-1).payload, undefined);
+});
+
 test("a turn checkpoint also checkpoints each connected copy in its own repository", async () => {
   const source = "/tmp/vibe64-turn/sessions/active/session-1/source";
   const copy = (name) => ({ repository: `example/${name}`, branch: "main", path: `/tmp/vibe64-turn/sessions/active/session-1/connected/${name}`,

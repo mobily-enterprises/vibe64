@@ -104,6 +104,36 @@ for (const [entry, create] of CHECKPOINT_ENTRY_POINTS) {
 }
 
 for (const [entry, create] of CHECKPOINT_ENTRY_POINTS) {
+  test(`a turn checkpoint names the source paths changed since the previous one, or says it cannot (${entry})`, async () => {
+    const root = await createRepository();
+    try {
+      let minute = 0;
+      const turn = () => {
+        minute += 1;
+        return create({ outerTurnId: `turn-${minute}`, outcome: "completed", sessionId: "session-1",
+          timestamp: `2026-11-27T09:${String(minute).padStart(2, "0")}:00.000Z`, worktreePath: root });
+      };
+      await writeFile(path.join(root, "tracked.txt"), "turn one\n");
+      // The first has HEAD as its parent, which misses what a turn committed.
+      assert.equal((await turn()).changedPaths, null);
+      await mkdir(path.join(root, "genesis"));
+      await writeFile(path.join(root, "genesis", "engineering.md"), "# Engineering\n");
+      await writeFile(path.join(root, "tracked.txt"), "turn two\n");
+      assert.deepEqual((await turn()).changedPaths, ["genesis/engineering.md", "tracked.txt"]);
+      // What the turn committed is still a change since the previous checkpoint.
+      await writeFile(path.join(root, "tracked.txt"), "turn three\n");
+      await git(root, ["commit", "-qam", "the agent's commit"]);
+      assert.deepEqual((await turn()).changedPaths, ["tracked.txt"]);
+      assert.deepEqual((await turn()).changedPaths, []);
+      for (let index = 0; index <= 100; index += 1) await writeFile(path.join(root, `generated-${index}.txt`), "x\n");
+      assert.equal((await turn()).changedPaths, null, "more than 100 changed paths are unknown");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+}
+
+for (const [entry, create] of CHECKPOINT_ENTRY_POINTS) {
   test(`terminal outcome changes reuse the original checkpoint and retain its recorded outcome (${entry})`, async () => {
     const root = await createRepository();
     try {

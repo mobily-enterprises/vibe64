@@ -343,9 +343,6 @@ import ConnectedProjectsSettings from "./ConnectedProjectsSettings.vue";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
-import {
-  sessionListRealtimeShouldRefresh
-} from "@/composables/useVibe64SessionData.js";
 import { useVibe64CollaborationSettings } from "@/composables/useVibe64CollaborationSettings.js";
 import { useVibe64DevelopmentDatabaseSettings } from "@/composables/useVibe64DevelopmentDatabaseSettings.js";
 import { useVibe64EngineeringSettings } from "@/composables/useVibe64EngineeringSettings.js";
@@ -362,8 +359,13 @@ import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
-  VIBE64_SESSION_SUMMARY_CHANGED_EVENT
+  VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
+  VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT
 } from "@/lib/vibe64SessionRequestConfig.js";
+import {
+  projectSettingsFileChangeReads,
+  projectSettingsSummaryReads
+} from "@/lib/vibe64ProjectSettingsRealtime.js";
 import { reloadPage } from "@/lib/browser.js";
 
 const projectSlug = useVibe64ProjectSlug();
@@ -507,13 +509,29 @@ watch(() => promptHints.value.enabled, (value) => {
   immediate: true
 });
 
+// Each read reloads only when what it shows can have changed (vibe64ProjectSettingsRealtime.js): a change to the files
+// it reads in its source session, that session's update or preparation, and a session opening or closing; never an
+// agent turn that left those files alone. A settings save from any page refreshes both through their project-change
+// subscriptions.
+const settingsScope = computed(() => ({
+  projectSlug: projectSlug.value,
+  sessionId: routeSessionId.value || String(resource.data.value?.collaboration?.source?.sessionId || ""),
+  showsConnections: (resource.data.value?.connectedProjects?.repositories || []).length > 0
+}));
+function reloadReads({ engineering, settings }) {
+  if (settings) void resource.reload();
+  if (engineering) void engineeringResource.reload();
+}
+const anyRead = ({ engineering, settings }) => engineering || settings;
 useRealtimeEvent({
   event: VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
-  matches: (event) => sessionListRealtimeShouldRefresh(event, projectSlug.value),
-  onEvent() {
-    void resource.reload();
-    void engineeringResource.reload();
-  }
+  matches: (event) => anyRead(projectSettingsSummaryReads(event, settingsScope.value)),
+  onEvent: (event) => reloadReads(projectSettingsSummaryReads(event, settingsScope.value))
+});
+useRealtimeEvent({
+  event: VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
+  matches: (event) => anyRead(projectSettingsFileChangeReads(event, settingsScope.value)),
+  onEvent: (event) => reloadReads(projectSettingsFileChangeReads(event, settingsScope.value))
 });
 
 async function refresh() {

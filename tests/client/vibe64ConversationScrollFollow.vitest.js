@@ -14,11 +14,15 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const messageSessionReads = VueRuntime.ref({});
+const messageSessionRealtime = [];
 vi.mock("@jskit-ai/shell-web/client/navigation/usePaths", () => ({
   usePaths: () => ({ api: (suffix, { params }) => `/api/app/${params.slug}${suffix}` })
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
-  useEndpointResource: ({ path }) => ({ data: VueRuntime.computed(() => messageSessionReads.value[path.value]) })
+  useEndpointResource: ({ path, realtime }) => {
+    messageSessionRealtime.push(realtime);
+    return { data: VueRuntime.computed(() => messageSessionReads.value[path.value]) };
+  }
 }));
 
 vi.mock("vuetify/components/VAlert", () => ({
@@ -649,6 +653,23 @@ describe("Vibe64 conversation scroll following", () => {
     await nextTick();
     expect(nodeText(mounted.container)).toContain("· destination");
     expect(nodeText(mounted.container)).not.toContain("Learning (destination)");
+    mounted.app.unmount();
+  });
+
+  it("reads a project message's session again only for that session's rename or a reconnect", async () => {
+    messageSessionRealtime.length = 0;
+    const details = { sourceProject: "vibe64", sourceSession: "source", projectSlug: "online", sessionId: "destination", body: "Done.", direction: "received" };
+    const mounted = mountConversation({ turns: [{ turnId: "incoming", user: { role: "user", text: details.body }, metadata: { projectMessage: details } }] });
+    await nextTick();
+    const { matches } = messageSessionRealtime.at(-1);
+    const changed = (payload) => matches({ payload });
+    expect(changed({ projectSlug: "vibe64", sessionId: "source", reason: "session-renamed" })).toBe(true);
+    expect(changed({})).toBe(true);
+    // Every other session of the project changes on each of its turns; none of that names this card's session.
+    expect(changed({ projectSlug: "vibe64", sessionId: "other", reason: "session-renamed" })).toBe(false);
+    expect(changed({ projectSlug: "vibe64", sessionId: "other" })).toBe(false);
+    expect(changed({ projectSlug: "vibe64", sessionId: "source", reason: "codex-app-server-turn-idle" })).toBe(false);
+    expect(changed({ projectSlug: "online", sessionId: "source", reason: "session-renamed" })).toBe(false);
     mounted.app.unmount();
   });
 

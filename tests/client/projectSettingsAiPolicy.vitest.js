@@ -27,6 +27,10 @@ import {
   projectSettingsQueryKey
 } from "../../src/lib/studioGateApi.js";
 import { useVibe64SessionPanel } from "../../src/composables/useVibe64SessionPanel.js";
+import {
+  VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
+  VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT
+} from "../../src/lib/vibe64SessionRequestConfig.js";
 
 const projectSettingsMocks = vi.hoisted(() => ({
   commandOptions: [],
@@ -40,8 +44,7 @@ const projectSettingsMocks = vi.hoisted(() => ({
   realtimeOptions: [],
   resource: null,
   route: { query: {} },
-  router: { replace: vi.fn() },
-  sessionEventMatches: vi.fn(() => true)
+  router: { replace: vi.fn() }
 }));
 
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", async (importOriginal) => {
@@ -103,8 +106,9 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
   }
 }));
 
-vi.mock("@/composables/useVibe64SessionData.js", () => ({
-  sessionListRealtimeShouldRefresh: projectSettingsMocks.sessionEventMatches,
+// The module's own helpers stay real: only the session list the panel's parent reads is a fixture.
+vi.mock("@/composables/useVibe64SessionData.js", async (importOriginal) => ({
+  ...await importOriginal(),
   useVibe64SessionData: () => ({
     createSessionRunning: ref(false),
     isSelectedSessionArchived: ref(false),
@@ -482,10 +486,14 @@ function mountPanel({ liveQueries = false, liveCommands = false } = {}) {
     writes,
     get sessionPanel() { return sessionPanel; },
     showSettings,
-    async projectChanged() {
+    async projectChanged(payload = {}) {
       for (const handler of listeners.get(VIBE64_PROJECT_CHANGED_EVENT) || []) {
-        handler({ projectSlug: projectSettingsMocks.projectSlug.value });
+        handler({ projectSlug: projectSettingsMocks.projectSlug.value, ...payload });
       }
+      await nextTick();
+    },
+    async emit(event, payload) {
+      for (const handler of listeners.get(event) || []) handler(payload);
       await nextTick();
     },
     listenerCount: () => [...listeners.values()].reduce((count, handlers) => count + handlers.size, 0),
@@ -562,7 +570,6 @@ describe("ProjectSettingsPanel AI behaviour", () => {
     projectSettingsMocks.resource = createResource();
     projectSettingsMocks.route = reactive({ query: { sessionId: "session-a" } });
     projectSettingsMocks.router.replace.mockReset();
-    projectSettingsMocks.sessionEventMatches.mockClear();
   });
 
   afterEach(() => {
@@ -631,6 +638,108 @@ describe("ProjectSettingsPanel AI behaviour", () => {
       await fixture.resolveReads(from);
       expect(fixture.sessionPanel.promptHintPolicy.value).toEqual({ enabled: true, ready: true });
       expect(findField(fixture.container, "Suggest useful next prompts").props.modelValue).toBe(true);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  // One agent turn's session summaries as the page's project receives them: its status, its prompt suggestions, its
+  // checkpoint of files the page does not show, and its repository check.
+  const agentTurn = (turn) => [
+    { reason: "codex-app-server-turn-active", agentSession: { turn: { active: true } },
+      clientRefresh: { includeDetail: false, includeList: false } },
+    { reason: "shared-prompt-hints-updated" },
+    { reason: "codex-app-server-turn-idle", agentSession: { turn: { active: false } },
+      clientRefresh: { includeDetail: false, includeList: false } },
+    { reason: "session-turn-checkpoint-updated", turnChangedPaths: ["src/app.js", `notes/turn-${turn}.md`] },
+    { reason: "session-repository-checked" }
+  ].map((change) => ({ projectSlug: "project-a", sessionId: "session-a", revision: turn + 1, status: "active", ...change }));
+  const checkpoint = (turnChangedPaths, sessionId = "session-a") => ({ projectSlug: "project-a", sessionId,
+    reason: "session-turn-checkpoint-updated", ...(turnChangedPaths ? { turnChangedPaths } : {}) });
+  const readsSince = (fixture, from) => fixture.requests.slice(from).map(({ sessionId, url }) => [url, sessionId]);
+
+  it.each([1, 20])("reads nothing for %i agent turns, and once for a turn that changes a file the page shows", async (turns) => {
+    const fixture = mountPanel({ liveQueries: true });
+    try {
+      await fixture.resolveReads();
+      const from = fixture.requests.length;
+      let summaries = 0;
+      for (let turn = 0; turn < turns; turn += 1) {
+        for (const change of agentTurn(turn)) {
+          await fixture.emit(VIBE64_SESSION_SUMMARY_CHANGED_EVENT, change);
+          summaries += 1;
+        }
+      }
+      expect(summaries).toBe(turns * 5);
+      expect(readsSince(fixture, from)).toEqual([]);
+
+      await fixture.emit(VIBE64_SESSION_SUMMARY_CHANGED_EVENT, checkpoint(["src/app.js", "genesis/engineering.md"]));
+      expect(readsSince(fixture, from)).toEqual([[ENGINEERING_ENDPOINT, "session-a"]]);
+      await fixture.resolveReads(from);
+      const next = fixture.requests.length;
+      await fixture.emit(VIBE64_SESSION_SUMMARY_CHANGED_EVENT, checkpoint(["vibe64.connections.json"]));
+      expect(readsSince(fixture, next)).toEqual([[PROJECT_SETTINGS_ENDPOINT, "session-a"]]);
+      await fixture.resolveReads(next);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it("reads again for its source's settings files and this project's settings changes, never another session's or project's", async () => {
+    const fixture = mountPanel({ liveQueries: true });
+    try {
+      await fixture.resolveReads();
+      const from = fixture.requests.length;
+      const edited = (path, sessionId = "session-a", projectSlug = "project-a") => fixture.emit(
+        VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
+        { hash: "h", originId: "tab-2", path, projectSlug, sessionId, updatedAt: "2026-11-27T00:00:00.000Z" }
+      );
+      await edited("src/app.js");
+      await edited("genesis/engineering.md", "session-b");
+      await edited("genesis/engineering.md", "session-a", "project-b");
+      await fixture.emit(VIBE64_SESSION_SUMMARY_CHANGED_EVENT, checkpoint(["genesis/engineering.md"], "session-b"));
+      await fixture.emit(VIBE64_SESSION_SUMMARY_CHANGED_EVENT, { ...checkpoint(["genesis/engineering.md"]), projectSlug: "project-b" });
+      // Project changes that are not its settings: a runtime closing, an approval, a GitHub issue, another project's save.
+      for (const reason of ["runtime-closed", "main-chat-approvals", "github-refreshed"]) await fixture.projectChanged({ reason });
+      await fixture.projectChanged({ projectSlug: "project-b" });
+      expect(readsSince(fixture, from)).toEqual([]);
+
+      await edited("genesis/engineering.md");
+      expect(readsSince(fixture, from)).toEqual([[ENGINEERING_ENDPOINT, "session-a"]]);
+      await fixture.resolveReads(from);
+      let next = fixture.requests.length;
+      await edited("genesis/collaboration.md");
+      expect(readsSince(fixture, next)).toEqual([[PROJECT_SETTINGS_ENDPOINT, "session-a"]]);
+      await fixture.resolveReads(next);
+
+      // A turn whose changed files Git could not name may have changed any of them.
+      next = fixture.requests.length;
+      await fixture.emit(VIBE64_SESSION_SUMMARY_CHANGED_EVENT, checkpoint(null));
+      expect(readsSince(fixture, next)).toEqual([[PROJECT_SETTINGS_ENDPOINT, "session-a"], [ENGINEERING_ENDPOINT, "session-a"]]);
+      await fixture.resolveReads(next);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it("reads its settings again after a turn that changed any file while it shows connections, and not after one that changed none", async () => {
+    const fixture = mountPanel({ liveQueries: true });
+    try {
+      for (const request of fixture.requests) {
+        if (request.url === PROJECT_SETTINGS_ENDPOINT && request.sessionId === "session-a") {
+          request.data.connectedProjects = { available: true, canEdit: true, exists: true, revision: "r1",
+            repositories: [{ name: "Lib", repository: "https://github.com/example/lib", relationship: "dependency" }],
+            source: { rootKind: "session-source", sessionId: "session-a" }, unused: [] };
+        }
+      }
+      await fixture.resolveReads();
+      const from = fixture.requests.length;
+      await fixture.emit(VIBE64_SESSION_SUMMARY_CHANGED_EVENT, checkpoint([]));
+      expect(readsSince(fixture, from)).toEqual([]);
+      // Whether a connection is used comes from the session's manifests, wherever they are.
+      await fixture.emit(VIBE64_SESSION_SUMMARY_CHANGED_EVENT, checkpoint(["packages/web/package.json"]));
+      expect(readsSince(fixture, from)).toEqual([[PROJECT_SETTINGS_ENDPOINT, "session-a"]]);
+      await fixture.resolveReads(from);
     } finally {
       fixture.close();
     }
@@ -1341,7 +1450,10 @@ describe("ProjectSettingsPanel AI behaviour", () => {
         scope: "project"
       }
     };
-    projectSettingsMocks.realtimeOptions[0].onEvent();
+    // Another session opened: the shared database choice depends on how many are open.
+    projectSettingsMocks.realtimeOptions[0].onEvent({
+      payload: { projectSlug: "project-a", reason: "session-created", sessionId: "session-b" }
+    });
     await nextTick();
 
     expect(findRadioGroup(container).props.modelValue).toBe("session");
@@ -2037,13 +2149,12 @@ describe("ProjectSettingsPanel AI behaviour", () => {
     });
     const sessionRealtime = projectSettingsMocks.realtimeOptions[0];
     expect(sessionRealtime.event).toBe("vibe64.session.summary.changed");
-    const changed = { payload: { projectSlug: projectSettingsMocks.projectSlug.value, sessionId: "session-1" } };
+    const changed = { payload: { projectSlug: projectSettingsMocks.projectSlug.value, reason: "session-created", sessionId: "session-1" } };
     expect(sessionRealtime.matches(changed)).toBe(true);
-    expect(projectSettingsMocks.sessionEventMatches)
-      .toHaveBeenCalledWith(changed, projectSettingsMocks.projectSlug.value);
+    expect(sessionRealtime.matches({ payload: { ...changed.payload, reason: "codex-app-server-turn-idle" } })).toBe(false);
 
     await findButton(container, "Refresh").props.onClick();
-    sessionRealtime.onEvent();
+    sessionRealtime.onEvent(changed);
     await nextTick();
     expect(projectSettingsMocks.resource.reload).toHaveBeenCalledTimes(2);
     expect(projectSettingsMocks.engineeringResource.reload).toHaveBeenCalledTimes(2);

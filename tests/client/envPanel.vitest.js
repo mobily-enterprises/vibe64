@@ -40,7 +40,7 @@ describe("Env panel", () => {
     expect(settingsSource).toContain("path: DEVELOPMENT_DATABASE_ENDPOINT");
     expect(settingsSource).toContain("scope: context.scope");
     expect(settingsSource).toContain("event: VIBE64_SESSION_SUMMARY_CHANGED_EVENT");
-    expect(settingsSource).toContain("matches: (event) => sessionListRealtimeShouldRefresh(event, projectSlug.value)");
+    expect(settingsSource).toContain("matches: (event) => anyRead(projectSettingsSummaryReads(event, settingsScope.value))");
     expect(settingsSource).toContain("void resource.reload()");
     expect(settingsSource).not.toContain("NO_WORKTREE_DB");
   });

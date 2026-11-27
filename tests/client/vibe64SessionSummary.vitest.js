@@ -3,6 +3,7 @@ import { createSessionChangedPublisher } from "../../packages/vibe64-core/src/se
 import { sessionListRealtimeShouldRefresh } from "../../src/composables/useVibe64SessionData.js";
 import { agentTurnRealtimeOverlayFromPayload } from "../../src/lib/vibe64AgentTurnRealtimeOverlay.js";
 import { mountedSessionRealtimeShouldRefresh } from "../../src/lib/vibe64MountedSessionState.js";
+import { projectSettingsSummaryReads } from "../../src/lib/vibe64ProjectSettingsRealtime.js";
 import {
   REPOSITORY_UPDATE_CHECK_FAILED_REASON,
   repositoryStatusRealtimeShouldRefresh
@@ -38,6 +39,25 @@ describe("session summaries", () => {
     const finished = await summaryOf("s1", { reason: "claude-stream-turn-idle", session: session("s1", { revision: 10 }),
       payload: { agentRun: { active: false, runId: "run-1" }, agentSession: { turn: { active: false, id: "turn-1" } } } });
     expect(agentTurnRealtimeOverlayFromPayload(finished, "s1")).toMatchObject({ active: false, revision: 10 });
+  });
+
+  it("carry the source paths a turn's checkpoint changed, so Project settings reads again only for a file it shows", async () => {
+    const checkpoint = await summaryOf("s1", { reason: "session-turn-checkpoint-updated", session: session("s1"),
+      payload: { turnChangedPaths: ["src/app.js", "genesis/engineering.md"] } });
+    expect(checkpoint.turnChangedPaths).toEqual(["src/app.js", "genesis/engineering.md"]);
+    const scope = { projectSlug: "alpha", sessionId: "s1", showsConnections: false };
+    expect(projectSettingsSummaryReads({ payload: checkpoint }, scope)).toEqual({ engineering: true, settings: false });
+    const code = await summaryOf("s1", { reason: "session-turn-checkpoint-updated", session: session("s1"),
+      payload: { turnChangedPaths: ["src/app.js"] } });
+    expect(projectSettingsSummaryReads({ payload: code }, scope)).toEqual({ engineering: false, settings: false });
+    // A page that shows connections: whether each is used comes from the manifests, wherever they are.
+    expect(projectSettingsSummaryReads({ payload: code }, { ...scope, showsConnections: true }))
+      .toEqual({ engineering: false, settings: true });
+    for (const reason of ["codex-app-server-turn-active", "codex-app-server-turn-idle", "claude-stream-turn-idle",
+      "shared-prompt-hints-updated", "session-repository-checked", "session-renamed"]) {
+      const summary = await summaryOf("s1", { reason, session: session("s1") });
+      expect(projectSettingsSummaryReads({ payload: summary }, scope), reason).toEqual({ engineering: false, settings: false });
+    }
   });
 
   it("carry archive, repository and approval notices", async () => {

@@ -1216,6 +1216,13 @@ and an emitter's explicit flags win. The list, detail and AI-access readers only
 read those flags, treating an unmentioned read as invalidated, and accept events
 through the one project scope check, `vibe64SessionEventMatchesScope`, so lists
 ignore events identified as belonging to another project.
+A turn's checkpoint change (`session-turn-checkpoint-updated`) carries
+`turnChangedPaths`, the source paths the turn changed since the session's previous
+checkpoint, which the project summary keeps; it names none when Git cannot say
+(a session's first checkpoint, whose parent is HEAD and so misses what the turn
+committed, or more than 100 paths). A project page that shows what source files
+hold reads again only when that list names one of its files, or names none
+([vibe64ProjectSettingsRealtime.js](../../../src/lib/vibe64ProjectSettingsRealtime.js)).
 The same publisher decides which pages a change reaches. A browser page
 watches, over its realtime connection, each project it has open and each
 session it shows, visible or in a background tab (`useVibe64ProjectWatch`:
