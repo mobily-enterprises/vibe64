@@ -90,7 +90,10 @@ async function checkpointTurn({
   });
   await publishSessionChanged(sessionId, {
     reason: failure ? "session-turn-checkpoint-failed" : "session-turn-checkpoint-updated",
-    session: await runtime.getSessionWithoutSource(sessionId)
+    session: await runtime.getSessionWithoutSource(sessionId),
+    // What the turn changed in the session's source, when Git could say, so a project page reloads only when the turn
+    // changed a file it shows.
+    ...(Array.isArray(checkpoint?.changedPaths) && !failure ? { payload: { turnChangedPaths: checkpoint.changedPaths } } : {})
   });
   return { ok: !failure, processed: true, task, ...(failure ? { error: failure } : { checkpoint }) };
 }

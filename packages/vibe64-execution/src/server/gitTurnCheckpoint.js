@@ -21,6 +21,8 @@ const GIT_CHECKPOINT_COMMAND_PATH = fileURLToPath(new URL("./gitTurnCheckpointCo
 // A temporary index directory untouched this long belongs to a run that was
 // killed; a live tree write changes it within seconds and ends within minutes.
 const STALE_TEMPORARY_TREE_MS = 15 * 60_000;
+// More changed paths than this are reported as unknown: the list travels in every project page's session summary.
+const CHECKPOINT_CHANGED_PATHS_LIMIT = 100;
 const DEFAULT_CHECKPOINT_TEMPORARY_DISK_BUDGET_BYTES = 512 * 1024 * 1024;
 const DEFAULT_CHECKPOINT_DISK_RESERVE_BYTES = 1024 * 1024 * 1024;
 const CHECKPOINT_OUTCOMES = new Set([
@@ -238,6 +240,10 @@ async function createGitTurnCheckpointUnlocked({
     }
     return {
       baseCommit: parentCommit,
+      // A session's first checkpoint has HEAD as its parent, which misses what the turn committed: unknown.
+      changedPaths: latestCommit
+        ? await changedPathsBetween(runCommand, identity.worktreePath, parentCommit, commit, project)
+        : null,
       commit,
       created: true,
       latestRef: refs.latestRef,
@@ -642,6 +648,18 @@ async function zeroObjectId(runCommand, worktreePath, options = {}) {
     "--show-object-format"
   ], { project });
   return "0".repeat(format === "sha256" ? 64 : 40);
+}
+
+/**
+ * The source paths one checkpoint changed from the one before it, for pages that show what source files hold; null
+ * (unknown) when Git cannot say or there are more than CHECKPOINT_CHANGED_PATHS_LIMIT.
+ * @returns {Promise<string[] | null>}
+ */
+async function changedPathsBetween(runCommand, worktreePath, fromCommit, toCommit, project) {
+  const result = await gitCommand(runCommand, worktreePath, ["diff-tree", "-r", "-z", "--name-only", fromCommit, toCommit], { project });
+  if (result.ok !== true) return null;
+  const paths = String(result.stdout || "").split("\0").filter(Boolean);
+  return paths.length <= CHECKPOINT_CHANGED_PATHS_LIMIT ? paths : null;
 }
 
 async function optionalGitOutput(runCommand, worktreePath, args, options = {}) {

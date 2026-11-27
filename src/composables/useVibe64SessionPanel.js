@@ -20,6 +20,7 @@ import {
   sessionRecordHasActiveAgentWork
 } from "@/lib/vibe64MountedSessionState.js";
 import { sessionRepositoryWorkState } from "@/lib/vibe64SessionRepositoryWorkState.js";
+import { projectSettingsProjectChangeShouldReload } from "@/lib/vibe64ProjectSettingsRealtime.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
@@ -105,6 +106,8 @@ function useVibe64SessionPanel(props, emit) {
     queryKey: projectSettingsKey,
     realtime: {
       event: VIBE64_PROJECT_CHANGED_EVENT,
+      // A change to this project's settings, never another project's or its runtime opening or closing.
+      matches: (event) => projectSettingsProjectChangeShouldReload(event, projectSlug.value),
       // Refresh both the selected-source reader and source-specific settings pages.
       queryKey: computed(() => projectSettingsKey.value.slice(0, -1))
     },

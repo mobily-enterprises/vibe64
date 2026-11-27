@@ -146,14 +146,16 @@ function sessionRealtimePayload(sessionId, { session: sessionValue, originId, pr
 
 // What a project page needs about a change in one of its sessions: the
 // session's identity and state, the reads it invalidates, whether its agent
-// turn runs, and the small notices project pages show. Nothing a session's
-// viewers render, such as streamed text or turn details, is summarized.
+// turn runs, the source paths a turn's checkpoint changed, and the small
+// notices project pages show. Nothing a session's viewers render, such as
+// streamed text or turn details, is summarized.
 const SUMMARY_NOTICE_FIELDS = Object.freeze([
   "approvalId",
   "approvalSender",
   "canonicalCommit",
   "repositoryUpdateCheck",
-  "repositoryUpdateCheckError"
+  "repositoryUpdateCheckError",
+  "turnChangedPaths"
 ]);
 
 function sessionSummaryPayload(full) {

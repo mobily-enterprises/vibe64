@@ -18,6 +18,7 @@ conveniences outside agent prompts.
 - `src/components/studio/ProjectSettingsPanel.vue`
 - `src/composables/useVibe64CollaborationSettings.js`
 - `src/composables/useVibe64SessionPanel.js`
+- `src/lib/vibe64ProjectSettingsRealtime.js`
 - `src/lib/studioGateApi.js`
 - `src/lib/studioUrls.js`
 
@@ -74,9 +75,21 @@ not receive source paths or environment credentials from this settings view.
 ## Implementation map
 
 - The persistent session panel owns project-settings refresh events for its
-  project. Active selected-source and explicit-session readers refresh through
-  that one owner; inactive source entries become stale without starting reads.
-  Engineering settings keep their separate query and refresh subscription.
+  project: a change to its settings (a save, which names no reason, or the
+  repository workflow), never another project's, a runtime opening or closing,
+  an approval or a GitHub change. Active selected-source and explicit-session
+  readers refresh through that one owner; inactive source entries become stale
+  without starting reads. Engineering settings keep their separate query and
+  refresh subscription, narrowed the same way.
+- Project settings reads its source session's files again only when a change can
+  have changed them (`src/lib/vibe64ProjectSettingsRealtime.js`): a turn
+  checkpoint or source editor change naming `genesis/engineering.md` (the
+  engineering read) or `genesis/collaboration.md`, `genesis/stack.md` or
+  `vibe64.connections.json` (the settings read); any changed file while it shows
+  connections, whose use comes from the session's manifests; a checkpoint that
+  names no paths; the source session's update, starter or preparation; and a
+  session of the project opening, renewing or archiving, which changes the
+  shared database choice. A turn's status never reloads it.
 - `collaborationSettingsState()` reads the selected source through Genesis and
   returns Genesis's current choice catalog.
 - `saveCollaborationSettingsState()` serializes source mutation with other

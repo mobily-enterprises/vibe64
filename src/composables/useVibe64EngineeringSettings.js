@@ -9,6 +9,7 @@ import {
   VIBE64_PROJECT_CHANGED_EVENT,
   engineeringSettingsQueryKey
 } from "@/lib/studioGateApi.js";
+import { projectSettingsProjectChangeShouldReload } from "@/lib/vibe64ProjectSettingsRealtime.js";
 import { VIBE64_SURFACE_ID } from "@/lib/vibe64RequestConfig.js";
 
 /**
@@ -39,7 +40,7 @@ function useVibe64EngineeringSettings({ projectSlug, route, router, routeSession
     )),
     realtime: {
       event: VIBE64_PROJECT_CHANGED_EVENT,
-      matches: () => !engineeringSaveCommand.isRunning
+      matches: (event) => projectSettingsProjectChangeShouldReload(event, projectSlug.value) && !engineeringSaveCommand.isRunning
     },
     refreshOnPull: true,
     requestRecoveryLabel: "Engineering approach"
