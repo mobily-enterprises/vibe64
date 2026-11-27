@@ -63,6 +63,9 @@ async function runGit(args = [], {
   return toText(result.stdout || result.output);
 }
 
+// The canonical repository's scripts run in a plain shell, never a login shell: a host's login profile may give Git
+// command-scope config of its own (mobilynet's sets GIT_CONFIG_COUNT), replacing the safe directories the command's
+// Git env names.
 async function initializeCanonicalRepository(repositoryPath, branch, {
   allowedRoots,
   repositoryRoot,
@@ -71,7 +74,7 @@ async function initializeCanonicalRepository(repositoryPath, branch, {
   const result = await runCommand({
     actor: "daemon",
     allowedRoots,
-    args: ["-lc", canonicalRepositoryInitializeScript({
+    args: ["-c", canonicalRepositoryInitializeScript({
       defaultBranch: branch,
       repositoryPath
     })],
@@ -97,7 +100,7 @@ async function installCanonicalCommit(repositoryPath, sourceRoot, branch, {
   const result = await runCommand({
     actor: "daemon",
     allowedRoots,
-    args: ["-lc", canonicalRepositoryInstallRefScript({
+    args: ["-c", canonicalRepositoryInstallRefScript({
       repositoryPath,
       sourceRef: `refs/heads/${branch}`,
       sourceRepository: sourceRoot,
