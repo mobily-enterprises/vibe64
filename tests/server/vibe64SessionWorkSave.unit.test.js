@@ -39,6 +39,7 @@ import {
 import { vibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 import { endChildInput } from "./childInputTestHelpers.js";
+import { withSessionWorkOperationsInProcess } from "./sessionWorkOperationsInProcess.js";
 
 const { canonicalRepositoryBackupPath } = repositoryStorageTestables;
 
@@ -66,16 +67,21 @@ function localGithub(request = {}) {
   return { ...request, env: { ...(request.env || {}), GIT_ALLOW_PROTOCOL: "https:file" } };
 }
 
-async function commandRunner(request = {}) {
+const TEST_GIT_IDENTITY = {
+  GIT_AUTHOR_EMAIL: "vibe64@example.test",
+  GIT_AUTHOR_NAME: "Vibe64 Test",
+  GIT_COMMITTER_EMAIL: "vibe64@example.test",
+  GIT_COMMITTER_NAME: "Vibe64 Test"
+};
+
+// Starts every command as a process, the session work child included: the managed Save and Update tests use it.
+async function childCommandRunner(request = {}) {
   return new Promise((resolve) => {
     const child = spawn(request.command, request.args || [], {
       cwd: request.cwd,
       env: {
         ...process.env,
-        GIT_AUTHOR_EMAIL: "vibe64@example.test",
-        GIT_AUTHOR_NAME: "Vibe64 Test",
-        GIT_COMMITTER_EMAIL: "vibe64@example.test",
-        GIT_COMMITTER_NAME: "Vibe64 Test",
+        ...TEST_GIT_IDENTITY,
         ...(request.env || {})
       }
     });
@@ -103,6 +109,9 @@ async function commandRunner(request = {}) {
     endChildInput(child, request.input ?? undefined);
   });
 }
+
+// The other tests run the session work child's operations in this process (sessionWorkOperationsInProcess.js).
+const commandRunner = withSessionWorkOperationsInProcess(childCommandRunner, TEST_GIT_IDENTITY);
 
 function saveSessionWork(input = {}) {
   return saveSessionWorkImplementation({
@@ -201,7 +210,7 @@ test("Save uses two foreground managed jobs and defers disposable cache maintena
       project,
       runCommand: async (request) => {
         requests.push(request);
-        return commandRunner(request);
+        return childCommandRunner(request);
       },
       session
     });
@@ -222,7 +231,7 @@ test("Save uses two foreground managed jobs and defers disposable cache maintena
       project,
       runCommand: async (request) => {
         requests.push(request);
-        return commandRunner(request);
+        return childCommandRunner(request);
       },
       session
     });
@@ -247,7 +256,7 @@ test("Save uses two foreground managed jobs and defers disposable cache maintena
     const saveRefs = () => git(session.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/vibe64/save"]);
     // The prepared ref is recovery evidence until the caller records the result.
     assert.match(await saveRefs(), /\/prepared$/u);
-    await retireSessionWorkSave({ operationId: "save-managed-stages", project, runCommand: commandRunner, session });
+    await retireSessionWorkSave({ operationId: "save-managed-stages", project, runCommand: childCommandRunner, session });
     assert.equal(await saveRefs(), "");
   } finally {
     await rm(root, { force: true, recursive: true });
@@ -268,7 +277,7 @@ test("managed Save keeps a Stack whose newer section proposal is pending", async
     const incomplete = complete.replace(/\n## Connected development\n[\s\S]*?(?=\n## |$)/u, "");
     assert.notEqual(incomplete, complete);
     await writeFile(stackPath, incomplete);
-    const input = { operationId: "pending-stack-proposal", project, session, runCommand: commandRunner,
+    const input = { operationId: "pending-stack-proposal", project, session, runCommand: childCommandRunner,
       derivedArtifactPaths: [".genesis/machine-city.json", ".genesis/program-city.json"] };
     // Genesis reports an unadopted component section as a pending proposal, not
     // an incomplete Stack, so Save neither blocks nor adopts it.
@@ -298,7 +307,7 @@ test("managed Save publishes its named checkpoint and preserves work added durin
     const saveMessageInput = await prepareSessionWorkSaveMessage({
       operationId: "save-naming-race",
       project,
-      runCommand: commandRunner,
+      runCommand: childCommandRunner,
       session
     });
     await writeFile(path.join(session.sourcePath, "shared.txt"), "later work\n", "utf8");
@@ -308,7 +317,7 @@ test("managed Save publishes its named checkpoint and preserves work added durin
       message: "Save the named work",
       operationId: "save-naming-race",
       project,
-      runCommand: commandRunner,
+      runCommand: childCommandRunner,
       session
     });
     assert.equal(result.status, "saved");
@@ -861,7 +870,7 @@ test("managed Update admits four stages and persists recovery before changing so
         const operation = JSON.parse(request.input).operation;
         requests.push(operation);
         if (operation === "update-apply") assert.equal(invalidated, true);
-        return commandRunner(request);
+        return childCommandRunner(request);
       }
     });
     assert.equal(result.status, "updated");
@@ -893,7 +902,7 @@ test("managed Update leaves source untouched when merge conflicts cross the help
       beforeSourceChange() { assert.fail("Conflicts must not invalidate preparation."); },
       runCommand(request) {
         requests.push(JSON.parse(request.input).operation);
-        return commandRunner(request);
+        return childCommandRunner(request);
       }
     }), (error) => {
       assert.equal(error.code, "vibe64_session_update_conflict");

@@ -18,6 +18,7 @@ import { createServiceSessionWork } from "../../packages/vibe64-terminals/src/se
 import { createServiceSessionWorkInspection } from "../../packages/vibe64-terminals/src/server/serviceSessionWorkInspection.js";
 import { createWritesWhileAssistantWorks } from "../../packages/vibe64-terminals/src/server/writesWhileAssistantWorks.js";
 import { endChildInput } from "./childInputTestHelpers.js";
+import { withSessionWorkOperationsInProcess } from "./sessionWorkOperationsInProcess.js";
 
 // Every copy's GitHub URL reaches a local bare repository through Git's own
 // URL rewriting, so the engine runs exactly as it does against GitHub.
@@ -53,16 +54,22 @@ function commandRunner(request = {}) {
   });
 }
 
-async function fixture(t) {
+/**
+ * @param {object} t the test
+ * @param {{ sessionWorkChild?: boolean }} [options] whether Save and Update start the session work child as a process;
+ * otherwise its operations run in this process (sessionWorkOperationsInProcess.js) and every other command is a process
+ */
+async function fixture(t, { sessionWorkChild = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-connected-copies-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const githubConfig = path.join(root, "github.gitconfig");
   const plainConfig = path.join(root, "plain.gitconfig");
   await writeFile(githubConfig, `[url "${path.join(root, "github")}/"]\n\tinsteadOf = https://github.com/\n`);
   await writeFile(plainConfig, "");
+  const runner = sessionWorkChild ? commandRunner : withSessionWorkOperationsInProcess(commandRunner, IDENTITY);
   const runnerWith = (config) => (requests = null) => (request = {}) => {
     requests?.push(request);
-    return commandRunner({ ...request, env: { GIT_CONFIG_GLOBAL: config, GIT_CONFIG_NOSYSTEM: "1", ...(request.env || {}) } });
+    return runner({ ...request, env: { GIT_CONFIG_GLOBAL: config, GIT_CONFIG_NOSYSTEM: "1", ...(request.env || {}) } });
   };
   const source = path.join(root, "sessions", "active", SESSION_ID, "source");
   await mkdir(source, { recursive: true });

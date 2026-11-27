@@ -90,6 +90,7 @@ Git commands.
 - `packages/vibe64-terminals/src/server/sessionSaveCommitMessage.js`
 - `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
+- `packages/vibe64-terminals/src/server/sessionWorkOperations.js`
 - Main: `packages/vibe64-terminals/src/server/sessionWorkSave.js`
 - `packages/vibe64-terminals/src/server/sessionWorkInspection.js`
 - `packages/vibe64-terminals/src/server/sessionWorkPublication.js`
