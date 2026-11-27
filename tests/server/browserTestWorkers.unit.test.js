@@ -44,7 +44,9 @@ test("a run's app servers: the budget's browser share or --workers within it, as
 });
 
 test("a managed host's own free memory decides, and null when it cannot tell; this process's own without one", async (t) => {
-  assert.equal(await availableWorkMemoryBytes(), process.availableMemory(), "no provider: this process's own");
+  // This process's figure is a fixed one: two live reads a moment apart differ on a busy host.
+  t.mock.method(process, "availableMemory", () => 5 * GIB);
+  assert.equal(await availableWorkMemoryBytes(), 5 * GIB, "no provider: this process's own");
   let answer = 3 * GIB;
   const release = installVibe64ManagedExecutionProvider({
     runCommand() {},
