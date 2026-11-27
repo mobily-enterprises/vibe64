@@ -1,6 +1,7 @@
-// The passes a plan runs: its `## Passes` section, one checklist item per pass, `<Genesis title>:
-// <scope>`. The plan is the only list: the next pass is its first item not yet ticked, and a pass
-// the person starts is added to the open plan, or to a small plan of its own when none is open.
+// The passes a plan runs: its `## Passes` section, one checklist item per pass, `<Genesis title>`,
+// optionally followed by `: <scope>` in any words (none is the plan's changes). The plan is the only
+// list: the next pass is its first item not yet ticked, and a pass the person starts is added to the
+// open plan, or to a small plan of its own when none is open.
 import { AFTER_PLAN_PASS_TITLES, ASSISTANT_FINISHING_DEFAULTS, inAfterPlanOrder } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { ASSISTANT_ROUTING_METADATA, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { uiPassScope } from "@local/vibe64-runtime/shared/assistantExplicitTask";
@@ -18,7 +19,6 @@ const DEEPLY = ", deeply";
 // The runs Genesis offers for every pass, by their run id: the pass's own runs, which Genesis records.
 const RUN_SCOPES = Object.freeze({ whole: "whole app", "since-last": "since last completed", deep: "deep" });
 const SINCE_COMMIT = /^the changes since ([a-f0-9]{7,64})$/u;
-const SECTION = /^this section of the app: (.+)$/u;
 const PASS_ACTIONS = Object.freeze(["continue", "again", "restart"]);
 const noListing = async () => null;
 
@@ -131,8 +131,9 @@ async function withAfterPlanPasses(text, store, sessionId, readListing = noListi
 
 /**
  * The pass a Passes item runs and the request Genesis recognises for it, or the reason it cannot
- * run: a pass the Genesis serving the project does not offer or cannot run, a scope it has no run
- * for, or the plan's changes in a session whose history shows no start for them.
+ * run: a pass the Genesis serving the project does not offer or cannot run, a run Genesis names
+ * that the pass doesn't have, or the plan's changes in a session whose history shows no start for
+ * them. A scope in other words reaches the pass as written.
  * @param {{ text: string, title: string, scope: string }} item
  * @param {{ passes: object[] }} listing Genesis's pass list
  * @param {{ sessionId: string, metadata?: Record<string, string> }} session
@@ -151,8 +152,10 @@ async function resolvePlanPass(item, listing, session) {
   }
   if (pass.unavailable) return { ...named, problem: pass.unavailable };
   const run = (id) => pass.runs.find((entry) => entry.id === id)?.request || "";
-  const deeply = item.scope.endsWith(DEEPLY);
-  const scope = deeply ? item.scope.slice(0, -DEEPLY.length) : item.scope;
+  // An item with no scope checks the plan's changes.
+  const words = item.scope || PLAN_CHANGES;
+  const deeply = words.endsWith(DEEPLY);
+  const scope = deeply ? words.slice(0, -DEEPLY.length) : words;
   let request = "";
   if (scope === PLAN_CHANGES || SINCE_COMMIT.test(scope)) {
     const base = scope === PLAN_CHANGES ? await afterPlanBase(session) : SINCE_COMMIT.exec(scope)[1];
@@ -166,10 +169,11 @@ async function resolvePlanPass(item, listing, session) {
     request = run("since-last") || run("whole");
   } else if (!deeply && scope === RUN_SCOPES.deep) {
     request = run("deep");
-  } else if (!deeply && SECTION.test(scope)) {
-    request = `Run the ${pass.title} on this section of the app: ${SECTION.exec(scope)[1]}.`;
+  } else {
+    // Any other scope is the plan's own words for what the pass checks, such as this section of the app: <section>.
+    request = `Run the ${pass.title} on ${words}.`;
   }
-  if (!request) return { ...named, problem: `${pass.title} has no run for “${item.scope}”.` };
+  if (!request) return { ...named, problem: `${pass.title} has no run for “${words}”.` };
   return { id: pass.id, ...named, request };
 }
 

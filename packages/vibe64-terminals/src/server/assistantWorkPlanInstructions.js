@@ -23,8 +23,8 @@ const passTitleList = (titles) => titles.length < 2 ? `“${titles[0]}”`
 function workPlanInstructions(role, { autoOutcome = false, auto = false, passTitles = null, passesRun = true } = {}) {
   const titled = Array.isArray(passTitles) && passTitles.length > 0;
   const passItem = titled
-    ? `(- [ ] <pass title>: <scope>, such as - [ ] ${passTitles[0]}: the plan's changes). <pass title> is one of Genesis's passes, written exactly as Genesis titles it: ${passTitleList(passTitles)}; never a short name or other words for one`
-    : "(- [ ] <pass title>: <scope>, <pass title> being a pass's exact title in Genesis's list, never a short name or other words for one)";
+    ? `(- [ ] <pass title>, optionally followed by ": " and what it should check, which you leave off for the plan's changes, such as - [ ] ${passTitles[0]} or - [ ] ${passTitles[0]}: the billing screens). <pass title> is one of Genesis's passes, written exactly as Genesis titles it: ${passTitleList(passTitles)}; never a short name or other words for one`
+    : "(- [ ] <pass title>, optionally followed by \": \" and what it should check, which you leave off for the plan's changes; <pass title> being a pass's exact title in Genesis's list, never a short name or other words for one)";
   const common = [
     "Apply this plan guidance when the user asks to create, discuss or work with a plan. Unrelated requests do not need a plan and must leave existing plans unchanged.",
     "A request to make, create, write or prepare a plan means save a Vibe64 checklist through vibe64-helper plan, unless the user explicitly asks for a chat-only draft or another format.",

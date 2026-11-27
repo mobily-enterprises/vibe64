@@ -237,6 +237,12 @@ writes an item with any other name, Vibe64 refuses that change of the plan at
 once, naming the item and every pass Genesis has, and Senior renames the item
 in the same turn: the plan you see only names passes that can run.
 
+After its title, an item may say what the pass checks, in any words:
+**Review: the billing screens**, or **Security pass: the changes since abc1234
+and the plan before it**. The pass checks just that. An item with nothing
+after its title checks the plan's changes. To have a pass check more or less,
+ask in the chat and Senior changes the item.
+
 - **Review** and **Security pass** are always ticked and can't be unticked:
   each says **Always in a new plan's Passes.**
 - **Data pass**, **Quality pass**, **UI pass** and **Deslop** are ticked in a

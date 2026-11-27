@@ -646,7 +646,8 @@ test("a new plan's After a plan passes and Senior's plan guidance take each pass
   f.router.respond = async () => ({ ok: true, text: JSON.stringify({ mode: "senior", reason: "planning" }) });
   await f.service.send("session-1", { ...request, message: "Make the plan" }, f.context);
   const guidance = f.sends[0].input.message;
-  assert.ok(guidance.includes(`one checklist item each (- [ ] <pass title>: <scope>, such as - [ ] ${renamed[0].title}: the plan's changes). ` +
+  assert.ok(guidance.includes(`one checklist item each (- [ ] <pass title>, optionally followed by ": " and what it should check, which you leave off ` +
+    `for the plan's changes, such as - [ ] ${renamed[0].title} or - [ ] ${renamed[0].title}: the billing screens). ` +
     `<pass title> is one of Genesis's passes, written exactly as Genesis titles it: ${listedTitles(renamed)}; never a short name or other words for one.`), guidance);
   assert.ok(guidance.includes("plan new and write refuse an item that names a pass Genesis doesn't have, and list Genesis's passes: rename it and write again."));
   assert.doesNotMatch(guidance, /User experience pass/u, "no title Genesis doesn't list");

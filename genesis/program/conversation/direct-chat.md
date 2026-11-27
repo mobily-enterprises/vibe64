@@ -2607,7 +2607,8 @@ checks. Senior's complete is refused unless the
 plan is completed or at its Passes step (`workPlanAtPasses`: active, with Passes
 items, every other item proven; `vibe64_assistant_workflow_plan_incomplete`).
 The plan is the only list of passes: its last section, `## Passes`, one
-`- [ ] <title>: <scope>` item per pass (`parseWorkPlanLines` marks its lines),
+`- [ ] <title>` item per pass, optionally followed by `: <scope>` in any words
+(`parseWorkPlanLines` marks its lines; no scope is the plan's changes),
 which a new plan gets from the chat's After a plan ticks (`withAfterPlanPasses`,
 each over the plan's changes) unless Senior wrote its own. `<title>` is the
 pass's exact title in Genesis's list (`listGenesisPasses`, the one reader;
@@ -2633,7 +2634,7 @@ next pass (`continuePlanPasses`): `nextPlanPass` reads the plan's first
 unticked Passes item, lists the session source's passes through Genesis
 (`listPasses`) and resolves its scope to Genesis's request (`resolvePlanPass`):
 whole app, since last completed (whole app for a pass that never completed),
-deep, a named section, or the plan's changes, from the base
+deep, the changes since a commit (its hash alone), or the plan's changes, from the base
 (`afterPlanBase`): the `after_plan_base` metadata commit while HEAD's history
 still holds it, else the merge base of HEAD with the session's canonical
 commit. A Save that reconciles, or an Update, rebases the session's work and
@@ -2643,7 +2644,11 @@ direct chat's routing reads the plan only to tell whether one completed during
 the request, so an unreadable plan counts as none there, as it did before passes
 ran after plans; Auto still refuses one. The base is recorded (`rememberAfterPlanBase`) when a plan
 becomes current with none recorded (`new` or `reopen`, through the plan command
-or Vibe64's own plan writes) and when a plan finishes. A pass the Genesis serving
+or Vibe64's own plan writes) and when a plan finishes. Any other scope is the
+plan's own words for what the pass checks (this section of the app: billing, the
+changes since commit abc1234 and the plan before it), which reach the pass as
+written, `Run the <title> on <scope>.`, so no wording holds the plan; the plan
+command checks titles, never scopes. A pass the Genesis serving
 the project can't run, or the plan's changes without a base, holds the request
 waiting at that pass with **<title> can't run: <reason> Change the plan's
 Passes, or put it right and choose Continue in Passes.** and a notice, skipping
