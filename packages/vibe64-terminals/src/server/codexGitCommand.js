@@ -205,6 +205,7 @@ function localGitCommandToolHome() {
 /**
  * @param {object} dependencies
  * @param {((actor: object, request: object) => Promise<unknown>) | null} [dependencies.authorizeActorAccess]
+ * @param {number} [dependencies.commandBudgetMs] how long one managed Git command may take in all, admission included
  * @param {RuntimeEnv} dependencies.env
  * @param {typeof fetch} [dependencies.fetch]
  * @param {RuntimeLogger} dependencies.logger
@@ -214,6 +215,7 @@ function localGitCommandToolHome() {
  */
 function createCodexGitCommandService({
   authorizeActorAccess = null,
+  commandBudgetMs = CODEX_GIT_COMMAND_TIMEOUT_MS,
   env,
   fetch: fetchRemote = globalThis.fetch,
   logger,
@@ -407,7 +409,7 @@ function createCodexGitCommandService({
         ...result,
         diagnostic: {
           stage,
-          ...(command === "vibe64-github" ? {} : { budgetMs: CODEX_GIT_COMMAND_TIMEOUT_MS, commandSubmitted }),
+          ...(command === "vibe64-github" ? {} : { budgetMs: commandBudgetMs, commandSubmitted }),
           elapsedMs: Math.round(performance.now() - startedAt),
           code: normalizeText(result.errorCode || result.code),
           executionId: normalizeText(result.executionId) || null
@@ -415,10 +417,10 @@ function createCodexGitCommandService({
       };
     };
     const runWithinBudget = (request) => {
-      const timeout = Math.floor(CODEX_GIT_COMMAND_TIMEOUT_MS - (performance.now() - startedAt));
+      const timeout = Math.floor(commandBudgetMs - (performance.now() - startedAt));
       if (timeout <= 0) {
         return Promise.resolve(commandFailure(
-          "Managed Git command exhausted its 30-second execution budget.",
+          `Managed Git command exhausted its ${Math.round(commandBudgetMs / 1000)}-second execution budget.`,
           "vibe64_codex_git_command_timed_out",
           { exitCode: 1, timedOut: true }
         ));
