@@ -115,12 +115,13 @@ outside commands, and its database tests run on the test databases the Stack
 declares (`TEST_DB_NAME` for `npm test` and `jskit test --databases`,
 `BROWSER_TEST_DB_NAME` for browser tests). The Stack binds a database's test
 databases to exactly those names, and Vibe64 refuses any other (a project that
-bound `TEST_DB_NAMES` had a test database no test opened), naming the fix. Each test file or browser worker
-gets its own copy, made from one schema snapshot and dropped when the run ends,
-and a run that was stopped leaves none past the next run's start. The app, its
-dev server and watchers run in Preview, browser-test servers as the project's
-declared test targets, and a worker or queue as an App Service declared for
-Preview (see [Add a service](add-a-service.md)).
+bound `TEST_DB_NAMES` had a test database no test opened), naming the fix. Each
+test file or browser worker gets its own copy, made from one schema snapshot
+and dropped when the run ends, and a run that was stopped leaves none past the
+next run's start. The app, its dev server and watchers run in Preview,
+browser-test servers as the project's declared test targets, and a worker or
+queue as an App Service declared for Preview (see
+[Add a service](add-a-service.md)).
 
 When a command starts a database server itself (`mariadbd`, `mysqld` or
 `postgres`), the assistant is told within a few seconds, once: in that
