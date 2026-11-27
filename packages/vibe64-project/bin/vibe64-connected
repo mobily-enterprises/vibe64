@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+// vibe64-connected <type> keep|apply|proof <repository>: one preparation step of a typed connected dependency, the argv
+// a session's recipe gives it (connectedAdapterSteps), run where the session's folders are rather than by Vibe64's
+// own runner, so a machine that holds them (a test machine a host sends a session's checks to) can run every step of
+// the recipe. It runs in the session's source, reads the connections from there (its listed connections, its
+// Stack's Connected development and each copy at ../connected/<name>) and runs the type's adapter, its commands
+// spawned with this process's environment. A host whose machines share project files through one group passes its
+// host profile in VIBE64_HOST_PROFILE (JSON, the settings configureVibe64Host takes); without it, the files it writes
+// get a person's own computer's modes. The step's output goes to stdout; a failure exits 1 with the adapter's message.
+import { spawn } from "node:child_process";
+import process from "node:process";
+import { configureVibe64Host } from "@local/vibe64-execution/server/hostProfile";
+import { inspectVibe64ConnectedDevelopment } from "@local/vibe64-genesis/server";
+import { runConnectedAdapterStep } from "../src/server/connectedAdapters/index.js";
+import { connectedRepositoriesInFolders } from "../src/server/connectedDevelopment.js";
+
+const ACTIONS = ["keep", "apply", "proof"];
+
+function stop(code, message) {
+  process.stderr.write(`${message}\n`);
+  process.exit(code);
+}
+
+/** What Vibe64's managed command runner answers, from a child process with this one's environment. */
+function runCommand({ command, args, cwd, timeout, env }) {
+  return new Promise(resolve => {
+    let stdout = "";
+    let stderr = "";
+    const child = spawn(command, args, { cwd, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"], timeout });
+    child.stdout.setEncoding("utf8").on("data", chunk => { stdout += chunk; });
+    child.stderr.setEncoding("utf8").on("data", chunk => { stderr += chunk; });
+    child.on("error", error => resolve({ ok: false, stdout, stderr, error: error.message }));
+    child.on("close", (exitCode, signal) => resolve(exitCode === 0
+      ? { ok: true, stdout, stderr, exitCode }
+      : { ok: false, stdout, stderr, exitCode, error: `${command} ${signal ? `stopped by ${signal}` : `exited with ${exitCode}`}` }));
+  });
+}
+
+const [type, action, repository, ...rest] = process.argv.slice(2);
+if (!type || !ACTIONS.includes(action) || !repository || rest.length) {
+  stop(2, "usage: vibe64-connected <type> keep|apply|proof <repository>, run in the session's source");
+}
+try {
+  configureVibe64Host(process.env.VIBE64_HOST_PROFILE ? JSON.parse(process.env.VIBE64_HOST_PROFILE) : null);
+} catch (error) {
+  stop(2, `VIBE64_HOST_PROFILE: ${error.message}`);
+}
+const sessionSourceRoot = process.cwd();
+let repositories;
+try {
+  const inspection = await inspectVibe64ConnectedDevelopment({ projectRoot: sessionSourceRoot });
+  repositories = await connectedRepositoriesInFolders({ sourceRoot: sessionSourceRoot, inspection });
+} catch (error) {
+  stop(1, error.message);
+}
+const connection = repositories.find(entry => entry.repository === repository);
+if (connection && connection.type !== type) stop(1, `${connection.name} is a connected ${connection.type} dependency, not ${type}.`);
+const result = await runConnectedAdapterStep({ action, repository, repositories, sessionSourceRoot, runCommand });
+if (result.output) process.stdout.write(`${result.output}\n`);
+if (!result.ok) stop(1, result.error);

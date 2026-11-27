@@ -313,6 +313,18 @@ to the affected command in Stack and prepare again. Vibe64's own steps declare
 the runtimes their toolchain needs (npm: `nodejs` and `git`). Do not bypass the
 managed runtime restriction by adding host executables to PATH.
 
+Each of Vibe64's own steps names its program in the preparation recipe:
+`vibe64-connected <type> keep|apply|proof <repository>`. A machine that holds
+the session's folders at the same paths (a test machine a host sends the
+session's checks to) runs that argv as it is, in the session's source:
+`vibe64-connected` reads the listed connections, the Stack's Connected
+development and each copy at `../connected/<name>`, the inputs the `Sources
+file` is made from, runs the type's adapter with the machine's own toolchain,
+and exits 1 with the adapter's message when a step fails. A host whose machines
+share project files through one group gives it the host profile in
+`VIBE64_HOST_PROFILE`, so what it writes keeps the group's modes. It ships in a
+Vibe64 release as `node_modules/@local/vibe64-project/bin/vibe64-connected`.
+
 `examples/connected-development/` holds a runnable proof for every package type
 (npm, composer, pip, bundler, gomod, cargo, maven, gradle, nuget and a custom
 CMake connection). Each typed proof runs Vibe64's own adapter through

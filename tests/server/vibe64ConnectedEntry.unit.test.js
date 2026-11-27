@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { appendFile, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -51,9 +51,9 @@ async function fixture(t) {
   await exec("git", ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "lib"], { cwd: copy });
   await writeFile(path.join(copy, "lib/message.js"), "module.exports = 'not committed yet';\n");
 
-  /** The step's argv as the recipe gives it, run in the session's source. */
-  const run = (...args) => new Promise(resolve => {
-    execFile(process.execPath, [PROGRAM, ...args], { cwd: source, env: registry.env, timeout: 120_000 }, (error, stdout, stderr) => {
+  /** The step's argv as the recipe gives it, run in the session's source; `env` adds to the registry's. */
+  const run = (args, env = {}) => new Promise(resolve => {
+    execFile(process.execPath, [PROGRAM, ...args], { cwd: source, env: { ...registry.env, ...env }, timeout: 120_000 }, (error, stdout, stderr) => {
       resolve({ code: error ? error.code : 0, stdout: String(stdout), stderr: String(stderr) });
     });
   });
@@ -73,7 +73,8 @@ async function filesBelow(dir, prefix = "") {
 
 test("vibe64-connected runs a typed connected step from the session's folders: npm installs what the copy would publish, uncommitted work included", { timeout: 180_000 }, async t => {
   const f = await fixture(t);
-  const applied = await f.run("npm", "apply", repository);
+  // As a host whose machines share project files through one group runs it.
+  const applied = await f.run(["npm", "apply", repository], { VIBE64_HOST_PROFILE: JSON.stringify({ sharedGroupAccess: true }) });
   assert.equal(applied.code, 0, applied.stderr);
   assert.match(applied.stdout, /@proof\/lib 1\.1\.0 in effect/u);
 
@@ -84,6 +85,8 @@ test("vibe64-connected runs a typed connected step from the session's folders: n
   assert.deepEqual(await filesBelow(installed), publishes);
   for (const file of publishes) {
     assert.equal(await readFile(path.join(installed, file), "utf8"), await readFile(path.join(f.copy, file), "utf8"), file);
+    // The group's file mode, as Vibe64's own runner writes them on such a host (0600 on a person's own computer).
+    assert.equal((await stat(path.join(installed, file))).mode & 0o777, 0o660, file);
   }
   assert.equal((await exec(process.execPath, ["-e", "console.log(require('@proof/lib').message)"], { cwd: f.source })).stdout.trim(),
     "not committed yet");
@@ -94,28 +97,31 @@ test("vibe64-connected runs a typed connected step from the session's folders: n
     sessionSourceRoot: f.source
   });
   assert.equal(status.inEffect, true, status.reason);
-  const proved = await f.run("npm", "proof", repository);
+  const proved = await f.run(["npm", "proof", repository]);
   assert.equal(proved.code, 0, proved.stderr);
   assert.match(proved.stdout, /Lib is in effect/u);
 });
 
 test("vibe64-connected fails with the adapter's own message, and refuses a step its session does not hold", { timeout: 180_000 }, async t => {
   const f = await fixture(t);
-  const unproved = await f.run("npm", "proof", repository);
+  const unproved = await f.run(["npm", "proof", repository]);
   assert.equal(unproved.code, 1);
   assert.match(unproved.stderr, /Connected Lib is not in effect/u);
 
-  const stranger = await f.run("npm", "apply", "https://github.com/example/other");
+  const stranger = await f.run(["npm", "apply", "https://github.com/example/other"]);
   assert.equal(stranger.code, 1);
   assert.match(stranger.stderr, /example\/other is no longer a typed connected dependency of this session/u);
 
-  const wrongType = await f.run("pip", "apply", repository);
+  const wrongType = await f.run(["pip", "apply", repository]);
   assert.equal(wrongType.code, 1);
   assert.match(wrongType.stderr, /Lib is a connected npm dependency, not pip/u);
 
-  const usage = await f.run("npm", "install", repository);
+  const usage = await f.run(["npm", "install", repository]);
   assert.equal(usage.code, 2);
   assert.match(usage.stderr, /usage: vibe64-connected <type> keep\|apply\|proof <repository>/u);
+  const profile = await f.run(["npm", "apply", repository], { VIBE64_HOST_PROFILE: JSON.stringify({ sharedGroups: true }) });
+  assert.equal(profile.code, 2);
+  assert.match(profile.stderr, /VIBE64_HOST_PROFILE: Unknown host profile setting: sharedGroups/u);
   // Nothing was put in effect.
   assert.equal(JSON.parse(await readFile(path.join(f.source, "node_modules/@proof/lib/package.json"), "utf8")).version, "1.0.0");
 });

@@ -32,6 +32,8 @@ const RUNTIME_ENTRIES = [
   ...GENESIS_SERVER_ENTRIES,
   "node_modules/@local/vibe64-genesis/bin/genesis",
   "node_modules/@local/vibe64-genesis/bin/vibe64-genesis-host-context",
+  // A machine that runs a session's checks from its folders runs the recipe's typed connected steps with it.
+  "node_modules/@local/vibe64-project/bin/vibe64-connected",
   "node_modules/@local/vibe64-runtime/src/server/agentSessionCommandHook.js",
   "node_modules/@local/vibe64-runtime/src/server/codexAppServerProcess.js",
   // Hosts' VPS agent loads the working-turns reader by its package export, from outside the bundle.
