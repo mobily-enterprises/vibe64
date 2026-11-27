@@ -42,11 +42,13 @@ const PROJECT_SLUG = "claude-goal-restart";
  * reports a workflow outcome through the plan helper's socket: continue, or
  * wait when its previous outcome was that continue.
  * @param {{ after: (callback: () => unknown) => void }} t
- * @param {{ root?: string }} [options] root: the folder of a harness another process set up, which this one serves
- *   too (as a server later killed mid-turn); the harness that made it removes it.
+ * @param {{ root?: string, plannedRestart?: boolean }} [options] root: the folder of a harness another process set
+ *   up, which this one serves too (as a server later killed mid-turn); the harness that made it removes it.
+ *   plannedRestart: the server reads a host's planned restart notice from `noticeFile`, as a host that gives one.
  */
-async function goalHarness(t, { root: sharedRoot = "" } = {}) {
+async function goalHarness(t, { root: sharedRoot = "", plannedRestart = false } = {}) {
   const root = sharedRoot || await mkdtemp(path.join(os.tmpdir(), "v64-claude-goal-restart-"));
+  const noticeFile = path.join(root, "planned-restart-notice.json");
   const command = path.join(root, "claude.cjs");
   const tracePath = path.join(root, "claude-trace.jsonl");
   const trace = async () => {
@@ -273,7 +275,8 @@ createInterface({ input: process.stdin }).on('line', async line => {
       logger: { info() {}, warn: record => warnings.push(record), error: record => warnings.push(record) },
       env: { CLAUDE_CONFIG_DIR: path.join(root, "config"), VIBE64_AGENT_RUNTIME_DIR: path.join(root, "agent-runtime"),
         VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments"), VIBE64_CLAUDE_COMMAND: command,
-        VIBE64_SYSTEM_ROOT: path.join(root, "system"), VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test" },
+        VIBE64_SYSTEM_ROOT: path.join(root, "system"), VIBE64_RUNTIME_NAMESPACE: "test", VIBE64_WORKSPACE: "test",
+        ...(plannedRestart ? { VIBE64_PLANNED_RESTART_NOTICE_FILE: noticeFile } : {}) },
       codexTerminalController: { codexToolHomeRequired: false, codexAppServerProviderOptions: { systemRoot: path.join(root, "system") } }
     }));
     value.configureAssistantRuntime({
@@ -329,6 +332,9 @@ createInterface({ input: process.stdin }).on('line', async line => {
   return {
     get service() { return service; },
     root,
+    noticeFile,
+    /** The project service double the server reads, whose operations a test may replace. */
+    project,
     routeAsSenior,
     /** The person sends to Main chat from the editor, as its chat does: through the send action, from their own request. */
     sendAsPerson: input => actions.execute({ actionId: ACTION_SEND_AGENT_MESSAGE,
@@ -347,8 +353,10 @@ createInterface({ input: process.stdin }).on('line', async line => {
       else await rm(credentialsPath, { force: true });
     },
     inProject: operation => runWithProjectRequestContext({ ...goalProject, vibe64User: null }, operation),
-    async restart({ graceful = true } = {}) {
+    /** The next server; `beforeStart` runs once the server before it has stopped (as a host's step between them). */
+    async restart({ graceful = true, beforeStart } = {}) {
       if (graceful) await service.close();
+      await beforeStart?.();
       service = createService();
       return service;
     },
