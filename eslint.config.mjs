@@ -20,18 +20,23 @@ import tsParser from "@typescript-eslint/parser";
 // names as the check for that mistake: the step runs after the test has moved on, or never.
 const BROWSER_SPECS = "tests/e2e/**/*.ts";
 const JSKIT_SOURCE_FILES = "**/*.{js,mjs,cjs,vue}";
+// A package's extensionless programs (bin/genesis and the like) are JavaScript linted as the .js files beside them are:
+// ESLint lints a file without an extension only when a config names it.
+const EXTENSIONLESS_BINS = "packages/*/bin/!(*.*)";
 
 function jskitSourceEntries(name, configs) {
   const entries = configs.filter((config) => config.files?.includes(JSKIT_SOURCE_FILES));
   if (entries.length === 0) {
-    throw new Error(`${name} no longer selects ${JSKIT_SOURCE_FILES}, so ${BROWSER_SPECS} would lose its rules.`);
+    throw new Error(`${name} no longer selects ${JSKIT_SOURCE_FILES}, so ${BROWSER_SPECS} and ${EXTENSIONLESS_BINS} would lose its rules.`);
   }
   return entries;
 }
 
-function withBrowserSpecs(name, configs) {
+function withSpecsAndBins(name, configs) {
   const entries = jskitSourceEntries(name, configs);
-  return configs.map((config) => (entries.includes(config) ? { ...config, files: [...config.files, BROWSER_SPECS] } : config));
+  return configs.map((config) => (
+    entries.includes(config) ? { ...config, files: [...config.files, BROWSER_SPECS, EXTENSIONLESS_BINS] } : config
+  ));
 }
 
 const jskitUnusedVars = jskitSourceEntries("baseConfig", baseConfig).find((config) => config.rules?.["no-unused-vars"])
@@ -89,11 +94,11 @@ export default [
       }
     }
   },
-  ...withBrowserSpecs("baseConfig", baseConfig),
-  ...withBrowserSpecs("vueConfig", vueConfig),
+  ...withSpecsAndBins("baseConfig", baseConfig),
+  ...withSpecsAndBins("vueConfig", vueConfig),
   ...clientFeaturesConfig(CLIENT_SOURCES),
-  ...withBrowserSpecs("webConfig", webConfig),
-  ...withBrowserSpecs("nodeConfig", nodeConfig),
+  ...withSpecsAndBins("webConfig", webConfig),
+  ...withSpecsAndBins("nodeConfig", nodeConfig),
   {
     files: [BROWSER_SPECS],
     languageOptions: {
