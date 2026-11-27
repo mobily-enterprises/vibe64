@@ -17,6 +17,7 @@ import {
   configureVibe64Host
 } from "../../packages/vibe64-execution/src/server/index.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { playwrightChildEnvironment } from "./playwrightChildEnvironment.js";
 
 const { AGENT_PLAYWRIGHT_COMMAND_NAME } = __testables;
 
@@ -296,11 +297,11 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
       return new Promise((resolve, reject) => {
         const child = spawn(input.command, input.args, {
           cwd: input.cwd,
-          env: {
-            ...process.env,
+          // As a managed host runs it: none of the server's own Playwright settings, then the command's.
+          env: playwrightChildEnvironment({
             ...input.env,
             VIBE64_EXECUTION_ID: "fixture-child-execution"
-          },
+          }),
           stdio: ["ignore", "pipe", "pipe"]
         });
         let stdout = "";
@@ -368,7 +369,7 @@ test("browser task-denial diagnostics survive the real wrappers and target resto
   });
   for (const args of [["test"], ["--target", "test-app", "test"]]) {
     await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, args, {
-      cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env }
+      cwd: fixture.projectRoot, env: playwrightChildEnvironment(fixture.prepared.env)
     }), (error) => {
       assert.equal(error.code, 1);
       const output = error.stdout + error.stderr;
@@ -387,7 +388,7 @@ test("Preview Stop preserves the assistant registration for the next managed tes
     await fixture.commandService.closeAllForSession("playwright-1.61.1");
     await rm(root, { recursive: true, force: true });
   });
-  const options = { cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env } };
+  const options = { cwd: fixture.projectRoot, env: playwrightChildEnvironment(fixture.prepared.env) };
   await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], options);
   assert.equal((await fixture.commandService.stopBrowsersForSession("playwright-1.61.1")).ok, true);
   const result = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], options);
@@ -414,7 +415,7 @@ test("the Playwright settings this test process carries, a test host lane's or a
     await rm(root, { recursive: true, force: true });
   });
   const result = JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
-    cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env }
+    cwd: fixture.projectRoot, env: playwrightChildEnvironment(fixture.prepared.env)
   })).stdout);
   assert.equal(result.managed, "1");
   assert.deepEqual(result.settings.filter((name) => Object.hasOwn(outer, name)), []);
@@ -445,7 +446,7 @@ test("managed Playwright target selection crosses the real wrapper/socket bounda
     await fixture.commandService.closeAllForSession("playwright-1.61.1");
     await rm(root, { recursive: true, force: true });
   });
-  const options = { cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env } };
+  const options = { cwd: fixture.projectRoot, env: playwrightChildEnvironment(fixture.prepared.env) };
   for (const args of [
     ["--target", "test-app", "test", "--grep", "checkout"],
     ["--target=test-app", "npm-run", "e2e", "--", "--grep", "checkout"]
@@ -545,7 +546,7 @@ test("managed browser startup and restoration can outlast the launch probe witho
         await rm(root, { recursive: true, force: true });
       });
       const completion = execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--target", "test-app", "test"], {
-        cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env }, timeout: 10_000
+        cwd: fixture.projectRoot, env: playwrightChildEnvironment(fixture.prepared.env), timeout: 10_000
       });
       if (outcome === "ready") {
         assert.equal(JSON.parse((await completion).stdout).baseUrl, "http://127.0.0.1:4104");
@@ -613,7 +614,7 @@ test("memory approval retains the original live command across the real wrapper/
         await rm(root, { recursive: true, force: true });
       });
       const command = approvalCommand(fixture.prepared.hostPlaywrightWrapperPath, ["--target", "test-app", "npm-run", "e2e"], {
-        cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env }
+        cwd: fixture.projectRoot, env: playwrightChildEnvironment(fixture.prepared.env)
       });
       const completion = command.completion;
       await Promise.race([
@@ -694,11 +695,10 @@ test("managed Playwright test command uses the exact versioned browser runtime w
       ["status"],
       {
         cwd: fixture.projectRoot,
-        env: {
-          ...process.env,
+        env: playwrightChildEnvironment({
           ...fixture.prepared.env,
           PLAYWRIGHT_BROWSERS_PATH: "/tmp/project-override"
-        }
+        })
       }
     )).stdout);
     assert.deepEqual(status, { ok: true, run: null });
@@ -708,13 +708,12 @@ test("managed Playwright test command uses the exact versioned browser runtime w
       ["test", "--grep", "checkout"],
       {
         cwd: fixture.projectRoot,
-        env: {
-          ...process.env,
+        env: playwrightChildEnvironment({
           ...fixture.prepared.env,
           PLAYWRIGHT_BROWSERS_PATH: "/tmp/project-override",
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0",
           PLAYWRIGHT_STORAGE_STATE: "/tmp/stale-managed-state.json"
-        }
+        })
       }
     )).stdout);
     assert.deepEqual(executed.args, ["test", "--grep", "checkout"]);
@@ -732,10 +731,9 @@ test("managed Playwright test command uses the exact versioned browser runtime w
       ["npm-run", "e2e", "--", "--grep", "settings"],
       {
         cwd: fixture.projectRoot,
-        env: {
-          ...process.env,
+        env: playwrightChildEnvironment({
           ...fixture.prepared.env
-        }
+        })
       }
     )).stdout);
     assert.deepEqual(npmRun.args, ["run", "e2e", "--", "--grep", "settings"]);
@@ -758,12 +756,11 @@ test("managed Playwright test command uses the exact versioned browser runtime w
       ["test", "--grep", "override"],
       {
         cwd: fixture.projectRoot,
-        env: {
-          ...process.env,
+        env: playwrightChildEnvironment({
           ...fixture.prepared.env,
           PLAYWRIGHT_BASE_URL: "http://127.0.0.1:6200/custom",
           PLAYWRIGHT_STORAGE_STATE: "/tmp/explicit-state.json"
-        }
+        })
       }
     )).stdout);
     assert.equal(explicit.baseUrl, "http://127.0.0.1:6200/custom");
@@ -776,10 +773,9 @@ test("managed Playwright test command uses the exact versioned browser runtime w
         "test"
       ], {
         cwd: fixture.projectRoot,
-        env: {
-          ...process.env,
+        env: playwrightChildEnvironment({
           PLAYWRIGHT_BASE_URL: "http://127.0.0.1:6200/custom"
-        }
+        })
       }),
       /Explicit Playwright application identity requires the Vibe64-managed preview/iu
     );
@@ -807,12 +803,11 @@ test("managed Playwright supplies authenticated browser state in the run's own d
       const directory = await mkdtemp(path.join(root, "run-"));
       const result = JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, args, {
         cwd: fixture.projectRoot,
-        env: {
-          ...process.env,
+        env: playwrightChildEnvironment({
           ...fixture.prepared.env,
           VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
           VIBE64_PLAYWRIGHT_STATE_DIR: directory
-        }
+        })
       })).stdout);
       assert.equal(path.dirname(result.storageStatePath), directory);
       // One app server: the suite's environment is the one it always had.
@@ -836,7 +831,7 @@ test("managed Playwright supplies authenticated browser state in the run's own d
 
     await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
-      env: { ...process.env, ...fixture.prepared.env, VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run" }
+      env: playwrightChildEnvironment({ ...fixture.prepared.env, VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run" })
     }), /did not give this browser test its own directory for the signed-in state\. Project tests were not started\./u);
   } finally {
     await fixture?.commandService.closeAllForSession("playwright-1.61.1");
@@ -867,12 +862,11 @@ test("a target run with several app servers signs each worker in on its own and 
     "export const targets = process.env.PLAYWRIGHT_WORKER_TARGETS;\n");
   const executed = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--identity", "admin", "test"], {
     cwd: fixture.projectRoot,
-    env: {
-      ...process.env,
+    env: playwrightChildEnvironment({
       ...fixture.prepared.env,
       VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
       VIBE64_PLAYWRIGHT_STATE_DIR: directory
-    }
+    })
   });
   const result = JSON.parse(executed.stdout);
   const origins = workerUrls.map((url) => new URL(url).origin);
@@ -901,12 +895,11 @@ test("a target run with several app servers signs each worker in on its own and 
     await writeFile(path.join(catalog, "package.json"), JSON.stringify({ name: "@jskit-ai/jskit-catalog", version }));
     return execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--identity", "admin", "test"], {
       cwd: fixture.projectRoot,
-      env: {
-        ...process.env,
+      env: playwrightChildEnvironment({
         ...fixture.prepared.env,
         VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
         VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
-      }
+      })
     });
   };
   for (const version of ["0.2.112", "0.1.900"]) {
@@ -930,12 +923,11 @@ test("a target run with several app servers signs each worker in on its own and 
     "export default { use: { baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: process.env.PLAYWRIGHT_STORAGE_STATE } };\n");
   const unread = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--identity", "admin", "test"], {
     cwd: fixture.projectRoot,
-    env: {
-      ...process.env,
+    env: playwrightChildEnvironment({
       ...fixture.prepared.env,
       VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
       VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
-    }
+    })
   });
   assert.match(unread.stderr, /playwright\.config\.mjs never reads it, so every worker uses the first server and its database/u);
   // A config that reads a worker's state file itself tampers with the supplied login, as with the single state.
@@ -945,12 +937,11 @@ test("a target run with several app servers signs each worker in on its own and 
     "export default { use: { storageState: JSON.parse(readFileSync(first.storageState, 'utf8')) } };\n");
   await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--identity", "admin", "test"], {
     cwd: fixture.projectRoot,
-    env: {
-      ...process.env,
+    env: playwrightChildEnvironment({
       ...fixture.prepared.env,
       VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
       VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
-    }
+    })
   }), /playwright\.config\.mjs reads or changes the signed-in browser state in PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_WORKER_TARGETS/u);
 });
 
@@ -964,10 +955,9 @@ test("managed Playwright test command reports a managed-preview blocker before s
     await assert.rejects(
       execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
         cwd: fixture.projectRoot,
-        env: {
-          ...process.env,
+        env: playwrightChildEnvironment({
           ...fixture.prepared.env
-        }
+        })
       }),
       /managed preview did not become ready/isu
     );
@@ -995,12 +985,11 @@ test("managed Playwright warns when the project's config never reads the supplie
     // As the daemon runs a target run's setup: in a directory of its own.
     const run = async () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
-      env: {
-        ...process.env,
+      env: playwrightChildEnvironment({
         ...fixture.prepared.env,
         VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
         VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
-      }
+      })
     });
 
     await writeFile(configPath, "export default { use: { storageState: process.env.PLAYWRIGHT_STORAGE_STATE } };\n");
@@ -1077,12 +1066,11 @@ test("managed Playwright refuses a config that reads or edits the supplied login
     // As the daemon runs a target run's setup: in a directory of its own.
     const run = async () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
-      env: {
-        ...process.env,
+      env: playwrightChildEnvironment({
         ...fixture.prepared.env,
         VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
         VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
-      }
+      })
     });
     const refusal = (configName, reason) => (error) => {
       assert.equal(error.code, 1);
@@ -1144,12 +1132,11 @@ if (["ensure", "status"].includes(process.argv[2])) {
 `);
     await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
-      env: {
-        ...process.env,
+      env: playwrightChildEnvironment({
         ...fixture.prepared.env,
         VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
         VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
-      }
+      })
     }), (error) => {
       assert.match(error.stderr, /could not prepare the managed browser and application identity/iu);
       assert.match(error.stderr, /unverified listener/iu);
@@ -1208,7 +1195,7 @@ test("an existing project keeps its retained browser runtime instead of the plat
   try {
     fixture = await prepareFixture(root, "1.50.1", "1.61.1");
     await createRuntime(fixture.runtimeRoot, "1.50.1");
-    const options = { cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env } };
+    const options = { cwd: fixture.projectRoot, env: playwrightChildEnvironment(fixture.prepared.env) };
     const readiness = JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath,
       ["readiness"], options)).stdout);
     assert.equal(readiness.status, "ready");
@@ -1236,7 +1223,7 @@ test("managed Playwright help works without matching runtimes or an installed pr
     for (const args of [["--help"], ["help"], ["-h"], []]) {
       const result = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, args, {
         cwd: fixture.projectRoot,
-        env: { ...process.env, ...fixture.prepared.env }
+        env: playwrightChildEnvironment(fixture.prepared.env)
       });
       assert.match(result.stdout, /vibe64-helper playwright.*test/u);
       assert.equal(result.stderr, "");
@@ -1249,7 +1236,7 @@ test("managed Playwright help works without matching runtimes or an installed pr
       ["readiness"], { cwd: fixture.projectRoot })).stdout).status, "not-configured");
     const result = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--help"], {
       cwd: fixture.projectRoot,
-      env: { ...process.env, ...fixture.prepared.env }
+      env: playwrightChildEnvironment(fixture.prepared.env)
     });
     assert.match(result.stdout, /Usage:/u);
     // A target is the project's own test server, not a bypass of its harness: an agent that read PLAYWRIGHT_BASE_URL
