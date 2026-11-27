@@ -235,11 +235,13 @@ function createServiceSessionWork({
         checkpointCommit: saveMessageInput.checkpoint.checkpointCommit,
         checkpointTree: saveMessageInput.checkpoint.checkpointTree,
         kind: "message",
-        message: "Writing a concise name for this work.",
+        message: input.commitMessage ? "Using the version name this Save was given." : "Writing a concise name for this work.",
         sessionHead: saveMessageInput.checkpoint.sessionHead,
         stage: "message-writing"
       });
-      const commitTitle = await nameSave(saveMessageInput, {
+      // A caller in the server's own process may name this Save (the sessions' `saveSessionWork` checks it); its
+      // connected copies' commits are still named as before.
+      const commitTitle = input.commitMessage ? { subject: input.commitMessage } : await nameSave(saveMessageInput, {
         agentContext,
         onProgress,
         operationId: input.operationId,

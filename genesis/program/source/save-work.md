@@ -514,6 +514,15 @@ GitHub, managed-Git, or local-source authority. It refuses ambiguous authority,
 changed session history, dirty local authority, or a moving canonical branch.
 Assistant naming is optional: provider, account, invalid-title, or cleanup failures
 produce a visible fallback notice and a deterministic checkpoint-based subject.
+Code in the server's own process may name the commit itself: the sessions'
+`saveSessionWork` takes `commitMessage`, one or more lines of at most 2000
+characters once trimmed and without NUL (`callerCommitMessage` in
+`sessionWork.js` refuses anything else with
+`vibe64_session_save_commit_message_invalid` before Save starts). The commit
+carries exactly that message and no Quick helper is asked; the commits of the
+session's connected copies are still named as before. Save's action input,
+which its route and the assistant's tool go through, has no such field and
+refuses it.
 Members can Save when the main chat's current connection is personal-only.
 Repository Save and manual pull-request creation do not require AI access;
 their source-operation and GitHub permissions still apply.

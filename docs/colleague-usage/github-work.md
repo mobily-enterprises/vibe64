@@ -102,6 +102,10 @@ failure status; the fallback notice remains in its progress history. Check the
 final Save result and the session's **All work is saved** indicator rather than
 treating the naming notice as a failed push.
 
+A Save that the server itself starts, rather than a person or the coding agent,
+can carry the version name it was given; no assistant writes one then. The
+Save button and the coding agent's save always use assistant naming.
+
 If a push loses its response, Vibe64 checks the exact prepared commit on the
 remote before treating it as failed. If the remote cannot be read, restore access
 and inspect the session's work again. Recovery uses the original Save operation

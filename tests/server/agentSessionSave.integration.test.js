@@ -14,6 +14,7 @@ import {
 import { runVibe64AgentWriteExclusive } from "../../packages/vibe64-runtime/src/server/agentWriteLock.js";
 import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 import { createSessionRepositoryUpdates } from "../../packages/vibe64-sessions/src/server/sessionRepositoryUpdates.js";
+import { sessionSaveInputValidator } from "../../packages/vibe64-sessions/src/server/inputSchemas.js";
 import { createSessionWork } from "../../packages/vibe64-sessions/src/server/sessionWork.js";
 import { createSessionWorkOperations } from "../../packages/vibe64-sessions/src/server/sessionWorkOperations.js";
 import { createSessionWorkRecovery } from "../../packages/vibe64-sessions/src/server/sessionWorkRecovery.js";
@@ -63,9 +64,10 @@ async function bounded(work, waitingFor) {
  * the sessions feature fills them, and `vibe64-helper session ...` over the session command the terminals compose.
  * A session's `agentRuns` say whether its main chat turn runs; `steers` are the notes sent into a running turn.
  * @param {import("node:test").TestContext} t
- * @param {{ first?: string }} [options] the first session's id (the second is beta)
+ * @param {{ first?: string, sessionAgent?: object }} [options] the first session's id (the second is beta), and the
+ *   agent the terminals' Save asks to name its commit (none answers by default, so Save names it from its checkpoint)
  */
-async function twoSessions(t, { first = "alpha" } = {}) {
+async function twoSessions(t, { first = "alpha", sessionAgent = {} } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-agent-session-save-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const seed = path.join(root, "seed");
@@ -146,7 +148,7 @@ async function twoSessions(t, { first = "alpha" } = {}) {
     logger: silentLogger,
     project,
     sessionAccess,
-    sessionAgent: {},
+    sessionAgent,
     state,
     workspacePreparation: { invalidateWorkspaceSetup: async () => {}, waitForRunningPreparation: async () => false },
     workspaceSetup: { isRunning: () => false }
@@ -223,6 +225,7 @@ async function twoSessions(t, { first = "alpha" } = {}) {
   return {
     canonical: ref => git(root, ["--git-dir", canonicalRepositoryPath, "rev-parse", ref]),
     canonicalFile: file => git(root, ["--git-dir", canonicalRepositoryPath, "show", `main:${file}`]),
+    canonicalMessage: ref => git(root, ["--git-dir", canonicalRepositoryPath, "log", "-1", "--format=%B", ref]),
     helpers,
     repositoryUpdates,
     runtime,
@@ -308,6 +311,45 @@ test("two sessions of a project with no GitHub coordinate through its main: each
   assert.equal(await p.canonicalFile("feature.txt"), "alpha's finished stage");
   assert.equal(await p.canonicalFile("beta-notes.txt"), "beta's own work");
   assert.equal(alpha.metadata.canonical_commit, betaCommit, "and alpha is told in turn");
+});
+
+// A caller in the server's own process (a check that saves the session it pinned) names its commit itself: the
+// commit's message is exactly the one given, trimmed, and no AI is asked to name it. Without one, Save names it as
+// before. A message that is not one or more lines of at most 2000 characters without NUL is refused before anything,
+// and Save's action input, which its route and the assistant's tool go through, refuses the field.
+test("a Save an in-process caller names is committed with exactly its message and no AI naming it, and an invalid one is refused", async (t) => {
+  const destinationReview = { branch: "main", mode: "managed_git", repository: "project", sessionId: "alpha" };
+  const actionInput = { destinationReview, sessionId: "alpha" };
+  assert.deepEqual(sessionSaveInputValidator.schema.create(actionInput).errors, {});
+  assert.deepEqual(Object.keys(sessionSaveInputValidator.schema.create({ ...actionInput, commitMessage: "Named" }).errors),
+    ["commitMessage"]);
+  const asked = [];
+  const sessionAgent = new Proxy({}, { get: (_agent, name) => {
+    if (typeof name === "string") asked.push(name);
+    return undefined;
+  } });
+  const p = await twoSessions(t, { sessionAgent });
+  const shared = path.join(p.sessions.alpha.sourcePath, "shared.txt");
+  const before = await p.canonical("main");
+  await writeFile(shared, "named by its caller\n");
+  for (const commitMessage of ["", " \n ", "a\0b", "x".repeat(2001), 42, null]) {
+    const refused = await bounded(p.work.saveToCurrentDestination("alpha", { commitMessage, vibe64User: PERSON }),
+      "the Save of an invalid message");
+    assert.equal(refused.code, "vibe64_session_save_commit_message_invalid", JSON.stringify(commitMessage));
+    assert.match(refused.error, /commitMessage/u);
+  }
+  assert.equal(await p.canonical("main"), before, "an invalid message saved nothing");
+  const message = "Release check: the lock pins public 6b7a1c878ff6\n\nstarted by owner at 2026-11-27T11:42:00.000Z: \"FINAL3\"";
+  const named = await bounded(p.work.saveToCurrentDestination("alpha", { commitMessage: `  ${message}\n`, vibe64User: PERSON }),
+    "the named Save");
+  assert.equal(named.ok, true, named.error);
+  assert.equal(await p.canonicalMessage("main"), message);
+  assert.deepEqual(asked, [], "no AI was asked to name it");
+  await writeFile(shared, "named by Save\n");
+  const unnamed = await bounded(p.work.saveToCurrentDestination("alpha", { vibe64User: PERSON }), "the unnamed Save");
+  assert.equal(unnamed.ok, true, unnamed.error);
+  assert.notEqual(asked.length, 0, "without a message Save asks its AI to name it");
+  assert.match(await p.canonicalMessage("main"), /^Save work [0-9a-f]{12}$/u);
 });
 
 test("while automatic save is off the command saves nothing, through the real Save", async (t) => {
