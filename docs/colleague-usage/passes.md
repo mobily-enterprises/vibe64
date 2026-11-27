@@ -75,7 +75,10 @@ completed.
 You can also type passes in main chat: **Run the Security and Data passes**,
 **Do the UX and UI passes deeply**, **Run every pass on the whole app**,
 **Deslop**, or **UI pass: the bookings pages**. They join the plan the same
-way. With no run named they check the changes since your last plan (**the
+way, except a pass you name without a run that the plan's Passes still have to
+run: that is the plan's own item, never a second one. **Run the Review pass**
+while the plan's Review is still to run runs the plan's Review when the plan is
+at its passes; before that, Senior says it is in the plan already. With no run named they check the changes since your last plan (**the
 changes since abc1234**); **Run the Master pass** runs every pass deeply. A
 message steered into a running turn is a steer, never a pass.
 
