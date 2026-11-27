@@ -233,6 +233,51 @@ it("the open plan's passes show each one's state, and Continue, Run this pass ag
   expect(mount(Vibe64PassesMenu, { passes: state, session: { sessionId: "session-1", metadata: {} } }).plansPasses).toBe(false);
 });
 
+// A plan at its passes, as whs2's was: Review done, eight to go, and Speed pass among them.
+const NINE = ["review", "security-pass", "data-pass", "quality-pass", "ux-pass", "speed-pass", "ui-pass", "identity-pass", "deslop"];
+const planAt = (done, { atPasses = true } = {}) => ({ title: "Bookings", atPasses, passes: NINE.map((id, index) => {
+  const title = GENESIS_PASSES.find((pass) => pass.id === id).title;
+  return { id, title, scope: "the plan's changes", item: `${title}: the plan's changes`, done: index < done, state: index < done ? "done" : "" };
+}) });
+
+it("while the open plan's passes are unfinished, the bar above the composer shows them with the list's Continue naming what's left, and no pass is suggested", async () => {
+  const { default: Vibe64PlanPassesBar } = await import("../../src/components/studio/vibe64-session/Vibe64PlanPassesBar.vue");
+  mocks.resource.data.value = { ok: true, passes: listed(), master: { passes: GENESIS_MASTER_PASS.passes }, plan: planAt(1), recommendation: "speed-pass" };
+  const { state, send } = passes();
+  expect(state.planProgress.value).toEqual({ done: 1, total: 9, left: 8 });
+  // Speed pass is this plan's own: nothing suggests it, or any other pass, beside the plan's next step.
+  expect(state.recommendation.value).toBe(null);
+  const bar = mount(Vibe64PlanPassesBar, { passes: state, session: mainChat() });
+  expect(bar.shown).toBe(true);
+  expect(bar.summary).toBe("This plan's passes: 1 of 9 done");
+  expect(bar.continueLabel).toBe("Continue (8 passes left)");
+  const menu = mount(Vibe64PassesMenu, { passes: state, session: mainChat() });
+  expect(menu.continueLabel, "the list's Continue says the same").toBe("Continue (8 passes left)");
+  // The bar's Continue is the list's: the same call and the same message.
+  await bar.continuePasses();
+  expect(send).toHaveBeenLastCalledWith({ message: "Continue the plan's passes.", passAction: "continue", submissionKind: "send" });
+  await menu.act("continue");
+  expect(send).toHaveBeenCalledTimes(2);
+  expect(send.mock.calls[1]).toEqual(send.mock.calls[0]);
+
+  mocks.resource.data.value = { ...mocks.resource.data.value, plan: planAt(8) };
+  expect([bar.summary, bar.continueLabel, menu.continueLabel]).toEqual(["This plan's passes: 8 of 9 done", "Continue (1 pass left)", "Continue (1 pass left)"]);
+  // Before Senior's review the plan's passes don't run yet: no bar, and still no suggestion beside them.
+  mocks.resource.data.value = { ...mocks.resource.data.value, plan: planAt(0, { atPasses: false }) };
+  expect([bar.shown, state.recommendation.value]).toEqual([false, null]);
+  // A lesson, Fix it with AI and a chat with no mode yet show no plan's passes, so no bar either.
+  for (const session of [mainChat({}, { purpose: "learning" }), mainChat({ mode: "fix" }), { sessionId: "session-1", metadata: {} }]) {
+    mocks.resource.data.value = { ...mocks.resource.data.value, plan: planAt(1) };
+    expect(mount(Vibe64PlanPassesBar, { passes: state, session }).shown).toBe(false);
+  }
+  // Once every pass is done, or the plan is finished, the bar goes and suggestions come back.
+  for (const plan of [planAt(9), null]) {
+    mocks.resource.data.value = { ...mocks.resource.data.value, plan };
+    expect(bar.shown).toBe(false);
+    expect(state.recommendation.value?.id).toBe("speed-pass");
+  }
+});
+
 it("a suggestion offers the pass's ordinary runs; its deep run stays in Passes beside its cost", () => {
   mocks.resource.data.value = { ok: true, recommendation: "quality-pass", master: null,
     passes: listed({ "quality-pass": { lastRun: new Date(Date.now() - 18 * 24 * 60 * 60 * 1000).toISOString(), commitsSince: 42 } }) };

@@ -2874,6 +2874,55 @@ async function uiPassWorld(page: Page, { width, preferences }: { width: number; 
 }
 
 for (const width of [390, 1280]) {
+  test(`@plan-passes a plan with unfinished passes shows them above the message box with Continue naming what's left, and suggests no pass, at ${width}px`, async ({ page }, info) => {
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    const { server, session } = await uiPassWorld(page, { width, preferences: { mode: "auto", ...AFTER_PLAN_DEFAULTS } });
+    try {
+      // whs2's plan at its passes: Review done, eight to go, Speed pass among them.
+      const ids = ["review", "security-pass", "data-pass", "quality-pass", "ux-pass", "speed-pass", "ui-pass", "identity-pass", "deslop"];
+      const planPasses = ids.map((id, index) => {
+        const title = GENESIS_PASSES.find((pass) => pass.id === id)!.title;
+        return { id, title, scope: "the plan's changes", item: `${title}: the plan's changes`, done: index === 0, state: index === 0 ? "done" : "" };
+      });
+      let plan: Record<string, unknown> | null = { title: "Bookings", atPasses: true, passes: planPasses };
+      // Speed pass never completed, so the server's rule picks it, though it is one of the plan's own passes.
+      const passes = GENESIS_PASSES.map((pass) => ({ ...pass, lastRun: null, commitsSince: 408, snoozedUntil: "", dismissed: false }));
+      await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/passes`, route =>
+        fulfillJson(route, { ok: true, sessionId: session.sessionId, unavailable: null, passes, plan, recommendation: "speed-pass" }));
+      await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+      await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+      const bar = page.getByTestId("vibe64-plan-passes");
+      await expect(bar).toContainText("This plan's passes: 1 of 9 done");
+      const next = bar.getByRole("button", { name: "Continue (8 passes left)", exact: true });
+      await expect(next).toBeEnabled();
+      const suggestion = page.getByRole("status").filter({ hasText: "Speed pass has never been completed on this app. Run it?" });
+      await expect(suggestion).toHaveCount(0);
+      const row = page.locator(".studio-autopilot__composer-actions:visible");
+      expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`plan-passes-bar-${width}.png`), animations: "disabled" });
+      // The Passes list's Continue names the same count.
+      await page.getByRole("button", { name: "Passes", exact: true }).click();
+      const list = page.getByRole("dialog", { name: "Passes" });
+      await expect(list.getByRole("button", { name: "Continue (8 passes left)", exact: true })).toBeEnabled();
+      await page.getByRole("button", { name: "Close passes", exact: true }).click();
+      await expect(list).toHaveCount(0);
+      // The bar's Continue sends the list's own message. Once the plan is finished, the bar goes and the suggestion is back.
+      plan = null;
+      await next.click();
+      await expect.poll(() => server.state.messages.length).toBe(1);
+      expect(server.state.messages[0]).toMatchObject({ message: "Continue the plan's passes.", passAction: "continue" });
+      await expect(bar).toHaveCount(0);
+      await expect(suggestion).toBeVisible();
+      expect(errors).toEqual([]);
+    } finally {
+      await page.close();
+      await server.close();
+    }
+  });
+}
+
+for (const width of [390, 1280]) {
   test(`@after-plan Passes tick the passes each new plan's Passes start with: Review and Security always, the rest saved for the chat at ${width}px`, async ({ page }, info) => {
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
