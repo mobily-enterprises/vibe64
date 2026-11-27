@@ -600,9 +600,7 @@ function normalizeResourceEnvironment(resources, provided, options = {}) {
 const LOCAL_DATABASE_SERVER_KINDS = new Set(["mysql", "postgresql"]);
 const LOCAL_DATABASE_FIELD_ORDER = ["host", "port", "database", "username", "password"];
 
-function trimmedValue(environment = {}, name = "") {
-  return typeof environment[name] === "string" ? environment[name].trim() : "";
-}
+const trimmedValue = (environment = {}, name = "") => typeof environment[name] === "string" ? environment[name].trim() : "";
 
 /**
  * The database servers a Stack declares that the person runs themselves, as
@@ -746,5 +744,6 @@ export {
   resourceRequiredInDevelopment,
   resourceSemanticIsSecret,
   satisfiedAlternative,
+  trimmedValue,
   __testables
 };

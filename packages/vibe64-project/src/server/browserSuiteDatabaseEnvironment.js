@@ -1,5 +1,5 @@
 import { isRecord, toText } from "@jskit-ai/kernel/shared/support/normalize";
-import { resourceKindIsDatabase } from "./resourceEnvironment.js";
+import { resourceKindIsDatabase, trimmedValue } from "./resourceEnvironment.js";
 
 // What a browser suite's process opens instead of a database it must not reach: names that explain themselves in the
 // error they cause, on a host that cannot resolve (`.invalid`), and an SQLite file in a folder that does not exist.
@@ -11,10 +11,6 @@ const URL_SCHEMES = Object.freeze({ mysql: "mysql", postgresql: "postgres" });
 
 function objectRecord(value) {
   return isRecord(value) ? value : null;
-}
-
-function trimmedValue(environment = {}, name = "") {
-  return typeof environment[name] === "string" ? environment[name].trim() : "";
 }
 
 function noBrowserSuiteDatabaseValue(kind = "", semantic = "") {
