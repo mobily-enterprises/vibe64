@@ -84,8 +84,9 @@ test("a database binds its test databases to exactly TEST_DB_NAME and BROWSER_TE
   }
   // A declaration refused here is refused wherever its preferred alternative is read, a host's provisioning included.
   assert.throws(() => normalizeResourceEnvironment([database({ testDatabase: "TEST_DB_NAMES" })], {
-    contract: CONTRACT, resourceValues: []
-  }), { code: "vibe64_database_resource_test_bindings_invalid" });
+    contract: CONTRACT,
+    resourceValues: [{ declaration: { component: "jskit", id: "database", kind: "postgresql" }, values: { url: "postgresql://app@db/app" } }]
+  }, { requireDatabaseTool: false }), { code: "vibe64_database_resource_test_bindings_invalid" });
 });
 
 test("a host serves a redis url to its declared name, and a bucket is never a host's to supply", () => {

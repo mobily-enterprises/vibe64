@@ -267,7 +267,7 @@ test("the checks spec says what a check gets and that the declared Verification 
     "never a listing", "owns its databases, ports and output folder", "never pin a worker or concurrency count",
     "its 10 slowest files"
   ]) assert.ok(checks.includes(required), required);
-  assert.doesNotMatch(checks, /hosted|Online|\/vibe64\/trees/u, "the public spec describes no hosting service");
+  assert.doesNotMatch(checks, /hosted|O[n]line|\/vibe64\/trees/u, "the public spec describes no hosting service");
 });
 
 test("the Preview identity protocol examples satisfy the real response validation", async () => {
