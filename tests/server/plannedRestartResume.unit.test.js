@@ -7,10 +7,11 @@ import { readBootId } from "@local/vibe64-core/server/plannedRestartNotice";
 import { assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
 import { goalHarness } from "./claudeGoalTestHelpers.js";
 
-// After a planned restart, Main chat's work goes on by itself: a turn the notice told (steered, or led by its note)
-// that ended before the restart, as the AI does once it has written where it is, is resumed once with the restart's
-// note, as the person it ran for; one the person stopped is not; and one still running at the restart is resumed by
-// the recovery of interrupted turns alone, once, however often the recovery checks again. The real terminals service,
+// After a planned restart, a chat's work goes on by itself: a turn the notice told (steered, or led by its note) that
+// ended before the restart, as the AI does once it has written where it is, is resumed once with the restart's note,
+// as the person it ran for, in Main chat and in a temporary chat alike; one the person stopped is not; and one still
+// running at the restart is resumed by the recovery of interrupted turns alone, once, however often the recovery
+// checks again. The real terminals service,
 // its planned restart reader and its recovery run here (claudeGoalTestHelpers.js); only Claude is synthetic, and a
 // steer ends its turn. The reader's own rules are plannedRestart.unit.test.js.
 
@@ -45,6 +46,8 @@ async function messages(h) {
 
 const resumes = async h => (await messages(h)).filter(text => text.includes(RESUME_NOTE));
 const request = async h => assistantRoutingRequestForDisplay((await h.store.readSession("test")).metadata);
+const temporaryRequest = async (h, conversationId) =>
+  assistantRoutingRequestForDisplay((await h.store.readSessionConversation("test", conversationId))?.routingMetadata || {});
 const finishedChecks = h => h.warnings.filter(record => record?.event === "vibe64.turn_resume.recovery_finished");
 
 /** A Senior request the person sent, working in Main chat. */
@@ -93,6 +96,37 @@ test("a turn the notice steered that ended before the restart goes on after it, 
     const entries = (await h.store.readConversationLog("test")).filter(turn => turn.system?.messageId?.startsWith("vibe64-turn-interrupted:"));
     assert.deepEqual(entries.map(turn => turn.system.text.replace(/\d\d:\d\d/u, "HH:MM")),
       ["Vibe64 was restarted at HH:MM UTC; this turn carried on."]);
+  });
+});
+
+test("a temporary chat's turn the notice steered that ended before the restart goes on after it, once, with the restart's note", { timeout: 60_000 }, async t => {
+  const h = await preparedHarness(t);
+  if (!h) return t.skip("this machine has no boot id, so no planned restart notice is obeyed");
+  await h.inProject(async () => {
+    // The owner's temporary chat follows Main chat's Senior routing; its request works until the notice steers it.
+    await h.service.createTemporaryConversation("test", { conversationId: "side-1" }, h.options);
+    const sent = await h.service.startTemporaryConversationTurn("test",
+      { conversationId: "side-1", messageId: "side-before-notice", message: "Keep working on the side report", vibe64User: h.actor }, h.options);
+    assert.notEqual(sent?.ok, false, JSON.stringify(sent));
+    await h.waitFor(async () => (await temporaryRequest(h, "side-1"))?.delivery === "accepted" &&
+      (await temporaryRequest(h, "side-1")).status === "working", async () => JSON.stringify(await temporaryRequest(h, "side-1")));
+    await giveNotice(h, "temporary-steered-then-ended");
+    await h.waitFor(() => h.warnings.some(record => record?.event === "vibe64.planned_restart.steered" && record.steered === 1),
+      () => JSON.stringify(h.warnings));
+    await h.waitFor(async () => (await temporaryRequest(h, "side-1"))?.status !== "working",
+      async () => JSON.stringify(await temporaryRequest(h, "side-1")));
+
+    await restartForTheNotice(h);
+    const recovery = await h.service.recoverInterruptedTurns({ retryDelaysMs: [] });
+    assert.equal(recovery.ok, true, JSON.stringify({ recovery, warnings: h.warnings }));
+    assert.deepEqual(recovery.results.map(({ chat, resumed }) => ({ chat, resumed })), [{ chat: "side-1", resumed: true }],
+      JSON.stringify(recovery));
+    const [resumed, ...again] = await resumes(h);
+    assert.deepEqual(again, [], "it is resumed once");
+    assert.match(resumed, /Vibe64: Restarted at \d\d:\d\d UTC\./u);
+    assert.match(resumed, /Original request: Keep working on the side report/u, "the request it ran goes on");
+    await h.waitFor(async () => (await temporaryRequest(h, "side-1"))?.status === "working", "the temporary chat works on it again");
+    assert.equal((await temporaryRequest(h, "side-1")).submittedBy?.username, h.actor.username, "as the person it ran for");
   });
 });
 
