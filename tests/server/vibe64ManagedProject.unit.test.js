@@ -12,15 +12,16 @@ import {
   materializeInitialProject,
   verifyManagedProjectSource
 } from "@local/vibe64-project/server/managedProject";
+import { gitEnv } from "../../packages/vibe64-execution/src/server/env/gitEnv.js";
 import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
 const execFileAsync = promisify(execFile);
 
-async function directCommand({ args = [], command = "", cwd = "", input, maxBuffer, outputEncoding } = {}) {
+async function directCommand({ args = [], command = "", cwd = "", env = process.env, input, maxBuffer, outputEncoding } = {}) {
   try {
     const execution = execFileAsync(command, args, {
       cwd,
-      env: process.env,
+      env,
       maxBuffer: maxBuffer ?? 4 * 1024 * 1024,
       ...(outputEncoding === "base64" ? { encoding: "buffer" } : {})
     });
@@ -536,4 +537,44 @@ test("an empty canonical repository is created bare on the requested branch for 
       code: "vibe64_initial_project_runtime_root_invalid"
     }
   );
+});
+
+// A host's login profile may give Git command-scope config of its own: mobilynet's /etc/profile.d/90-mobilynet.sh
+// exports GIT_CONFIG_COUNT=2 with core.hooksPath and core.fsmonitor, replacing a caller's entries, so a login shell
+// loses every one Vibe64 gave its command (27 Nov: Online's GitHub open lost its token transport's credential
+// helper so). The canonical repository's scripts keep their safe directories whatever such a profile sets: this
+// test's profile replaces the entries the same way, from the home, and a git shim records what each git sees.
+test("the canonical repository's scripts keep their safe directories whatever a login profile sets", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-managed-login-profile-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const namespaceRoot = path.join(root, "namespace");
+  const projectRuntimeRoot = path.join(root, "runtime");
+  const home = path.join(root, "home");
+  const shimRoot = path.join(root, "shim");
+  const record = path.join(root, "safe-directories");
+  await Promise.all([mkdir(namespaceRoot), mkdir(projectRuntimeRoot), mkdir(home), mkdir(shimRoot)]);
+  await writeFile(path.join(home, ".bash_profile"),
+    "export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null " +
+    "GIT_CONFIG_KEY_1=core.fsmonitor GIT_CONFIG_VALUE_1=false\n");
+  const realGit = (await execFileAsync("sh", ["-c", "command -v git"])).stdout.trim();
+  await writeFile(path.join(shimRoot, "git"), [
+    "#!/bin/sh",
+    `printf 'git:%s\\n' "$(${JSON.stringify(realGit)} config --get-all safe.directory | tr '\\n' ' ')" >> ${JSON.stringify(record)}`,
+    `exec ${JSON.stringify(realGit)} "$@"`
+  ].join("\n"), { mode: 0o755 });
+
+  // The gateway's part for the canonical repository's own scripts: the command runs with the Git env its request
+  // gives it, in a home whose login profile replaces it.
+  const runCommand = (request) => request.command !== "bash" ? directCommand(request) : directCommand({
+    ...request,
+    env: { HOME: home, LANG: "C", PATH: `${shimRoot}:${process.env.PATH}`, ...gitEnv({ request }) }
+  });
+  await initializeManagedProject({ projectContextRoot: namespaceRoot, projectRuntimeRoot, runCommand });
+
+  const seen = (await readFile(record, "utf8").catch(() => "")).split("\n").filter(Boolean);
+  assert.ok(seen.length > 0, "the canonical repository's scripts ran git");
+  for (const line of seen) {
+    assert.ok(line.slice("git:".length).split(" ").includes(path.resolve(projectRuntimeRoot)),
+      `git saw these safe directories: "${line.slice("git:".length).trim()}"`);
+  }
 });
