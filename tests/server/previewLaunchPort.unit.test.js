@@ -72,3 +72,41 @@ test("a Preview is never offered a port the host claims for its own services, wh
   t.after(() => unclaimed.release());
   assert.equal(unclaimed.port, free);
 });
+
+test("a Preview serving several app servers holds that many consecutive ports, passing over any block a used, held or ephemeral port breaks, and frees them together", async (t) => {
+  const { createServer } = await import("node:net");
+  const free = await portBelowEphemeralRange();
+  const narrow = await rangeFile(t, `${free + 2} ${free + 9}\n`);
+  const consecutive = (ports, count) => {
+    assert.equal(ports.length, count);
+    ports.forEach((port, index) => assert.equal(port, ports[0] + index));
+  };
+  // The block from the preferred port reaches into the range: the scan goes on past its end.
+  const first = await reserveAvailableWebLaunchTargetPort(free, { rangeFile: narrow }, 4);
+  t.after(() => first.release());
+  consecutive(first.ports, 4);
+  assert.equal(first.port, first.ports[0]);
+  assert.ok(first.port > free + 9, `${first.ports} reach into ${free + 2}-${free + 9}`);
+  // Ports another Preview holds are passed over.
+  const second = await reserveAvailableWebLaunchTargetPort(first.port, { rangeFile: narrow }, 2);
+  t.after(() => second.release());
+  consecutive(second.ports, 2);
+  assert.ok(second.port > first.ports.at(-1), `${second.ports} overlap ${first.ports}`);
+  // So is a block with a port something listens on.
+  const listener = createServer();
+  await new Promise((resolve) => listener.listen(second.ports.at(-1) + 2, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => listener.close(resolve)));
+  const third = await reserveAvailableWebLaunchTargetPort(second.ports.at(-1) + 1, { rangeFile: narrow }, 3);
+  t.after(() => third.release());
+  consecutive(third.ports, 3);
+  assert.ok(third.port > listener.address().port, `${third.ports} include the listened port ${listener.address().port}`);
+  // Released together: the same block is offered again.
+  first.release();
+  const again = await reserveAvailableWebLaunchTargetPort(first.port, { rangeFile: narrow }, 4);
+  t.after(() => again.release());
+  assert.deepEqual(again.ports, first.ports);
+  // One server, one port, as always.
+  const single = await reserveAvailableWebLaunchTargetPort(free, { rangeFile: narrow });
+  t.after(() => single.release());
+  assert.deepEqual(single.ports, [single.port]);
+});

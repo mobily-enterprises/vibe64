@@ -1012,3 +1012,14 @@ test("repeatable activity descriptors carry only an explicit opaque history iden
   }
   assert.equal(normalizeExecutionDescriptor({ operationId: "random-operation" }).resourceProfile, undefined);
 });
+
+test("an execution declares its workers, 1 to 64, as a browser-test suite with several app servers does", () => {
+  assert.equal(normalizeExecutionDescriptor({ workers: 4 }).workers, 4);
+  assert.equal(normalizeExecutionDescriptor({ workers: 64 }).workers, 64);
+  // One is every execution's count, so it is never written out.
+  assert.equal(Object.hasOwn(normalizeExecutionDescriptor({ workers: 1 }), "workers"), false);
+  assert.equal(Object.hasOwn(normalizeExecutionDescriptor({}), "workers"), false);
+  for (const workers of [0, -1, 65, 1.5, "2", null, Number.NaN]) {
+    assert.throws(() => normalizeExecutionDescriptor({ workers }), { code: "vibe64_execution_workers_invalid" }, String(workers));
+  }
+});

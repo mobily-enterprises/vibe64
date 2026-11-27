@@ -258,3 +258,22 @@ test("legacy projects without dependency files or resource estimates can start w
 test("standalone operation does not require managed resource metadata or a resource store", async () => {
   assert.deepEqual(await startResourceWorkflow({ env: {} }), { ok: true, workflow: null });
 });
+
+test("a test target serving several app servers starts its workflow as that many workers", async (t) => {
+  const f = await fixture(t);
+  const requests = [];
+  const release = installVibe64ManagedExecutionProvider({
+    runCommand() {}, stopExecution() {},
+    startWorkflow(input) { requests.push(input); return { ok: true, workflow: { id: `workflow-${requests.length}` } }; }
+  });
+  t.after(release);
+  const input = { ...f.input, session: { sessionId: "session" }, kind: "preview", label: "Application", environment: "test" };
+  await runWithProjectRequestContext({ slug: "example" }, async () => {
+    await startResourceWorkflow({ ...input, configuration: { mode: "interactive", workers: 3 } });
+    await startResourceWorkflow({ ...input, configuration: { mode: "interactive" } });
+  });
+  assert.equal(requests[0].workers, 3);
+  assert.equal(Object.hasOwn(requests[1], "workers"), false);
+  // Its count is part of what the host learns its memory by.
+  assert.notEqual(requests[0].compatibilityKey, requests[1].compatibilityKey);
+});

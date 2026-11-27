@@ -290,3 +290,26 @@ test("preview auth providers advertise only the identifier types they support", 
     PREVIEW_IDENTITY_SELECTOR_USER_ID
   ]);
 });
+
+test("a preview identity grant names the browser-test worker it signs in on, signed with the rest", () => {
+  const previewAuth = previewAuthFixture();
+  const selection = {
+    operation: PREVIEW_IDENTITY_LOGIN_OPERATION,
+    selector: { type: PREVIEW_IDENTITY_SELECTOR_EMAIL, value: "ada@example.com" }
+  };
+  const payload = (grant) => JSON.parse(Buffer.from(grant.split(".")[1], "base64url").toString("utf8"));
+  const first = createPreviewIdentityGrant(previewAuth, selection, { nowSeconds: 100 });
+  assert.equal(Object.hasOwn(payload(first), "worker"), false, "worker 0, every other Preview's, is not written out");
+  assert.equal(verifyPreviewIdentityGrant(first, previewAuth, { nowSeconds: 110 }).worker, 0);
+  const third = createPreviewIdentityGrant(previewAuth, selection, { nowSeconds: 100, worker: 2 });
+  assert.equal(payload(third).worker, 2);
+  assert.equal(verifyPreviewIdentityGrant(third, previewAuth, { nowSeconds: 110 }).worker, 2);
+  for (const worker of [-1, 1.5, "1", null]) {
+    assert.throws(() => createPreviewIdentityGrant(previewAuth, selection, { worker }),
+      { code: "vibe64_preview_identity_worker_invalid" }, String(worker));
+  }
+  // A grant whose worker was changed after signing is refused.
+  const [prefix, , signature] = first.split(".");
+  const changed = Buffer.from(JSON.stringify({ ...payload(first), worker: 1 })).toString("base64url");
+  assert.throws(() => verifyPreviewIdentityGrant(`${prefix}.${changed}.${signature}`, previewAuth, { nowSeconds: 110 }));
+});
