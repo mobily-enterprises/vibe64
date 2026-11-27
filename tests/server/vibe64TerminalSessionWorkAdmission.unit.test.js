@@ -278,13 +278,18 @@ async function terminalServiceFixture(t, lock, {
 
 // Skills an older Genesis synced: Genesis serves every project its own skills, so the only Genesis
 // that serves other ones is Genesis's own source, which stands in for that older release while it
-// syncs the project, then goes. The project keeps the older genesis-project skill as managed.
+// syncs the project, then goes. The project keeps the older genesis-project skill as managed. A Genesis
+// never downgrades copies a newer one recorded writing (the manifest's genesisVersion), so the
+// project's copies first read as written before Genesis recorded its release.
 async function outdatedSkillFixture(projectRoot) {
   await execFileAsync("git", ["init", "--quiet"], { cwd: projectRoot });
   await initializeGenesisProject({ projectRoot });
   const skillPath = path.join(projectRoot, ".agents/skills/genesis-project/SKILL.md");
   const expected = await readFile(skillPath, "utf8");
   const original = `${expected}\nGuidance from an older Genesis.\n`;
+  const manifestPath = path.join(projectRoot, ".agents/skills/.genesis-managed.json");
+  const { genesisVersion: _written, ...unrecorded } = JSON.parse(await readFile(manifestPath, "utf8"));
+  await writeFile(manifestPath, `${JSON.stringify(unrecorded, null, 2)}\n`);
   const olderSkills = path.join(projectRoot, "skills");
   await cp(path.join(genesisPackageBinDirectory(), "../genesis-compiler/skills"), olderSkills, { recursive: true });
   await writeFile(path.join(olderSkills, "genesis-project/SKILL.md"), original);
