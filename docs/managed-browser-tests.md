@@ -162,20 +162,25 @@ JSKIT's database patterns), its test-only `env` and `APP_ENV=test`. Both JSKIT d
 `BROWSER_TEST_DB_NAME` and `TEST_DB_NAME` as optional database names, so a host
 that provisions a project's database gives the browser suite and the Node
 database tests one each. `vibe64-helper playwright --target test-app npm-run
-test:e2e` then runs the project's own suite on that database. A project whose
-own `## Outputs` predates the target adds the block above; any other project
-adds a target of its own as below.
+test:e2e` then runs the project's own suite on that database. A JSKIT project
+whose own `## Outputs` predates the target adds the block above, and one whose
+test target starts a development server takes its Run step; any other project
+adds a target of its own as below, serving its production build as `jskit
+browser-test-server` does.
 
 Keep the normal target as the default. Add another web target with
 ``- Data: `test` `` to the existing `## Outputs` section in `genesis/stack.md`,
 using scripts that actually exist. `vibe64-helper spec outputs` (`npx vibe64 spec
 outputs` outside a session) prints the exact grammar and a test-target example.
-The launcher is application-owned, not a command provided by Vibe64. Use the
-Outputs contract's `{host}` and `{port}` arguments rather than starting another
-fixed-port server. A Data `test` target enforces isolated test data and enables
-the persistent Test Preview banner; target and database names are not used as
-heuristics. Managed test phases remain visible during startup, execution,
-restoration and recovery even for targets without Data.
+The launcher is application-owned, not a command provided by Vibe64. A test
+target serves the application's production build, never a development server:
+built once per tree and reused while a digest of its sources is unchanged, one
+app server per worker, so the suite tests the code Staging and Production run.
+Use the Outputs contract's `{host}`, `{port}` and `{workers}` arguments rather
+than starting another fixed-port server. A Data `test` target enforces isolated
+test data and enables the persistent Test Preview banner; target and database
+names are not used as heuristics. Managed test phases remain visible during
+startup, execution, restoration and recovery even for targets without Data.
 
 The application launcher must:
 
@@ -198,11 +203,9 @@ Keep ordinary browser startup incremental. Retain the isolated schema and its
 migration ledger, apply pending migrations, and reset test data deterministically
 before seeding fixtures. Preserve migration-owned baseline data required by the
 application. Fresh-schema migration checks remain a separate test operation.
-Use the development server for routine checks; a production frontend build belongs
-to tests that specifically need the built artifact. Batch related browser cases
-into one managed invocation so they share startup and restoration. If startup is
-slow, measure migrations, fixture preparation, and server startup before retrying
-or extending a deadline.
+Batch related browser cases into one managed invocation so they share startup,
+the build and restoration. If startup is slow, measure the build, migrations,
+fixture preparation and server startup before retrying or extending a deadline.
 
 If login is required, declare the existing Preview identity protocol beneath
 this target. Its application-owned identity executable must select the same test

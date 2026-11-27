@@ -46,6 +46,11 @@ reading unchanged logs between short waits.
 Where its command tool supports `yield_time_ms`, an empty progress wait uses
 `30000`; shorter waits are for interactive input or a specific immediate check.
 
+A test target serves your app's production build, the code Staging and
+Production run, never a development server, and builds it again only when the
+app's code has changed. If a project's test target starts a development server,
+ask the coding agent to change it to serve the build.
+
 A test target can run a suite in parallel when its Run step in
 `genesis/stack.md` takes `{workers}` (a JSKIT project's `test-app` does). It
 then serves one copy of your app per browser, each with its own copy of the

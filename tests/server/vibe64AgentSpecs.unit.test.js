@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { __testables as agentSpecCliTestables, runAgentSpecCli } from "../../server/lib/agentSpecCli.js";
@@ -223,6 +224,26 @@ test("the browser-tests and managed-git specs carry every rule the session guida
     /`--config-env`, `--exec-path`, `--upload-pack`, signing, submodule recursion/u
   ]) assert.match(git, pattern);
   assert.doesNotMatch(everything, /commandSubmitted|unauthenticated 404/u);
+});
+
+// A project's browser suite tests the code Staging and Production run: its Data test target serves the production build,
+// built once and reused while its sources are unchanged, one app server per worker. A test target that ran a development
+// server tested other code, slower, and an agent that read "use the development server for routine checks" offered one.
+test("a Data test target serves the production build, never a development server, in both specs, the guide and the Program", async () => {
+  const outputs = (await cli(["outputs"])).stdout;
+  const browser = (await cli(["browser-tests"])).stdout;
+  const guide = await readFile(new URL("../../docs/managed-browser-tests.md", import.meta.url), "utf8");
+  const program = await readFile(new URL("../../genesis/program/preview/managed-application.md", import.meta.url), "utf8");
+  // The rule's words, wrapped however each text wraps its lines.
+  const rule = new RegExp(("serves the application's production build, never a development server: built once per tree and " +
+    "reused while a digest of its sources is unchanged, one app server per worker").split(" ").join("\\s+"), "u");
+  for (const [name, text] of Object.entries({ outputs, browser, guide, program })) assert.match(text, rule, name);
+  for (const [name, text] of Object.entries({ outputs, browser, guide })) assert.match(text, /jskit\s+browser-test-server/u, name);
+  const [example] = fencedBlocks(outputs, "markdown");
+  const testTarget = example.split("\n### ").find((target) => target.includes("- Data: `test`"));
+  assert.match(testTarget, /- Run `[^`]+`: `node_modules\/\.bin\/jskit` `browser-test-server` `\{host\}` `\{port\}` `\{workers\}`/u);
+  assert.doesNotMatch(guide, /Use the development server for routine checks/u);
+  assert.doesNotMatch(program, /production builds are separate from\s+ordinary browser checks/u);
 });
 
 test("the Preview identity protocol examples satisfy the real response validation", async () => {
