@@ -115,9 +115,11 @@ function createTemporaryConversationInteraction({
         } = observed;
         const route = routingRequest(observed);
         // A stopped or cancelled request, including its retained changeover
-        // attempt, is not offered for recovery, as in Main.
+        // attempt, is not offered for recovery, as in Main. Nor is the attempt of
+        // a send still under way: only once its server is gone does routing
+        // record the delivery uncertain, which is offered below.
         const attempted = attemptedChangeover(observed);
-        const pending = route?.stopped && attempted?.messageId === route.messageId ||
+        const pending = route?.stopped && attempted?.messageId === route.messageId || route?.delivery === "sending" ||
           assistantCancelledMessageIds(observed.routingMetadata).includes(attempted?.messageId) ? null : attempted;
         const request = route?.delivery === "uncertain" && !route.stopped && route.input ? {
           messageId: route.messageId,

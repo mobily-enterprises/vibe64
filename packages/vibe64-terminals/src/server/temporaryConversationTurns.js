@@ -22,6 +22,7 @@ import {
   MAIN_CONVERSATION_PRESENTATION
 } from "./mainConversationBinding.js";
 import { conversationClosingRefusal, requireSuccess, routingRequest, presentation } from "./temporaryConversationRules.js";
+import { admittingOperations, announceAdmission } from "./temporaryConversationAdmission.js";
 import { doNothing } from "@local/vibe64-core/shared/doNothing";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 
@@ -385,8 +386,11 @@ function createTemporaryConversationTurns({
   async function startInsideWrite(sessionId, input, ctx) {
     const record = await chatRecords.recordFor(ctx, input.conversationId);
     if (record.state === "closing") throw conversationClosingRefusal();
+    const options = persistentConversationOptions(savingTemporaryOutput(sessionId, record.conversationId, ctx), record);
+    const turn = { conversationId: record.conversationId, messageId: input.messageId };
     return conversationRuntime.startPersistentConversationTurn({
-      ...persistentConversationOptions(savingTemporaryOutput(sessionId, record.conversationId, ctx), record),
+      ...options,
+      operations: admittingOperations(options.operations, () => announceAdmission({ conversationTurns, logger }, sessionId, turn)),
       sessionId,
       input
     });

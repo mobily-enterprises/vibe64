@@ -5,6 +5,7 @@ import { createSessionChangedPublisher } from "@local/vibe64-core/server/session
 
 const VIBE64_CONVERSATION_TURN_STARTING_EVENT = "vibe64.conversation.turn-starting";
 const VIBE64_CONVERSATION_TURN_SETTLED_EVENT = "vibe64.conversation.turn-settled";
+const VIBE64_CONVERSATION_TURN_ADMITTED_EVENT = "vibe64.conversation.turn-admitted";
 
 /** @param {RuntimeEvents} events */
 function createProjectRuntimeChangedPublisher(events) {
@@ -46,7 +47,8 @@ function createTerminalSessionChangedPublishers(events) {
 
 /**
  * What other features learn about a turn. `starting` is awaited before a message is sent, so a
- * listener can refuse it by throwing. `settled` says a turn ended and carries no result: a listener
+ * listener can refuse it by throwing. `admitted` says the AI took a temporary chat's message as its
+ * turn, while Vibe64 is still recording the send. `settled` says a turn ended and carries no result: a listener
  * reads the conversation. `conversationId` is empty for Main; `failure` names a message that never reached the AI.
  * @param {RuntimeEvents} events
  */
@@ -55,17 +57,23 @@ function createConversationTurnPublishers(events) {
     return events.publish({ type: VIBE64_CONVERSATION_TURN_STARTING_EVENT, sessionId, ...turn });
   }
 
+  function admitted(sessionId, turn) {
+    return events.publish({ type: VIBE64_CONVERSATION_TURN_ADMITTED_EVENT, sessionId, ...turn });
+  }
+
   function settled(sessionId, conversationId, failure = null) {
     return events.publish({ type: VIBE64_CONVERSATION_TURN_SETTLED_EVENT, sessionId, conversationId, failure });
   }
 
   return Object.freeze({
+    admitted,
     starting,
     settled
   });
 }
 
 export {
+  VIBE64_CONVERSATION_TURN_ADMITTED_EVENT,
   VIBE64_CONVERSATION_TURN_SETTLED_EVENT,
   VIBE64_CONVERSATION_TURN_STARTING_EVENT,
   createConversationTurnPublishers,

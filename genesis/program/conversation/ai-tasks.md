@@ -63,6 +63,7 @@ upgrade cleans up the closing records older archives still hold.
 - `src/lib/vibe64AiTaskConversation.js`
 - `src/composables/useVibe64TemporaryAiColleagueView.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationLifecycle.js`
+- `packages/vibe64-terminals/src/server/temporaryConversationAdmission.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationTurns.js`
 - `packages/vibe64-terminals/src/server/temporaryConversationInteraction.js`
 - `packages/vibe64-terminals/src/server/temporaryRepairChatsUpgrade.js`
@@ -78,7 +79,14 @@ machine moves it and is the only writer of the field, apart from copying a
 conversation into a development copy. Everything else asks: a client sends a
 command, a finished turn sends an event, and the runner carries out the effect the
 machine asked for. A task therefore keeps going without a browser, and reads the
-same after a reload, on another device and for another member.
+same after a reload, on another device and for another member. A task is working
+from the moment its AI takes the task's own message as its turn: the temporary
+chat's `admitted` event (`temporaryConversationAdmission.js`, followed by
+`onTurnAdmitted`) moves it before the send has recorded that turn, which a slow
+host takes seconds over; the runner's own admission when the send returns then
+changes nothing. While that send still runs, the chat reads its turn as working and
+never offers the attempted message for recovery; only a send its server left
+uncertain is offered.
 
 Each move adds to the task's `revision`, so a late answer can never replace a newer
 one in a browser. A browser's conversation snapshot carries only `task.kind`; the

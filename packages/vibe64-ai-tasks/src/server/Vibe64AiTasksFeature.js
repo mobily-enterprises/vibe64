@@ -3,6 +3,7 @@ import { isLocalhostCheckBypassEnabled } from "@local/vibe64-core/server/localho
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import {
+  VIBE64_CONVERSATION_TURN_ADMITTED_EVENT,
   VIBE64_CONVERSATION_TURN_SETTLED_EVENT,
   VIBE64_CONVERSATION_TURN_STARTING_EVENT
 } from "@local/vibe64-terminals/server/events";
@@ -36,6 +37,11 @@ function followSessionEvents(events, aiTasks) {
     id: "vibe64.ai-tasks.turn-starting",
     matches: event => event.type === VIBE64_CONVERSATION_TURN_STARTING_EVENT,
     handle: event => aiTasks.onTurnStarting(event)
+  });
+  events.register({
+    id: "vibe64.ai-tasks.turn-admitted",
+    matches: event => event.type === VIBE64_CONVERSATION_TURN_ADMITTED_EVENT,
+    handle: event => aiTasks.onTurnAdmitted(event)
   });
   events.register({
     id: "vibe64.ai-tasks.turn-settled",
