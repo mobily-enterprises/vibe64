@@ -52,3 +52,14 @@ the Ith (Node's `--test-shard`), so the N shards together run every file once.
   survive a power cut, and on a shared test host those waits were most of a
   session test's time. A test that proves a write durable still sees every
   flush call, in order (`tests/server/durableWriteTrace.js`).
+
+## Tests that start Playwright
+
+A test that starts Playwright, or a wrapper or fixture that runs it, gives the
+child `playwrightChildEnvironment(own)` from
+`tests/server/playwrightChildEnvironment.js`, never `{ ...process.env, ... }`.
+A test host's lane or an outer suite exports Playwright and JSKIT browser-test
+settings, such as `PLAYWRIGHT_PORT` or `PLAYWRIGHT_WORKER_TARGETS`, which JSKIT's
+harness reads as the child's own. The helper drops every `PLAYWRIGHT_` and
+`JSKIT_BROWSER_` name the test process has except `PLAYWRIGHT_BROWSERS_PATH`,
+then sets the child's own on top.

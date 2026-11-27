@@ -22,6 +22,7 @@ import { currentProjectRequestContext, runWithProjectRequestContext } from "../.
 import { vibe64Driver } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 import { portBelowEphemeralRange } from "../fixtures/portBelowEphemeralRange.js";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { playwrightChildEnvironment } from "./playwrightChildEnvironment.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -240,14 +241,15 @@ process.stdout.write(JSON.stringify({
   const previewStarts = [];
   const detached = new Set();
   const socketRoot = await mkdtemp(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "v64-test-sockets-"));
-  const commandEnv = {
-    ...process.env,
-    PLAYWRIGHT_BASE_URL: "", PLAYWRIGHT_STORAGE_STATE: "", VIBE64_PLAYWRIGHT_TARGET_RUN: "",
+  // What the fixture's server gives every command, as a managed host's does: none of this process's own Playwright
+  // settings (a test host lane's PLAYWRIGHT_PORT, an outer suite's targets), then the command's own env on top.
+  const commandEnv = playwrightChildEnvironment({
+    VIBE64_PLAYWRIGHT_TARGET_RUN: "",
     TMPDIR: socketRoot,
     NPM_CONFIG_PREFIX: path.join(root, "tools"),
     VIBE64_SHARED_CACHE_ROOT: path.join(root, "cache"),
     PLAYWRIGHT_BROWSERS_PATH: browsersPath
-  };
+  });
   const runCommand = async (input) => {
     if (input.mode === "detached") {
       const id = `${sessionId}-browser-${detached.size}`;
@@ -400,11 +402,8 @@ try {
     execute(args) {
       const child = spawn(prepared.hostPlaywrightWrapperPath, args, {
         cwd: f.sourceRoot, detached: true,
-        env: {
-          ...process.env, ...prepared.env, VIBE64_EXECUTION_ID: "test-parent",
-          // This fixture owns a different Preview and identity from its outer suite.
-          PLAYWRIGHT_BASE_URL: "", PLAYWRIGHT_STORAGE_STATE: "", VIBE64_PLAYWRIGHT_TARGET_RUN: ""
-        },
+        // This fixture owns a different Preview and identity from its outer suite: none of their settings reach it.
+        env: playwrightChildEnvironment({ ...prepared.env, VIBE64_EXECUTION_ID: "test-parent", VIBE64_PLAYWRIGHT_TARGET_RUN: "" }),
         stdio: ["ignore", "pipe", "pipe"]
       });
       const completion = new Promise((resolve, reject) => {
