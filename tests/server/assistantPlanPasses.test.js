@@ -524,6 +524,40 @@ test("\"Run the Review pass\" while the plan's Review is still to run is the pla
   }
 });
 
+test("a reply to Senior's review of the plan that waited for the person goes back to that review on Senior without Router; done, the plan runs its passes", async (t) => {
+  const passes = ["Review: the plan's changes", "Security pass: the plan's changes"];
+  const QUESTION = "The validation is built.\n\n[1] Keep blank names out of the export too?\nPossible answers:\n- Yes (recommended)\n- No";
+  for (const asks of [true, false]) {
+    const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
+    await publishPlanFixture(f.context, planWith(passes));
+    await f.service.send("session-1", request, f.context);
+    await f.source.commit("Required-name validation");
+    await planChecked(f);
+    await finish(f, "handoff");
+    // Senior's review needs the person: a numbered question in its reply, or a reported wait.
+    await reportOutcome(f, "wait", { involved: true, explanation: "1. Keep blank names out of the export too? Recommended: yes." });
+    const text = asks ? QUESTION : "Actual final explanation.";
+    const review = f.state();
+    f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: review.followup?.messageId || review.messageId, text: "Senior reviews the plan." },
+      assistant: { text }, messages: [{ role: "assistant", text }] }];
+    await f.service.afterTurn("session-1", end(review), f.context);
+    assert.deepEqual([f.state().status, f.state().stage, f.state().awaitingAnswer === true], ["waiting", "review", asks], `asks ${asks}`);
+    const routed = f.helperCalls();
+    await f.service.send("session-1", { messageId: "reply-1", message: "1: yes, keep them out.", submissionKind: "send" }, f.context);
+    assert.equal(f.helperCalls(), routed, `asks ${asks}: the reply is not routed`);
+    const reply = f.sends.at(-1);
+    assert.equal(reply.selection.modelId, f.assignments.senior.modelId);
+    assert.equal(reply.input.genesisTask, undefined, "Senior's review of the plan runs no Genesis task");
+    assert.ok(reply.input.message.includes("1: yes, keep them out.\n\n"), "the person's reply comes first");
+    assert.match(reply.input.message, /Senior review of the plan: /u);
+    assert.deepEqual([f.state().messageId, f.state().stage, f.state().reason, f.state().planInvolved], ["reply-1", "review", "review", true]);
+    // Senior ticks the plan's items and reports complete: the plan runs its passes.
+    await tickItems(f);
+    await finish(f, "complete");
+    assert.deepEqual([f.state().stage, f.state().pass?.item, (await readWorkPlan(f.context)).status], ["pass", passes[0], "active"], `asks ${asks}`);
+  }
+});
+
 test("a new plan's Passes section starts with the chat's After a plan ticks; a plan Senior writes with its own Passes keeps them", async (t) => {
   const f = await fixture(t, { mode: "auto", afterPlan: ["review", "security-pass", "ui-pass", "deslop"], afterPlanDeep: ["deslop"] },
     { readyPlan: false, source: true });
