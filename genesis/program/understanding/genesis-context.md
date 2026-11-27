@@ -97,6 +97,14 @@ Env the Stack declares, and the test databases bound to `TEST_DB_NAME` and
 A host imports it from `@local/vibe64-genesis/server`.
 A genesis-compiler without that operation fails it, naming the update.
 
+`vibe64-helper spec checks` also says where a helper agent's worktree goes, and
+the session guidance repeats it in one line: inside the source, in a folder Git
+ignores (`.worktrees/<name>`, listed in the source's `.git/info/exclude`, since
+Save records a worktree Git doesn't ignore as an embedded repository). A host
+that runs checks on another machine sends a check there only from the source or
+a worktree inside it; one from a worktree in `TMPDIR` stays where the session
+is, on the session's test databases.
+
 
 Code indexing uses Genesis's parser management interface. Standalone first use
 prepares only missing parsers needed by the source, outside project dependencies.

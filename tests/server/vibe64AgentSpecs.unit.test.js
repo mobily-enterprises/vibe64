@@ -248,12 +248,17 @@ test("a Data test target serves the production build, never a development server
 
 // What a check gets, wherever a host runs it, and how a project declares its whole suite: a project whose whole run
 // listed its browser suite (test:e2e:list) in place of running it, pinned its budgets and bound TEST_DB_NAMES had nothing
-// that told it otherwise. The session guidance names the spec before Verification or a test setup changes.
+// that told it otherwise. The session guidance names the spec before Verification or a test setup changes, and says
+// where a helper agent's worktree goes: an agent whose helpers worked in worktrees outside the source (28 Nov) ran all
+// their database tests on the session's one set of test databases, though its host sends checks from inside the
+// source to machines with databases of their own.
 test("the checks spec says what a check gets and that the declared Verification is the whole suite, part by part", async () => {
   const everything = vibe64Driver({ conversationKind: "main", scope: "session", session: {
     managedDatabaseRefresh: true, managedEnvironment: true, managedGit: true, managedPreview: true, managedPages: true
   } });
   assert.match(everything, /Before you change the Stack's Verification or how tests are set up, read `vibe64-helper spec checks`/u);
+  assert.match(everything,
+    /A helper agent's worktree goes inside the source, in a folder Git ignores \(`\.worktrees\/<name>`\), not in TMPDIR, so the host runs its checks as the source's \(same spec\)\./u);
   const { code, stdout: checks } = await cli(["checks"]);
   assert.equal(code, 0);
   for (const required of [
@@ -265,7 +270,12 @@ test("the checks spec says what a check gets and that the declared Verification 
     "Declare every part of the project's checks as its own `- Verify` entry",
     "A part missing from Verification is a part no whole run covers", "The declared Verification is the whole suite",
     "never a listing", "owns its databases, ports and output folder", "never pin a worker or concurrency count",
-    "its 10 slowest files"
+    "its 10 slowest files",
+    "A check run from a worktree inside the session's source gets that worktree's tree",
+    "sends one there only from the source or a worktree inside it", "which every such run shares",
+    "`git worktree add .worktrees/<name>` after adding `/.worktrees/` to the source's `.git/info/exclude`",
+    "Save records a worktree Git doesn't ignore as an embedded repository", "never from a worktree in `TMPDIR`",
+    "so helpers' database tests run side by side"
   ]) assert.ok(checks.includes(required), required);
   assert.doesNotMatch(checks, /hosted|O[n]line|\/vibe64\/trees/u, "the public spec describes no hosting service");
 });

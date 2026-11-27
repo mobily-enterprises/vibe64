@@ -46,7 +46,7 @@ const MANAGED_PREVIEW_INSTRUCTIONS = Object.freeze([
   "Use the managed preview browser for interactive browsing and `vibe64-helper playwright` only for an existing configured project suite; never install another browser.",
   "For browser evidence, batch related actions and assertions, return only needed values and inspect relevant locators or regions; screenshot at meaningful checkpoints or failures, not after every click. Reuse the managed browser when isolation permits, keep required viewport, identity and security checks, and use existing automated cases for repeat verification.",
   "Before you write, change or run a browser suite, read `vibe64-helper spec browser-tests`: the Playwright pin, the host's login state, declared test targets (`vibe64-helper playwright --target <id>`), their parallel workers and isolation, one suite at a time, cancelling, and what to report. Tests that write never use the person's development target.",
-  "Before you change the Stack's Verification or how tests are set up, read `vibe64-helper spec checks`.",
+  "Before you change the Stack's Verification or how tests are set up, read `vibe64-helper spec checks`. A helper agent's worktree goes inside the source, in a folder Git ignores (`.worktrees/<name>`), not in TMPDIR, so the host runs its checks as the source's (same spec).",
   "If a managed command reports kernel task denials or a resource incident, report the blocker with its diagnostic and incident ID and ask the platform operator to inspect that evidence before retrying; never raise test timeouts or weaken assertions to work around a process/thread limit. A generic browser timeout without resource evidence does not establish a platform cause."
 ]);
 const MANAGED_PAGES_INSTRUCTIONS = Object.freeze([

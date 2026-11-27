@@ -171,6 +171,11 @@ Wherever it runs, a check gets this and nothing more, so write checks that need 
 - Its databases, from the host's own development provisioning where the check runs: the database, its test database (\`TEST_DB_NAME\`) and its browser test database (\`BROWSER_TEST_DB_NAME\`), which a database resource binds through \`testDatabase\` and \`browserTestDatabase\` to exactly those names; Vibe64 refuses any other. The application's own database user makes and drops the copies JSKIT's test runners make of them for their workers; a check never gets administrator credentials. The host grants a fixed number of copies: with more test workers than that, JSKIT runs that many database files at once.
 - Temporary files go where \`TMPDIR\` or the system puts them: depend on no location, and remove what a check makes.
 
+## A helper's worktree
+
+- A check run from a worktree inside the session's source gets that worktree's tree (its commit and working changes) in place of the source's. A host that runs checks on another machine sends one there only from the source or a worktree inside it; from any other folder it keeps the check where the session is, on the session's test databases, which every such run shares.
+- So give each helper agent that runs checks its own worktree inside the source, in a folder Git ignores: \`git worktree add .worktrees/<name>\` after adding \`/.worktrees/\` to the source's \`.git/info/exclude\` (Save records a worktree Git doesn't ignore as an embedded repository), and run its checks from there, never from a worktree in \`TMPDIR\`. Where the host has other machines, each check there gets databases of its own, so helpers' database tests run side by side.
+
 ## The Verification that declares the whole suite
 
 - Declare every part of the project's checks as its own \`- Verify\` entry, each a command the project has: its lint, unit tests, database tests, client tests, browser suite and build. A part missing from Verification is a part no whole run covers.
