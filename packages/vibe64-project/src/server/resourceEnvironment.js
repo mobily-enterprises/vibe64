@@ -195,10 +195,10 @@ function validateDatabaseTestBindings(resource = {}) {
   const refused = !DATABASE_RESOURCE_KINDS.has(resource.kind) ? [] : Object.entries(objectRecord(resource.optionalBindings) || {})
     .filter(([semantic, name]) => !Object.hasOwn(DATABASE_TEST_BINDINGS, semantic) || DATABASE_TEST_BINDINGS[semantic] !== name);
   if (refused.length === 0) return;
-  throw vibe64Error(`The ${resource.kind} resource ${toText(resource.id) || "(unknown)"} binds ${refused.map(([semantic, name]) =>
-    `\`${semantic}\` to \`${toText(name)}\``).join(", ")}. A database resource's optionalBindings binds only \`testDatabase\` to ` +
-    "`TEST_DB_NAME` and `browserTestDatabase` to `BROWSER_TEST_DB_NAME`, the names the test runners read.",
-  "vibe64_database_resource_test_bindings_invalid");
+  const message = `The ${resource.kind} resource ${toText(resource.id) || "(unknown)"} binds ${refused.map(([semantic, name]) =>
+    `\`${semantic}\` to \`${toText(name)}\``).join(", ")}. A database resource's optionalBindings binds only \`testDatabase\` ` +
+    "to `TEST_DB_NAME` and `browserTestDatabase` to `BROWSER_TEST_DB_NAME`, the names the test runners read.";
+  throw vibe64Error(message, "vibe64_database_resource_test_bindings_invalid");
 }
 
 /** A declared resource's one preferred alternative, its bindings checked for its kind. */
