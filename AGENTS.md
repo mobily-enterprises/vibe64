@@ -40,22 +40,21 @@ development task. Do not ask again merely because the fix belongs in JSKIT. This
 supersedes a project-only editing restriction for that dependency work; a later
 explicit human restriction still takes precedence.
 
-In a Vibe64 session, edit JSKIT only in the session's connected copy listed in
-`.development/connected.json` (its `sourceRoot`); do not assume the active tab,
-a remembered session path or an Env value names it. On a laptop, use a JSKIT
-worktree as above. The copy belongs to this session: edit it and run its
-focused tests here, as for the session's own source, and the session's Save
-publishes it. Preserve existing work and coordinate overlapping files with any
-other agent changing them. Coordination establishes who edits and tests; it is
-not another permission request. Do not bypass the execution boundary or describe
-its refusal as missing human consent. These relevant checks do not need another
+This repository connects neither JSKIT nor Genesis (its
+`vibe64.connections.json` lists none), so a session of it has no copy of
+either. Edit JSKIT or Genesis in a Vibe64 session of that repository, or on a
+laptop in a worktree of its own checkout, as **Where you're running**
+describes. A change reaches this repository once that repository releases it
+and the lockstep pin run moves the pins here (**Who moves JSKIT pins**).
+Preserve existing work and coordinate overlapping files with any other agent
+changing them. Coordination establishes who edits and tests; it is not another
+permission request. Do not bypass the execution boundary or describe its
+refusal as missing human consent. These relevant checks do not need another
 human approval.
 
-Consume JSKIT source edits through connected repositories (below), and report
-missing support for that as an implementation gap. This permission alone does
-not authorize npm publication, deployment, destructive Git operations or
-unrelated framework work. Existing architectural boundaries and test-scope
-requirements still apply.
+This permission alone does not authorize npm publication, deployment,
+destructive Git operations or unrelated framework work. Existing architectural
+boundaries and test-scope requirements still apply.
 
 ### Who moves JSKIT pins
 
@@ -67,7 +66,7 @@ and `package-lock.json`.
   each JSKIT or Genesis release and moves every dependent repository's pins
   together, the JSKIT starter apps' included. A platform's own release ships
   the pins it finds: it releases and pins neither JSKIT nor Genesis. Never move
-  them in development, connected copy or not.
+  them in development.
 - A user project moves its own JSKIT pins, and only with JSKIT's update
   command, `npm run jskit:update`, which moves every `@jskit-ai` pin to one
   published catalog and installs it. Never move a JSKIT package with
@@ -100,7 +99,8 @@ With a JSKIT copy connected to a user project:
 ## Connected repositories
 
 A project's `vibe64.connections.json` lists the repositories it develops with,
-for example JSKIT and Genesis. Every session keeps its own copy of each one in
+for example a library it uses or a repository it composes; this repository's
+lists none. Every session keeps its own copy of each one in
 `connected/<name>` beside its source, and `.development/connected.json` lists
 each copy's `sourceRoot`. No other session sees or changes this session's
 copies. Another session's work on the same repository arrives as new commits on

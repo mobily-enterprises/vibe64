@@ -1,14 +1,3 @@
 {
-  "repositories": [
-    {
-      "name": "JSKIT AI",
-      "repository": "https://github.com/mobily-enterprises/jskit-ai",
-      "relationship": "dependency"
-    },
-    {
-      "name": "Genesis",
-      "repository": "https://github.com/mobily-enterprises/genesis-compiler",
-      "relationship": "dependency"
-    }
-  ]
+  "repositories": []
 }
