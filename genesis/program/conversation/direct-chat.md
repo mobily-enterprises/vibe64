@@ -2906,7 +2906,13 @@ Senior's plan guidance
 (`workPlanInstructions`) says unfinished review reports continue through the
 workflow outcome command only in Auto's turns that report an outcome
 (`autoOutcome`: planning, implementation and review), never in Auto
-conversation or direct chats.
+conversation or direct chats. Every claim that Vibe64 runs a plan's passes is
+true where it is made: the guidance says they run once Senior's review ends with
+every item outside Passes ticked and reports complete; a direct chat's outcome
+instructions tell only a Senior chat's agent in Main chat's own requests
+(`afterPlan`) that its turn starts them, and Junior and Custom chats that theirs
+never do; and a goal's or lesson's request, which never starts them
+(`passesRun` false), is told they wait for a later Main chat request.
 
 The admitted agent uses the existing authenticated session-helper socket's
 `plan read` and `plan outcome` operations. The read supplies exact request/turn/stage

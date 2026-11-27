@@ -306,7 +306,9 @@ function createAssistantRoutingDelivery({
         : checks
           ? assistantWholeChecksInstructions({ autoSave: savesAutomatically(context.session.metadata), passes: state.wholeChecks?.passes })
           : includePlanInstructions
-            ? workPlanInstructions(role, { autoOutcome, auto: state.mode === "auto", passTitles: await passTitlesFor(context, role) }) : ""
+            ? workPlanInstructions(role, {
+              autoOutcome, auto: state.mode === "auto", passTitles: await passTitlesFor(context, role), passesRun: Boolean(state.afterPlan)
+            }) : ""
     });
     // A turn that starts while a planned restart is near hears about it first, as the turns running when it came did.
     const restartWarning = plannedRestart().warning();

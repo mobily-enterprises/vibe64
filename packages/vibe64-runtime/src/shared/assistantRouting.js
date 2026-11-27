@@ -483,7 +483,7 @@ function assistantModePrompt(mode, message, options = {}) {
         "The latest execution request supersedes earlier planning-only wording, while explicit remaining approval boundaries still apply. " +
         "If work remains, lead with Implementation incomplete and name the exact blocker and unfinished scope; never open with Done for partial implementation. " +
         (mode === "senior"
-          ? "When this request implements a plan, verify every item outside its Passes section and full-tick it; then, when the plan has Passes items, leave it active and Vibe64 runs them, otherwise complete the plan yourself with the plan helper. Leave it active with the gaps in Progress while any remain. "
+          ? "When this request implements a plan, verify every item outside its Passes section and full-tick it; then, when the plan has Passes items, leave it active and report complete with the plan's revisions: Vibe64 then runs them; otherwise complete the plan yourself with the plan helper. Leave it active with the gaps in Progress while any remain. "
           : "When this request implements a plan, leave the plan active: Senior reviews it in its own turn after yours; do not request permission for that turn. ") +
         "The plan's Passes section lists the passes Vibe64 runs after Senior's review, each in its own turn; never start a pass on your own in this turn.";
       break;
@@ -563,7 +563,8 @@ function assistantWorkflowInstructions(state, { autoSave = false } = {}) {
 /**
  * A Senior, Junior or Custom chat's agent reports Auto's outcomes, except that a request's first
  * turn may answer without one. Its work ends with its own last turn: a plan Senior has reviewed
- * runs its Passes items, and nothing else runs a pass.
+ * runs its Passes items, and nothing else runs a pass. Only a Senior chat's turn in Main chat's own requests
+ * (`afterPlan`) is told it starts them.
  */
 function directWorkflowInstructions(state) {
   const answers = state.stage === "implementation" && !state.followup;
@@ -576,7 +577,11 @@ function directWorkflowInstructions(state) {
     "wait retains this stage for a real blocker, a required user decision, or an explicit pause. A clarification or status question is not a stop: incorporate it and continue. An explicit Stop remains respected. A final reply that asks the person a numbered question always waits for their answer, whatever outcome you report.",
     (answers ? "complete means you changed a plan without changing any files (a turn that changed neither reports nothing, as above)" : "complete means you answered or finished without changing any files") +
       ", or, only when you are Senior and a plan is involved, that you verified every item outside its Passes section and full-ticked it, and, when the plan has no Passes items, explicitly completed it using the plan helper: then report complete with the returned revisions. Junior and Custom never complete a plan: leave it active and report handoff once its work is finished.",
-    "Once your turn ends, a plan whose items outside Passes are all ticked runs its Passes items, each in its own turn. Never start Deslop, a UI pass or another pass on your own: the passes the person asks for join the plan's Passes.",
+    // Only Senior's turns in Main chat's own requests start a plan's passes: a Junior or Custom chat's never do.
+    state.afterPlan && state.resolvedMode === "senior"
+      ? "Once your turn ends, having full-ticked every item outside a plan's Passes or reported complete on a plan already there, Vibe64 runs its Passes items, each in its own turn."
+      : "Your turns never start a plan's passes: they run in Main chat, once Senior has reviewed the plan in Auto or a Senior chat.",
+    "Never start Deslop, a UI pass or another pass on your own: the passes the person asks for join the plan's Passes.",
     "For incomplete implementation use continue, not handoff. Do not ask the person to request the next step."
   ].join("\n");
 }
