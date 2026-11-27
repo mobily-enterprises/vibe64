@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { playwrightChildEnvironment } from "./playwrightChildEnvironment.js";
+
+// Where the inherited browsers are: any folder of the test's own, never one in a system location.
+const BROWSERS = path.join(os.tmpdir(), "vibe64-test-playwright-browsers");
 
 test("a Playwright child's environment drops every Playwright and JSKIT browser-test setting it inherits, keeps the browsers, and takes its own", () => {
   const parent = {
@@ -12,12 +17,12 @@ test("a Playwright child's environment drops every Playwright and JSKIT browser-
     PLAYWRIGHT_BASE_URL: "http://127.0.0.1:4173",
     PLAYWRIGHT_FUTURE_X: "1",
     JSKIT_BROWSER_FUTURE_X: "1",
-    PLAYWRIGHT_BROWSERS_PATH: "/opt/browsers"
+    PLAYWRIGHT_BROWSERS_PATH: BROWSERS
   };
   assert.deepEqual(playwrightChildEnvironment({ PLAYWRIGHT_BASE_URL: "http://127.0.0.1:5000", OWN: "1" }, parent), {
     HOME: "/home/tester",
     PATH: "/usr/bin",
-    PLAYWRIGHT_BROWSERS_PATH: "/opt/browsers",
+    PLAYWRIGHT_BROWSERS_PATH: BROWSERS,
     PLAYWRIGHT_BASE_URL: "http://127.0.0.1:5000",
     OWN: "1"
   });
