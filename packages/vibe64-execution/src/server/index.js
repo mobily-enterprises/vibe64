@@ -34,6 +34,9 @@ export {
   runVibe64Command
 } from "./runVibe64Command.js";
 export {
+  MAX_EXECUTION_WORKERS
+} from "./request.js";
+export {
   runCaptureCommand
 } from "./engines/capture.js";
 export {

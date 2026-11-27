@@ -14,7 +14,7 @@ const AGENT_PREVIEW_USAGE = [
   "  vibe64-helper preview browser ensure",
   "  vibe64-helper preview browser eval < playwright-code.js",
   "  vibe64-helper preview browser identity <default|guest|configured-name>",
-  "  vibe64-helper preview browser storage-state <default|guest|configured-name> --output <new-path>",
+  "  vibe64-helper preview browser storage-state <default|guest|configured-name> --output <new-path> [--worker <index>]",
   "  vibe64-helper preview browser screenshot [--output <path>]",
   "  vibe64-helper preview browser status",
   "  vibe64-helper preview browser reset",
@@ -23,17 +23,17 @@ const AGENT_PREVIEW_USAGE = [
   "  vibe64-helper preview identities save < identities.json",
   "  vibe64-helper preview logs [--lines <count>] [--json]",
   "  vibe64-helper preview restart [--wait] [--json] [--timeout-ms <ms>]",
-  "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
-  "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
+  "  vibe64-helper playwright [--target <target-id> [--workers <n>]] [--identity <default|guest|configured-name>] test [playwright test arguments]",
+  "  vibe64-helper playwright [--target <target-id> [--workers <n>]] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
   "",
   "JSON output:",
-  "  status/ensure/restart/stop --json: ready, stoppedIntent, stale, outputTargetId, endpoints.browser {url, hostname, port}, currentPage {url, route, title, observedAt}, terminal {id, status, running, exitCode, command, createdAt}, defaultIdentity, identities [{name, type}], identityTypes, diagnostics {latest, log, directApplicationEndpoint}.",
+  "  status/ensure/restart/stop --json: ready, stoppedIntent, stale, outputTargetId, endpoints.browser {url, hostname, port}, currentPage {url, route, title, observedAt}, terminal {id, status, running, exitCode, command, createdAt}, defaultIdentity, identities [{name, type}], identityTypes, diagnostics {latest, log, directApplicationEndpoint, testWorkers [{index, url}] while a browser-test run's target serves several app servers}.",
   "  open --json: path, moved (how many of the person's open Previews moved to it), errors (why one that answered did not move).",
   "  screenshot: outputPath, byteLength, sha256, capturedAt, url, title, width, height, luminance, darkPixelPercentage, domTextLength, domTextSummary.",
   "  browser eval: result (the code's JSON-safe return value), logs [{level, values}] from console, url (the page afterwards).",
   "  identities: the project's Managed app identities [{name, type, value}] (first is the default) and the Stack's declared Preview identity types.",
   "  identities save: replaces the whole ordered list with the JSON array on stdin (or {\"identities\": [...]}, refused with any other field, such as the identityTypes or invalidIdentities a read also returns); each type must be declared. Save only names and accounts the person asked for or confirmed; never create app accounts or change roles for this. Then verify each with preview browser identity <name>.",
-  "  browser storage-state: writes the identity's Playwright storage state to a new file at --output; the interactive browser keeps its identity.",
+  "  browser storage-state: writes the identity's Playwright storage state to a new file at --output; the interactive browser keeps its identity. --worker signs in on that app server of a browser-test run's target, whose test database is its own (status diagnostics.testWorkers).",
   "",
   "When the person asks to see a page, run preview open with its path inside the app (/orders/42?tab=notes): it moves every Preview pane they have open for this session to that page, as their Preview address box would, and they see a note that the AI opened it. Only paths starting with a single / are accepted, never other sites. If it reports moved: 0, give them the path to type into the Preview address box instead. Your own browser commands never move their pane.",
   "Screenshot commands emit JSON metadata for a uniquely named, immutable PNG.",
@@ -275,9 +275,10 @@ async function remoteCommand(args = [], extra = {}) {
   });
 }
 
-async function authorizeBrowserIdentity(identity = "") {
+async function authorizeBrowserIdentity(identity = "", worker = 0) {
   const payload = await controlRequest("/agent-preview-command/identity", {
-    identity
+    identity,
+    worker
   });
   if (payload.ok === false) {
     throw new Error(payload.error || "Vibe64 could not authorize the preview identity exchange.");
@@ -303,6 +304,16 @@ function requestedOutputPath(args = []) {
     ? String(args[outputIndex + 1] || "").trim()
     : String(outputEntry || "").slice("--output=".length).trim();
   return requested ? path.resolve(requested) : "";
+}
+
+// The app server of a browser-test run's target a storage state signs in on: --worker <index>, else the first.
+function requestedWorker(args = []) {
+  const index = args.indexOf("--worker");
+  const entry = args.find((arg) => String(arg || "").startsWith("--worker="));
+  if (index < 0 && !entry) return 0;
+  const text = index >= 0 ? String(args[index + 1] || "") : String(entry).slice("--worker=".length);
+  if (!/^(?:0|[1-9][0-9]{0,2})$/u.test(text)) fail("--worker requires a worker index from 0.", 64);
+  return Number(text);
 }
 
 function screenshotOutputPath(args = []) {
@@ -502,12 +513,14 @@ try {
       restorePreview: process.env.VIBE64_PLAYWRIGHT_RESTORE_PREVIEW === "1",
       testRunToken: String(process.env.VIBE64_PLAYWRIGHT_TARGET_RUN || "").trim(),
       identity: String(process.env.VIBE64_PLAYWRIGHT_TARGET_IDENTITY || "").trim(),
+      workers: Number(process.env.VIBE64_PLAYWRIGHT_WORKERS) || 0,
       playwrightEnv: Object.fromEntries([
         "PLAYWRIGHT_BASE_URL",
         "PLAYWRIGHT_BROWSERS_PATH",
         "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
         "VIBE64_MANAGED_PLAYWRIGHT_TEST",
-        "PLAYWRIGHT_STORAGE_STATE"
+        "PLAYWRIGHT_STORAGE_STATE",
+        "PLAYWRIGHT_WORKER_TARGETS"
       ].filter((name) => Object.hasOwn(process.env, name)).map((name) => [name, process.env[name]])),
       runner,
       workerScriptPath
@@ -550,8 +563,9 @@ try {
       if (!identity || !outputPath) {
         fail("Managed Playwright storage state requires an identity and --output path.", 64);
       }
+      const worker = requestedWorker(browserArgs.slice(1));
       const session = await previewSession();
-      const authorization = await authorizeBrowserIdentity(identity);
+      const authorization = await authorizeBrowserIdentity(identity, worker);
       printJson(await interactiveCommand("storage-state", {
         grant: authorization.grant,
         outputPath

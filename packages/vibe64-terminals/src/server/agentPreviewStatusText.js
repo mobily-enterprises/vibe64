@@ -223,7 +223,11 @@ function previewStatusSummary(status = {}, options = {}) {
     }),
     diagnostics: {
       ...previewDiagnostics(status),
-      directApplicationEndpoint: previewEndpoint(applicationUrl)
+      directApplicationEndpoint: previewEndpoint(applicationUrl),
+      // A browser-test run's target with several app servers: worker i's, the first being the endpoint above.
+      ...(Array.isArray(activeMetadata.testWorkers) && activeMetadata.testWorkers.length > 1
+        ? { testWorkers: activeMetadata.testWorkers.map(({ index, url }) => ({ index, url })) }
+        : {})
     },
     endpoints: {
       browser: browserEndpoint

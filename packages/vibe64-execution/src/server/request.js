@@ -85,6 +85,8 @@ const VIBE64_EXECUTION_LIFECYCLES = Object.freeze([
   "service"
 ]);
 const DEFAULT_COMMAND_MAX_BUFFER_BYTES = 1000 * 1000 * 100;
+// The most workers one execution or workflow declares (a browser-test run's app servers and browsers), as hosts admit.
+const MAX_EXECUTION_WORKERS = 64;
 const DEFAULT_INTERACTIVE_RUNTIME_PURPOSES = new Set([
   "assistant",
   "codex",
@@ -282,9 +284,18 @@ function normalizeExecutionDescriptor(value = {}, options = {}) {
       !["development", "test", "staging"].includes(resourceProfile.environment))) {
     throw commandRequestError("Invalid activity resource profile identity.", "vibe64_resource_profile_invalid");
   }
+  // A browser-test suite with several app servers drives a browser for each: hosts admit it as that many.
+  const workers = execution.workers === undefined ? 1 : execution.workers;
+  if (!Number.isSafeInteger(workers) || workers < 1 || workers > MAX_EXECUTION_WORKERS) {
+    throw commandRequestError(
+      `An execution's workers is a whole number from 1 to ${MAX_EXECUTION_WORKERS}.`,
+      "vibe64_execution_workers_invalid"
+    );
+  }
   const aiPurpose = normalizeAiPurpose(execution.aiPurpose);
   return Object.freeze({
     ...(resourceProfile ? { resourceProfile: Object.freeze({ ...resourceProfile }) } : {}),
+    ...(workers > 1 ? { workers } : {}),
     ...(aiPurpose ? { aiPurpose } : {}),
     controlGenerationId: normalizeExecutionIdentifier(execution.controlGenerationId),
     ...(execution.workflowId === undefined || execution.workflowId === null || execution.workflowId === ""
@@ -493,6 +504,7 @@ const __testables = Object.freeze({ normalizeExecutionDescriptor });
 
 export {
   DEFAULT_COMMAND_MAX_BUFFER_BYTES,
+  MAX_EXECUTION_WORKERS,
   normalizeVibe64CommandRequest,
   __testables
 };

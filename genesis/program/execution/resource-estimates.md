@@ -37,3 +37,10 @@ provenance and separate operation phases. They do not include measured usage,
 learned minima, granted limits or an admission decision. Those remain the
 execution host's responsibility. Source inspections never rewrite declarations
 or mix host observations into the project contract.
+
+One reader plans with an estimate itself: a browser-test run on a test target
+that serves several app servers sizes their count by the target's Running high
+estimate, plus 512 MiB for each worker's Chromium, against the memory free for
+its work (1.5 GiB a worker without an estimate). The target's listing carries
+that estimate as `runningHighBytes` (`vibe64OutputTargets.js`,
+`browserTestWorkers.js`). The host still admits the run itself.

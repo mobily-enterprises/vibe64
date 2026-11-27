@@ -1614,10 +1614,10 @@ test("launch restart baseline is unavailable outside git worktrees", async () =>
 test("HTTP launch readiness of a test target with several app servers waits for every one, and names the one that never answered", async () => {
   const { createServer } = await import("node:http");
   const requests = [0, 0];
-  const servers = [0, 1].map((index) => createServer((_request, response) => {
+  const servers = [0, 1].map((index) => createServer((request, response) => {
     requests[index] += 1;
-    // The second server answers only on its third probe.
-    response.writeHead(index === 0 || requests[1] >= 3 ? 200 : 503);
+    // The second server answers only on its third probe, and /never never.
+    response.writeHead(request.url === "/never" ? 503 : index === 0 || requests[1] >= 3 ? 200 : 503);
     response.end();
   }));
   await Promise.all(servers.map((server) => new Promise((resolve) => server.listen(0, "127.0.0.1", resolve))));

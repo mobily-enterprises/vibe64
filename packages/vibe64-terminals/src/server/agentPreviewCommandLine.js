@@ -119,7 +119,11 @@ function createAgentPreviewCommandLine({
     return workerRegistry.sessionProjectSlug(sessionId) || normalizeText(readSessionUiState(sessionId)?.projectSlug);
   }
 
-  async function authorizeBrowserIdentity(sessionId = "", identity = "") {
+  /**
+   * A grant for the managed browser's sign-in as `identity`, on app server `worker` of a browser-test run's target (0,
+   * the only one, for every other Preview).
+   */
+  async function authorizeBrowserIdentity(sessionId = "", identity = "", worker = 0) {
     const normalizedSessionId = normalizeText(sessionId);
     const requested = normalizeText(identity).toLowerCase();
     if (!normalizedSessionId) {
@@ -134,15 +138,12 @@ function createAgentPreviewCommandLine({
         "vibe64_agent_preview_identity_required"
       );
     }
+    // Worker 0 is every Preview's one app server, so only another worker is named.
+    const onWorker = worker > 0 ? { worker } : {};
     if (requested === "guest") {
-      return launchTarget.selectPreviewIdentity(normalizedSessionId, {
-        mode: "guest"
-      });
+      return launchTarget.selectPreviewIdentity(normalizedSessionId, { mode: "guest", ...onWorker });
     }
-    return launchTarget.selectPreviewIdentity(normalizedSessionId, {
-      identityName: requested,
-      mode: "identity"
-    });
+    return launchTarget.selectPreviewIdentity(normalizedSessionId, { identityName: requested, mode: "identity", ...onWorker });
   }
 
   /**

@@ -1,4 +1,7 @@
 import crypto from "node:crypto";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
   browserTestNeedsCleanup,
   drainBrowserTestExecutions
@@ -139,6 +142,7 @@ function createAgentPreviewBrowserTests({
         return start();
       }) : undefined,
       signal: options.signal,
+      workers: Number.isSafeInteger(input.workers) && input.workers > 0 ? input.workers : 0,
       onState: (targetState) => {
         const pending = state.browserTestRuns.get(sessionId);
         if (pending) pending.state = targetState;
@@ -245,6 +249,19 @@ function createAgentPreviewBrowserTests({
     if (pending) {
       state.browserTestRuns.set(sessionId, pending);
     }
+    let result;
+    try {
+      // A run with a target gets its own directory for its sign-in states, removed when the run ends however its
+      // wrapper and suite ended. Its wrapper and the managed browser run as executions of their own: the session's
+      // group, which they share, reaches it.
+      if (pending && (input.targetId || input.restorePreview === true)) {
+        pending.stateDirectory = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-run-"));
+        await chmod(pending.stateDirectory, 0o770);
+      }
+    } catch (error) {
+      state.browserTestRuns.delete(sessionId);
+      return commandFailure(`Vibe64 could not make the browser test's own directory: ${error.message}`, "vibe64_managed_playwright_run_failed");
+    }
     options = {
       ...options,
       signal: AbortSignal.any([options.signal, cancellation.signal, parent?.signal].filter(Boolean))
@@ -255,12 +272,12 @@ function createAgentPreviewBrowserTests({
       if (pending && ["starting", "running"].includes(pending.state)) pending.state = "stopping";
     };
     options.signal.addEventListener("abort", stopping, { once: true });
-    let result;
     try {
       result = await runRegisteredPlaywrightCommand(sessionId, input, {
         browserWorkers: state.browserWorkers,
         onOutput: options.onOutput,
         signal: options.signal,
+        stateDirectory: pending?.stateDirectory || parent?.stateDirectory || "",
         runCommand: async (request) => {
           if (pending && !input.targetId) pending.state = "running";
           const commandResult = await workerRegistry.runBrowserCommand(request);
@@ -286,6 +303,7 @@ function createAgentPreviewBrowserTests({
       return result;
     } finally {
       options.signal.removeEventListener("abort", stopping);
+      if (pending?.stateDirectory) await rm(pending.stateDirectory, { force: true, recursive: true });
       completion.resolve(result);
       if (pending && !result?.previewRecoveryRequired && state.browserTestRuns.get(sessionId) === pending) {
         state.browserTestRuns.delete(sessionId);

@@ -45,6 +45,9 @@ const REPORTED_STARTS = 5;
  * @param {import("@jskit-ai/kernel/server/types").RuntimeLogger} [dependencies.logger] where each replaced Preview run
  *   is logged
  * @param {number} [dependencies.previewPrepareWaitMs] how long a restart waits at most for its run's Prepare steps
+ * @param {() => Promise<number | null>} [dependencies.availableMemory] the memory free for a browser-test run's app
+ *   servers (browserTestWorkers.js)
+ * @param {() => number} [dependencies.testBudget] the machine's test budget
  */
 function createOutputTargetTerminalController({
   ensureWorkspacePrepared,
@@ -60,7 +63,9 @@ function createOutputTargetTerminalController({
   setWorkflowPhase = setVibe64WorkflowPhase,
   sessionAdmissionFailure,
   logger = silentLogger,
-  previewPrepareWaitMs
+  previewPrepareWaitMs,
+  availableMemory,
+  testBudget
 }) {
   const state = createOutputTargetTerminalState({ env });
   const launchCoordination = createOutputTargetLaunchCoordination({
@@ -92,7 +97,9 @@ function createOutputTargetTerminalController({
     launchCoordination,
     launchStart,
     project,
-    stopExecution
+    stopExecution,
+    availableMemory,
+    testBudget
   });
   const outputStatus = createOutputTargetLaunchStatus({
     state,

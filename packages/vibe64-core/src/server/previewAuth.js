@@ -215,10 +215,23 @@ function previewIdentityGrantSignature(payloadText = "") {
     .digest("base64url");
 }
 
+/**
+ * A grant's worker: which of a browser-test run's app servers its identity command signs in on (0, the first, for every
+ * other Preview), a whole number. The Preview that executes the grant refuses a worker it does not serve.
+ * @param {unknown} worker
+ */
+function previewIdentityWorker(worker = 0) {
+  if (!Number.isSafeInteger(worker) || worker < 0) {
+    throw previewIdentityError("A preview identity's worker is a whole number from 0.", "vibe64_preview_identity_worker_invalid");
+  }
+  return worker;
+}
+
 function createPreviewIdentityGrant(previewAuth = {}, selection = {}, options = {}) {
   const {
     nowSeconds = Math.floor(Date.now() / 1000),
-    ttlSeconds = PREVIEW_IDENTITY_GRANT_TTL_SECONDS
+    ttlSeconds = PREVIEW_IDENTITY_GRANT_TTL_SECONDS,
+    worker = 0
   } = options;
   if (!previewAuthIdentityAvailable(previewAuth)) {
     throw previewIdentityError(
@@ -246,7 +259,8 @@ function createPreviewIdentityGrant(previewAuth = {}, selection = {}, options = 
     nonce: crypto.randomBytes(16).toString("base64url"),
     scope: previewIdentityGrantScope(previewAuth),
     selection: normalizedSelection,
-    version: 1
+    version: 1,
+    ...(previewIdentityWorker(worker) > 0 ? { worker } : {})
   })).toString("base64url");
   return `${PREVIEW_IDENTITY_GRANT_PREFIX}.${payloadText}.${previewIdentityGrantSignature(payloadText)}`;
 }
@@ -293,7 +307,8 @@ function verifyPreviewIdentityGrant(grant = "", previewAuth = {}, options = {}) 
   return {
     expiresAt: payload.expiresAt,
     nonce: String(payload.nonce),
-    selection: normalizePreviewIdentitySelection(payload.selection)
+    selection: normalizePreviewIdentitySelection(payload.selection),
+    worker: previewIdentityWorker(payload.worker ?? 0)
   };
 }
 

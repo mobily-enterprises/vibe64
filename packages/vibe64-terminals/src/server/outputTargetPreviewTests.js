@@ -11,6 +11,7 @@ import {
   writeSavedOutputTarget
 } from "./outputTargetMetadata.js";
 import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
+import { availableWorkMemoryBytes, browserTestBudget, browserTestWorkerCount } from "./browserTestWorkers.js";
 import {
   readLaunchContext,
   findOutputTarget,
@@ -66,21 +67,34 @@ async function recordWaitingRestore({ store, savedTarget }, sessionId, testTarge
  * @param {OutputTargetLaunchStart} dependencies.launchStart
  * @param {ProjectService} dependencies.project
  * @param {typeof import("@local/vibe64-execution/server").stopVibe64Execution} dependencies.stopExecution
+ * @param {() => Promise<number | null>} [dependencies.availableMemory] the memory free for a run's app servers
+ * @param {() => number} [dependencies.testBudget] the machine's test budget
  */
 function createOutputTargetPreviewTests({
   state,
   launchCoordination,
   launchStart,
   project,
-  stopExecution
+  stopExecution,
+  availableMemory = availableWorkMemoryBytes,
+  testBudget = browserTestBudget
 }) {
+  /**
+   * Runs `operation` with the session's Preview on a test target. A target whose Run step takes `{workers}` serves
+   * the run's app servers (browserTestWorkers.js) when the run names it; any other run gets one, as always.
+   * @param {object} options
+   * @param {number} [options.workers] the run's --workers, 0 for the default
+   */
   async function withPreviewTarget(sessionId, outputTargetId, operation, {
     waitUntilReady,
     startTarget = startTargetNow,
     signal,
-    onState = ignoreTestRunState
+    onState = ignoreTestRunState,
+    workers = 0
   }) {
-    const testRun = { targetId: outputTargetId, token: crypto.randomUUID(), closing: false };
+    const testRun = { targetId: outputTargetId, token: crypto.randomUUID(), closing: false, workers: 1 };
+    // Only a run that names its target gets several app servers: a run of the person's Preview tests it as it is.
+    const namedTarget = Boolean(outputTargetId);
     // A restore the agent's turn end started finishes before this run reads the Preview.
     await state.previewTestRuns.get(sessionId)?.restoreRun;
     function changeState(nextState) {
@@ -118,8 +132,18 @@ function createOutputTargetPreviewTests({
         outputTargetId = plan.outputTargetId || plan.terminal?.metadata?.outputTargetId;
         testRun.targetId = outputTargetId;
       }
-      const targetError = previewTargetError(findOutputTarget(targets, outputTargetId), outputTargetId);
+      const target = findOutputTarget(targets, outputTargetId);
+      const targetError = previewTargetError(target, outputTargetId);
       if (targetError) throw targetError;
+      if (namedTarget && target.servesWorkers) {
+        testRun.workers = browserTestWorkerCount({
+          servesWorkers: true,
+          requested: workers,
+          budget: testBudget(),
+          freeBytes: await availableMemory(),
+          runningHighBytes: target.runningHighBytes
+        });
+      }
       state.previewTestRuns.set(sessionId, testRun);
       if (current) {
         current.restorePending = false;
@@ -223,8 +247,10 @@ function createOutputTargetPreviewTests({
       return result;
     };
     // Restoring would start the person's app again: a run that tested hands its result back now and restores later. A
-    // run refused or cancelled restores at once, as its caller expects Preview back.
+    // run refused or cancelled restores at once, as its caller expects Preview back, and so does a run with several app
+    // servers, whose test target holds a server and a database copy per worker.
     if (testRun.tested && !signal?.aborted && !cleanupRequired && !testRun.closing && !testRun.restoreWhenFinished &&
+        testRun.workers === 1 &&
         previous.running && previous.targetId && previous.targetId !== testRun.targetId &&
         await recordWaitingRestore(previous, sessionId, testRun.targetId)) {
       testRun.restorePending = true;

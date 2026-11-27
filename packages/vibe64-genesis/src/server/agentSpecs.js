@@ -219,7 +219,7 @@ ${list(OUTPUTS_ENTRY_FORMS.target)}
 
 - Ids use lowercase letters, digits and single hyphens. Target ids are unique; at most one target is \`- Default.\` (the normal Preview).
 - \`interactive\`: exactly one Run step, last, and one \`#### Presentation\`. \`finite\`: no Run, Presentation or Preview identity, and at least one \`#### Download\`.
-- Steps are ordered Prepare, Build, then Run. \`{host}\` and \`{port}\` may appear only in a web target's Run step; the application must listen there. \`{parameter:id}\` may appear in any step argument.
+- Steps are ordered Prepare, Build, then Run. \`{host}\` and \`{port}\` may appear only in a web target's Run step; the application must listen there. \`{parameter:id}\` may appear in any step argument. \`{workers}\` may appear only in the Run step of a web target with \`- Data: test\`: the number of app servers a browser-test run asks for, worker *i* listening on \`{port}\`+*i* (1 for an ordinary Preview start); \`vibe64-helper spec browser-tests\` says how a run uses them.
 - \`\` - Data: \`test\` \`\` declares a target that enforces isolated test data (Test Preview banner; used by \`vibe64-helper playwright --target <id>\`). \`development\` is the other value; omitting Data asserts nothing.
 - Workdir defaults to \`.\`.
 

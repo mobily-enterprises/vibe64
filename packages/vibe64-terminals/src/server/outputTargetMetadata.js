@@ -232,11 +232,20 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
   });
 }
 
+/**
+ * The app servers a launch serves: its metadata's testWorkers (a browser-test run's test target), else one.
+ * @param {{ metadata?: { testWorkers?: unknown[] } }} launch a running terminal or a launch spec
+ */
+function launchWorkerCount(launch = {}) {
+  return Array.isArray(launch.metadata?.testWorkers) ? launch.metadata.testWorkers.length : 1;
+}
+
 export {
   clearLaunchMetadata,
   clearLaunchMetadataForTerminal,
   launchAgentHref,
   launchIsReady,
+  launchWorkerCount,
   normalizeOpenTarget,
   OUTPUT_METADATA,
   outputTargetFromMetadata,

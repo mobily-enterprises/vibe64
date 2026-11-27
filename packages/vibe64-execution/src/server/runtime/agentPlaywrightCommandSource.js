@@ -53,21 +53,25 @@ function callArguments(code = "", start = 0) {
   return code.slice(start, end - 1);
 }
 
+// The variables that carry the supplied login: the state file, and the list of a run's app servers with each one's
+// state file (PLAYWRIGHT_WORKER_TARGETS, which JSKIT's browserTestConfig() reads).
+const LOGIN_VARIABLES = ["PLAYWRIGHT_STORAGE_STATE", "PLAYWRIGHT_WORKER_TARGETS"];
+
 // Why a config tampers with the supplied login, or "" when it does not. Ignoring comments, a config that names
-// PLAYWRIGHT_STORAGE_STATE tampers when it mentions cookies or origins (the state's contents) or passes the variable,
-// or a variable assigned from it, to a file read: readFileSync, readFile, createReadStream, open, openSync, copyFile,
-// copyFileSync, require or import.
+// PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_WORKER_TARGETS tampers when it mentions cookies or origins (the state's
+// contents) or passes the variable, or a variable assigned from it, to a file read: readFileSync, readFile,
+// createReadStream, open, openSync, copyFile, copyFileSync, require or import.
 function loginTampering(source = "") {
   const code = configCode(source);
   const words = (text = "") => text.match(/[A-Za-z_$][\\w$]*/gu) || [];
-  if (!words(code).includes("PLAYWRIGHT_STORAGE_STATE")) {
+  if (!words(code).some((word) => LOGIN_VARIABLES.includes(word))) {
     return "";
   }
   if (words(code).some((word) => word === "cookies" || word === "origins")) {
     return "it works on the state's cookies or origins";
   }
-  const names = new Set(["PLAYWRIGHT_STORAGE_STATE"]);
-  for (const [, renamed] of code.matchAll(/(?<![\\w$.])PLAYWRIGHT_STORAGE_STATE\\s*:\\s*([A-Za-z_$][\\w$]*)/gu)) {
+  const names = new Set(LOGIN_VARIABLES);
+  for (const [, renamed] of code.matchAll(/(?<![\\w$.])(?:PLAYWRIGHT_STORAGE_STATE|PLAYWRIGHT_WORKER_TARGETS)\\s*:\\s*([A-Za-z_$][\\w$]*)/gu)) {
     names.add(renamed);
   }
   const mentionsLogin = (text = "") => words(text).some((word) => names.has(word));
@@ -105,10 +109,57 @@ function refuseConfigTamperingWithLogin(applicationRoot = "") {
     if (reason) {
       fail(
         "Vibe64 refused to run these browser tests: " + configName +
-        " reads or changes the signed-in browser state in PLAYWRIGHT_STORAGE_STATE (" + reason + "). " +
+        " reads or changes the signed-in browser state in PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_WORKER_TARGETS (" + reason + "). " +
         LOGIN_STATE_OWNERSHIP_MESSAGE + " Project tests were not started."
       );
     }
+  }
+}
+`;
+
+// The wrapper's warnings about a Playwright config that never reads what the host supplies.
+const CONFIG_WARNINGS_SOURCE = `// A run with several app servers needs a config that gives each Playwright worker its own: JSKIT's
+// browserTestConfig() does, from PLAYWRIGHT_WORKER_TARGETS. Any other config sends every worker to the first server
+// and its database, so they overwrite each other's data.
+function warnWhenConfigIgnoresWorkers(applicationRoot = "", workerCount = 1) {
+  const configName = ["playwright.config.mjs", "playwright.config.js", "playwright.config.ts", "playwright.config.cjs"]
+    .find((name) => existsSync(path.join(applicationRoot, name)));
+  if (!configName) {
+    return;
+  }
+  const source = readFileSync(path.join(applicationRoot, configName), "utf8");
+  const code = configCode(source);
+  const jskitHarness = source.includes("@jskit-ai/jskit-catalog/browser-tests") &&
+    /(?<![\\w$.])browserTestConfig\\s*\\(/u.test(code);
+  if (!jskitHarness && !/(?<![\\w$])PLAYWRIGHT_WORKER_TARGETS(?![\\w$])/u.test(code)) {
+    process.stderr.write(
+      "Vibe64 serves " + workerCount + " app servers for this run in PLAYWRIGHT_WORKER_TARGETS, but " + configName +
+      " never reads it, so every worker uses the first server and its database. Build the config with JSKIT's " +
+      "browserTestConfig(), or run with --workers 1.\\n"
+    );
+  }
+}
+
+// A config that never reads the supplied login runs every test signed out, which looks like broken
+// sign-in; saying which variable to read points at the one-line fix. A config reads it when its code, not a
+// comment, names PLAYWRIGHT_STORAGE_STATE, or when JSKIT's browserTestConfig() builds it: that harness passes
+// the supplied login to use.storageState itself.
+function warnWhenConfigIgnoresLogin(applicationRoot = "") {
+  const configName = ["playwright.config.mjs", "playwright.config.js", "playwright.config.ts", "playwright.config.cjs"]
+    .find((name) => existsSync(path.join(applicationRoot, name)));
+  if (!configName) {
+    return;
+  }
+  const source = readFileSync(path.join(applicationRoot, configName), "utf8");
+  const code = configCode(source);
+  const namesLogin = /(?<![\\w$])PLAYWRIGHT_STORAGE_STATE(?![\\w$])/u.test(code);
+  const jskitHarness = source.includes("@jskit-ai/jskit-catalog/browser-tests") &&
+    /(?<![\\w$.])browserTestConfig\\s*\\(/u.test(code);
+  if (!namesLogin && !jskitHarness) {
+    process.stderr.write(
+      "Vibe64 supplies the signed-in browser state in PLAYWRIGHT_STORAGE_STATE, but " + configName +
+      " never reads it, so these tests run signed out. Pass process.env.PLAYWRIGHT_STORAGE_STATE to use.storageState there.\\n"
+    );
   }
 }
 `;
@@ -119,8 +170,8 @@ function agentPlaywrightCommandSource({
   runtimeRoot = ""
 } = {}) {
   return `#!/usr/bin/env node
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
@@ -302,11 +353,19 @@ function managedPreview(applicationRoot = "", {
     const identityTypes = Array.isArray(status.identityTypes)
       ? status.identityTypes
       : [];
+    // A browser-test run's target with several app servers lists them, worker i's first being the one above.
+    const testWorkers = (Array.isArray(status.diagnostics?.testWorkers) ? status.diagnostics.testWorkers : [])
+      .map((worker) => new URL(String(worker?.url || "")))
+      .map((workerUrl) => {
+        if (!["http:", "https:"].includes(workerUrl.protocol)) throw new Error("A test worker is not an HTTP server.");
+        return workerUrl.origin;
+      });
     return {
       baseUrl: url.origin,
       identityTypes,
       identityRequired: identityTypes.length > 0,
-      managed: true
+      managed: true,
+      workerUrls: testWorkers.length > 1 ? testWorkers : [url.origin]
     };
   } catch {
     fail(
@@ -341,76 +400,76 @@ function moveStorageStateToBaseUrl(storageState = {}, baseUrl = "") {
   };
 }
 
-function managedPlaywrightStorageState(applicationRoot = "", identity = "default", baseUrl = "") {
-  const directory = mkdtempSync(path.join(
-    path.resolve(process.env.TMPDIR || "/tmp"),
-    "vibe64-playwright-auth-"
-  ));
-  const storageStatePath = path.join(directory, "storage-state.json");
-  const result = spawnSync(managedNodePath, [
-    managedPreviewPath,
-    "browser",
-    "storage-state",
-    identity,
-    "--output",
-    storageStatePath
-  ], {
-    cwd: applicationRoot,
-    encoding: "utf8",
-    env: process.env,
-    maxBuffer: 16 * 1024 * 1024,
-    timeout: 120_000
-  });
-  const diagnostics = [result.error?.message, result.stderr, result.stdout]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean)
-    .join("\\n");
-  const storageState = result.error || result.status !== 0 ? null : readJson(storageStatePath);
-  if (!storageState) {
-    rmSync(directory, {
-      force: true,
-      recursive: true
+// One worker's signed-in state, in the run's own directory (the daemon's, which it removes when the run ends): the
+// managed browser signs in on that worker's app server, whose database is its own, and the state moves to its origin.
+function workerStorageState(applicationRoot = "", identity = "default", baseUrl = "", directory = "", worker = 0) {
+  const storageStatePath = path.join(directory, "storage-state-" + worker + ".json");
+  return new Promise((resolve) => {
+    const child = spawn(managedNodePath, [
+      managedPreviewPath,
+      "browser",
+      "storage-state",
+      identity,
+      "--output",
+      storageStatePath,
+      ...(worker > 0 ? ["--worker", String(worker)] : [])
+    ], {
+      cwd: applicationRoot,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"]
     });
+    let diagnostics = "";
+    const collect = (chunk) => {
+      if (diagnostics.length < 16 * 1024 * 1024) diagnostics += chunk;
+    };
+    child.stdout.on("data", collect);
+    child.stderr.on("data", collect);
+    const timer = setTimeout(() => child.kill("SIGTERM"), 120_000);
+    child.once("error", (error) => {
+      clearTimeout(timer);
+      resolve({ diagnostics: error.message });
+    });
+    child.once("close", (code) => {
+      clearTimeout(timer);
+      const storageState = code === 0 ? readJson(storageStatePath) : null;
+      if (!storageState) {
+        resolve({ diagnostics: diagnostics.trim() });
+        return;
+      }
+      writeFileSync(storageStatePath, JSON.stringify(moveStorageStateToBaseUrl(storageState, baseUrl)) + "\\n", {
+        mode: 0o600
+      });
+      resolve({ storageStatePath });
+    });
+  });
+}
+
+async function managedPlaywrightStorageStates(applicationRoot = "", identity = "default", workerUrls = []) {
+  const directory = String(process.env.VIBE64_PLAYWRIGHT_STATE_DIR || "").trim();
+  if (!path.isAbsolute(directory) || !existsSync(directory)) {
+    fail(
+      "Vibe64 did not give this browser test its own directory for the signed-in state. Project tests were not started."
+    );
+  }
+  const states = await Promise.all(workerUrls.map((baseUrl, worker) =>
+    workerStorageState(applicationRoot, identity, baseUrl, directory, worker)));
+  const failed = states.find((state) => !state.storageStatePath);
+  if (failed) {
     fail(
       "Vibe64 could not prepare the managed browser and application identity for Playwright. " +
       "Project tests were not started." +
-      (diagnostics ? "\\n" + diagnostics : "")
+      (failed.diagnostics ? "\\n" + failed.diagnostics : "")
     );
   }
-  writeFileSync(storageStatePath, JSON.stringify(moveStorageStateToBaseUrl(storageState, baseUrl)) + "\\n", {
-    mode: 0o600
-  });
-  return {
-    directory,
-    storageStatePath
-  };
+  return states.map((state) => state.storageStatePath);
 }
 
-// A config that never reads the supplied login runs every test signed out, which looks like broken
-// sign-in; saying which variable to read points at the one-line fix. A config reads it when its code, not a
-// comment, names PLAYWRIGHT_STORAGE_STATE, or when JSKIT's browserTestConfig() builds it: that harness passes
-// the supplied login to use.storageState itself.
-function warnWhenConfigIgnoresLogin(applicationRoot = "") {
-  const configName = ["playwright.config.mjs", "playwright.config.js", "playwright.config.ts", "playwright.config.cjs"]
-    .find((name) => existsSync(path.join(applicationRoot, name)));
-  if (!configName) {
-    return;
-  }
-  const source = readFileSync(path.join(applicationRoot, configName), "utf8");
-  const code = configCode(source);
-  const namesLogin = /(?<![\\w$])PLAYWRIGHT_STORAGE_STATE(?![\\w$])/u.test(code);
-  const jskitHarness = source.includes("@jskit-ai/jskit-catalog/browser-tests") &&
-    /(?<![\\w$.])browserTestConfig\\s*\\(/u.test(code);
-  if (!namesLogin && !jskitHarness) {
-    process.stderr.write(
-      "Vibe64 supplies the signed-in browser state in PLAYWRIGHT_STORAGE_STATE, but " + configName +
-      " never reads it, so these tests run signed out. Pass process.env.PLAYWRIGHT_STORAGE_STATE to use.storageState there.\\n"
-    );
-  }
-}
-
+${CONFIG_WARNINGS_SOURCE}
 ${LOGIN_TAMPERING_SOURCE}
-function childEnv(runtime = {}, preview = {}, authentication = null) {
+// A suite's environment. With several app servers, PLAYWRIGHT_WORKER_TARGETS lists each worker's server and signed-in
+// state; worker 0's are also PLAYWRIGHT_BASE_URL and PLAYWRIGHT_STORAGE_STATE, as for a run with one.
+function childEnv(runtime = {}, preview = {}, storageStatePaths = []) {
+  const workerUrls = preview.workerUrls || [];
   return {
     ...process.env,
     PATH: [path.dirname(runtime.cliPath), process.env.PATH || ""].filter(Boolean).join(":"),
@@ -418,26 +477,24 @@ function childEnv(runtime = {}, preview = {}, authentication = null) {
     VIBE64_PLAYWRIGHT_OUTPUT_TARGET: "",
     VIBE64_PLAYWRIGHT_RESTORE_PREVIEW: "",
     VIBE64_PLAYWRIGHT_TARGET_IDENTITY: "",
+    VIBE64_PLAYWRIGHT_WORKERS: "",
     PLAYWRIGHT_BROWSERS_PATH: runtime.browsersPath,
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
     VIBE64_MANAGED_PLAYWRIGHT_TEST: "1",
+    PLAYWRIGHT_WORKER_TARGETS: workerUrls.length > 1
+      ? JSON.stringify(workerUrls.map((baseURL, worker) => ({
+        baseURL,
+        ...(storageStatePaths[worker] ? { storageState: storageStatePaths[worker] } : {})
+      })))
+      : "",
     ...(preview.managed ? {
-      PLAYWRIGHT_STORAGE_STATE: authentication?.storageStatePath || ""
+      PLAYWRIGHT_STORAGE_STATE: storageStatePaths[0] || ""
     } : {})
   };
 }
 
 function runManaged(runner = "", args = [], options = {}) {
-  const cleanup = () => {
-    if (options.cleanupRoot) {
-      rmSync(options.cleanupRoot, {
-        force: true,
-        recursive: true
-      });
-    }
-  };
   if (!path.isAbsolute(managedPreviewPath) || !existsSync(managedPreviewPath)) {
-    cleanup();
     fail(
       "Vibe64 could not start the isolated browser-test execution. " +
       "The session's vibe64-helper preview command is unavailable."
@@ -453,7 +510,6 @@ function runManaged(runner = "", args = [], options = {}) {
     env: options.env,
     stdio: "inherit"
   });
-  cleanup();
   if (result.error) {
     fail(result.error?.message || result.error);
   }
@@ -464,10 +520,11 @@ function runManaged(runner = "", args = [], options = {}) {
   process.exit(Number.isInteger(result.status) ? result.status : 1);
 }
 
-function managedExecution(runtime = {}, applicationRoot = "", {
+async function managedExecution(runtime = {}, applicationRoot = "", {
   identity = "default",
   identityExplicit = false,
-  targetId = ""
+  targetId = "",
+  workers = 0
 } = {}) {
   // The daemon must capture the prior Preview state before startup or login.
   // The inner scoped wrapper only reads the Preview already owned by that run.
@@ -478,7 +535,8 @@ function managedExecution(runtime = {}, applicationRoot = "", {
         VIBE64_PLAYWRIGHT_OUTPUT_TARGET: targetId,
         VIBE64_PLAYWRIGHT_RESTORE_PREVIEW: "1",
         PLAYWRIGHT_STORAGE_STATE: "",
-        VIBE64_PLAYWRIGHT_TARGET_IDENTITY: identityExplicit ? identity : ""
+        VIBE64_PLAYWRIGHT_TARGET_IDENTITY: identityExplicit ? identity : "",
+        VIBE64_PLAYWRIGHT_WORKERS: workers ? String(workers) : ""
       }
     };
   }
@@ -495,15 +553,19 @@ function managedExecution(runtime = {}, applicationRoot = "", {
   if (suppliesLogin) {
     refuseConfigTamperingWithLogin(applicationRoot);
   }
-  const authentication = suppliesLogin
-    ? managedPlaywrightStorageState(applicationRoot, identity, preview.baseUrl)
-    : null;
-  if (authentication) {
+  const storageStatePaths = suppliesLogin
+    ? await managedPlaywrightStorageStates(applicationRoot, identity, preview.workerUrls)
+    : [];
+  if (suppliesLogin) {
     warnWhenConfigIgnoresLogin(applicationRoot);
   }
+  if (preview.workerUrls?.length > 1) {
+    process.stderr.write("Vibe64 runs this suite on " + preview.workerUrls.length + " app servers, one per Playwright worker, " +
+      "each with its own copy of the test database.\\n");
+    warnWhenConfigIgnoresWorkers(applicationRoot, preview.workerUrls.length);
+  }
   return {
-    cleanupRoot: authentication?.directory || "",
-    env: childEnv(runtime, preview, authentication)
+    env: childEnv(runtime, preview, storageStatePaths)
   };
 }
 
@@ -512,8 +574,17 @@ function parseInvocation(values = []) {
   let identity = "default";
   let identityExplicit = false;
   let targetId = "";
+  let workers = 0;
   while (args.length > 0) {
     const option = String(args[0] || "");
+    if (option === "--workers" || option.startsWith("--workers=")) {
+      if (workers) fail("Specify --workers only once.", 64);
+      args.shift();
+      const value = option === "--workers" ? String(args.shift() || "") : option.slice("--workers=".length);
+      if (!/^[1-9][0-9]?$/u.test(value)) fail("--workers requires a whole number of app servers from 1 to 99.", 64);
+      workers = Number(value);
+      continue;
+    }
     if (option === "--target" || option.startsWith("--target=")) {
       if (targetId) fail("Specify --target only once.", 64);
       args.shift();
@@ -541,7 +612,8 @@ function parseInvocation(values = []) {
     command: String(args.shift() || "").trim(),
     identity,
     identityExplicit,
-    targetId
+    targetId,
+    workers
   };
 }
 
@@ -551,16 +623,25 @@ const {
   command,
   identity,
   identityExplicit,
-  targetId
+  targetId,
+  workers
 } = invocation;
-if (!command && (identityExplicit || targetId)) {
-  fail("Specify test or npm-run after --target and --identity options.", 64);
+if (!command && (identityExplicit || targetId || workers)) {
+  fail("Specify test or npm-run after --target, --identity and --workers options.", 64);
+}
+if (workers && !targetId) {
+  fail("--workers needs --target: only a test target with {workers} in its Run step serves several app servers.", 64);
+}
+// Vibe64 decides a target run's workers and gives each its own app server: Playwright's own count would share them.
+if (targetId && args.some((arg) => /^(?:--workers|-j)(?:=|$)/u.test(String(arg)))) {
+  fail("--target runs one Playwright worker per app server Vibe64 serves. Use vibe64-helper playwright --workers <n> " +
+    "before --target, not Playwright's --workers or -j.", 64);
 }
 if (!command || command === "help" || command === "--help" || command === "-h") {
   process.stdout.write([
     "Usage:",
-    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
-    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
+    "  vibe64-helper playwright [--target <target-id> [--workers <n>]] [--identity <default|guest|configured-name>] test [playwright test arguments]",
+    "  vibe64-helper playwright [--target <target-id> [--workers <n>]] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
     "  vibe64-helper playwright status",
     "  vibe64-helper playwright readiness",
     "  vibe64-helper playwright cancel <run-id>",
@@ -568,6 +649,7 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
     "The project keeps ordinary portable Playwright tests. Vibe64 ensures the managed preview, supplies PLAYWRIGHT_BASE_URL, selects the matching managed browser runtime, and uses the project's default managed app identity. Use --identity to select another configured name or guest.",
     "The signed-in state arrives in PLAYWRIGHT_STORAGE_STATE. " + LOGIN_STATE_OWNERSHIP_MESSAGE + " A playwright config that reads that file or works on its cookies or origins is refused.",
     "Use --target for tests that write: each target is a test server the project's genesis/stack.md Outputs declare. Vibe64 starts it with the project's own Run command and its own disposable data, and PLAYWRIGHT_BASE_URL points the specs at it, so the project's own harness is what runs, not a bypass of it. A spec that needs data creates it in its fixtures. Tests that write never use the person's own development target (often app). Vibe64 waits for the target, tests with its identity, and restores the previous Preview when the turn ends or Preview is next ensured, restarted or stopped, so repeated runs in one turn skip the restore in between. The project owns disabling external side effects. List targets with vibe64-helper preview targets --json.",
+    "A target whose Run step takes {workers} runs the suite in parallel: one app server per Playwright worker, each with its own copy of the test database, as many as the machine's test budget and free memory allow (--workers <n> asks for fewer or more, up to the budget). The run closes that target as it ends. vibe64-helper spec browser-tests explains it.",
     "Do not overlap a suite with live preview browser actions or Preview ensure/restart/target changes. Wait on the original command through cleanup, then confirm playwright status has no active run; preview ensure restores the previous Preview before it reports ready. Read-only status and logs are safe during a suite.",
     "For a background command, use its existing execution/session wait with about a 30-second window where supported: set yield_time_ms: 30000 for an empty command poll. Reserve shorter waits for interactive input or a specific immediate check. Do not repeatedly reread empty or unchanged logs between brief waits; inspect new output, changed state or a specific blocker."
   ].join("\\n") + "\\n");
@@ -575,7 +657,7 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
 }
 const applicationRoot = findApplicationRoot();
 if (command === "readiness") {
-  if (args.length || identityExplicit || targetId) fail("Use readiness without test arguments.", 64);
+  if (args.length || identityExplicit || targetId || workers) fail("Use readiness without test arguments.", 64);
   const manifest = applicationRoot ? readJson(path.join(applicationRoot, "package.json")) : null;
   const declaredVersion = String(manifest?.devDependencies?.["@playwright/test"] ||
     manifest?.dependencies?.["@playwright/test"] || manifest?.devDependencies?.playwright ||
@@ -599,8 +681,8 @@ if (!applicationRoot) {
   fail("No package.json was found for this Playwright test command.");
 }
 if (command === "status" || command === "cancel") {
-  if (identityExplicit || targetId) {
-    fail("--identity and --target apply only to test and npm-run commands.", 64);
+  if (identityExplicit || targetId || workers) {
+    fail("--identity, --target and --workers apply only to test and npm-run commands.", 64);
   }
   if ((command === "status" && args.length) || (command === "cancel" && (args.length !== 1 || !args[0]))) {
     fail("Use status, or cancel <run-id> with the ID from status.", 64);
@@ -642,9 +724,8 @@ if (command === "test") {
 } else {
   fail("Unsupported managed Playwright command: " + command + ". Browser installation is never permitted.", 64);
 }
-const execution = managedExecution(runtime, applicationRoot, { identity, identityExplicit, targetId });
+const execution = await managedExecution(runtime, applicationRoot, { identity, identityExplicit, targetId, workers });
 runManaged(runner, runnerArgs, {
-  cleanupRoot: execution.cleanupRoot,
   cwd: applicationRoot,
   env: execution.env
 });

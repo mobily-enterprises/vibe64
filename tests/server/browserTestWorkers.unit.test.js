@@ -6,13 +6,12 @@ import test from "node:test";
 import {
   MAX_BROWSER_TEST_WORKERS,
   availableWorkMemoryBytes,
-  browserTestWorkerCount
+  browserTestWorkerCount,
+  playwrightWorkerTargets
 } from "../../packages/vibe64-terminals/src/server/browserTestWorkers.js";
-import { __testables as browserWorkerTestables } from "../../packages/vibe64-terminals/src/server/agentPreviewBrowserWorker.js";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 import { MAX_EXECUTION_WORKERS } from "../../packages/vibe64-execution/src/server/index.js";
 
-const { playwrightWorkerTargets } = browserWorkerTestables;
 const MIB = 1024 * 1024;
 const GIB = 1024 * MIB;
 

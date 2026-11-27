@@ -19,6 +19,7 @@ import { removeDeadUnixJsonCommandSocket, requestUnixJsonCommand, unixCommandSoc
 import { isRecord, normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 import { commandFailure } from "./commandFailure.js";
 import { drainRegisteredProcessGroup } from "./agentPreviewBrowserProcessGroups.js";
+import { playwrightWorkerTargets } from "./browserTestWorkers.js";
 
 const PROJECT_PLAYWRIGHT_MISSING_MESSAGE =
   "Browser checks need Playwright, and neither this project nor this computer has it. Report this and ask the person to install it on this computer (npm install -g playwright, then playwright install chromium). Do not add Playwright to a project that is not already a Node.js project just for these checks.";
@@ -281,13 +282,16 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
  * @param {AbortSignal} options.signal
  * @param {typeof runVibe64Command} options.runCommand
  * @param {(targetId: string, operation: (testRunToken: string) => Promise<object>, validate: () => Promise<unknown>) => Promise<object>} options.withTarget
+ * @param {string} [options.stateDirectory] the run's own directory, which the daemon removes when the run ends: a run
+ *   with a target makes its sign-in states there, and its suite may name only states there in PLAYWRIGHT_WORKER_TARGETS
  */
 async function runRegisteredPlaywrightCommand(sessionId, input, {
   browserWorkers,
   onOutput,
   signal,
   runCommand,
-  withTarget
+  withTarget,
+  stateDirectory = ""
 }) {
   const registered = registeredBrowserWorkerForInput(sessionId, input, browserWorkers);
   if (registered.error) {
@@ -394,6 +398,12 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
       "vibe64_managed_playwright_storage_state_invalid"
     );
   }
+  // Only a run's own suite, started by its wrapper with the run's token, gets the list of its app servers.
+  const workerTargets = normalizeText(requestedEnv.PLAYWRIGHT_WORKER_TARGETS);
+  const workerTargetList = workerTargets
+    ? playwrightWorkerTargets(workerTargets, input.testRunToken ? stateDirectory : "")
+    : null;
+  if (workerTargetList?.error) return workerTargetList.error;
   const request = {
     actor: "daemon",
     allowedRoots: [descriptor.worktreePath],
@@ -407,7 +417,8 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
       VIBE64_MANAGED_PLAYWRIGHT_TEST: "1",
       ...(storageStatePath ? {
         PLAYWRIGHT_STORAGE_STATE: storageStatePath
-      } : {})
+      } : {}),
+      ...(workerTargetList ? { PLAYWRIGHT_WORKER_TARGETS: workerTargets } : {})
     },
     envPolicy: "preview",
     execution: {
@@ -418,7 +429,21 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
       ownerId: descriptor.sessionId,
       parentExecutionId,
       projectSlug: descriptor.project?.slug,
-      sessionId: descriptor.sessionId
+      sessionId: descriptor.sessionId,
+      // A host learns the suite's memory by what it runs (the runner, its script and arguments, where), for each count
+      // of workers; a run of a test target tests on the target's test database.
+      resourceProfile: {
+        key: "browser-test",
+        environment: input.testRunToken ? "test" : "development",
+        compatibilityKey: crypto.createHash("sha256").update(JSON.stringify({
+          runner,
+          args,
+          script: scriptText || "",
+          directory: path.relative(descriptor.worktreePath, cwd)
+        })).digest("hex")
+      },
+      // A suite with several app servers drives a browser for each: hosts admit it as that many.
+      ...(workerTargetList ? { workers: workerTargetList.length } : {})
     },
     maxBuffer: 32 * 1024 * 1024,
     mode: "capture",
@@ -459,9 +484,11 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
     }
     return current;
   }
+  // The setup is the wrapper that signs the suite in and starts it, not the suite: it has no suite's resource profile.
+  const { resourceProfile: _suiteProfile, ...setupExecution } = request.execution;
   return withTarget(targetId, (testRunToken) => runCommand({
     ...request,
-    execution: { ...request.execution, kind: "control", label: "Browser test setup" },
+    execution: { ...setupExecution, kind: "control", label: "Browser test setup" },
     command: descriptor.managedNodePath,
     args: [
       descriptor.playwrightWrapperPath,
@@ -472,8 +499,10 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
       ...request.env,
       ...descriptor.env,
       VIBE64_PLAYWRIGHT_TARGET_RUN: testRunToken,
+      VIBE64_PLAYWRIGHT_STATE_DIR: stateDirectory,
       PLAYWRIGHT_BASE_URL: "",
-      PLAYWRIGHT_STORAGE_STATE: ""
+      PLAYWRIGHT_STORAGE_STATE: "",
+      PLAYWRIGHT_WORKER_TARGETS: ""
     }
   }), validate);
 }

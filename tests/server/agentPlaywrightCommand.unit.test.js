@@ -930,12 +930,14 @@ test("managed Playwright warns when the project's config never reads the supplie
       path.join(fixture.runtimeRoot, "node26", "bin", "npm")
     );
     const configPath = path.join(fixture.projectRoot, "playwright.config.mjs");
-    const run = () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
+    // As the daemon runs a target run's setup: in a directory of its own.
+    const run = async () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
       env: {
         ...process.env,
         ...fixture.prepared.env,
-        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
+        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+        VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
       }
     });
 
@@ -1010,12 +1012,14 @@ test("managed Playwright refuses a config that reads or edits the supplied login
       path.join(fixture.runtimeRoot, "node26", "bin", "npm"),
       { identityTypes }
     );
-    const run = () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
+    // As the daemon runs a target run's setup: in a directory of its own.
+    const run = async () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
       env: {
         ...process.env,
         ...fixture.prepared.env,
-        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
+        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+        VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
       }
     });
     const refusal = (configName, reason) => (error) => {
@@ -1078,7 +1082,12 @@ if (["ensure", "status"].includes(process.argv[2])) {
 `);
     await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
-      env: { ...process.env, ...fixture.prepared.env, VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run" }
+      env: {
+        ...process.env,
+        ...fixture.prepared.env,
+        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+        VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
+      }
     }), (error) => {
       assert.match(error.stderr, /could not prepare the managed browser and application identity/iu);
       assert.match(error.stderr, /unverified listener/iu);

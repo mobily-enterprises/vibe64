@@ -1142,13 +1142,17 @@ test("a test target taking {workers} serves one app server per worker, each with
     const startsBefore = f.previewStarts.length;
     const result = await f.controller.withPreviewTarget(f.sessionId, "parallel", async () => {
       const status = await f.controller.launchStatus(f.sessionId);
-      const urls = (status.activeTerminal.metadata.testWorkers || [{ url: status.previewTarget.href }]).map(({ url }) => url);
+      // Each app server itself, as testWorkers lists them: the Preview's own address carries its access token, which a
+      // relative URL would drop.
+      const urls = (status.activeTerminal.metadata.testWorkers || [{ url: status.activeTerminal.metadata.targetUrl }])
+        .map(({ url }) => url);
       served = await Promise.all(urls.map(async (url) => {
         assert.equal(await (await fetch(new URL("add", url))).text(), "ok");
         return { port: Number(new URL(url).port), ...await (await fetch(new URL("worker", url))).json() };
       }));
       return { ok: true, exitCode: 0 };
     }, { waitUntilReady: f.waitReady, workers });
+    assert.ok(served, `the run reached its suite: ${JSON.stringify(result)}`);
     return { result, served, starts: f.previewStarts.slice(startsBefore) };
   };
   const personsAppIsBack = async () => {
@@ -1244,7 +1248,7 @@ test('parallel slow test', async () => {
     const result = await commands.execute(["--target", "parallel", "--workers", "2", "--identity", "tester",
       "test", "--grep", "parallel test"]);
     assert.match(result.stdout, /4 passed/u);
-    assert.match(result.stderr, /runs this suite on 2 app servers, one per Playwright worker/u);
+    assert.match(result.stdout + result.stderr, /runs this suite on 2 app servers, one per Playwright worker/u);
     const seen = await Promise.all([0, 1, 2, 3].map(async n => (
       JSON.parse(await readFile(path.join(f.sourceRoot, `parallel-seen-${n}.json`), "utf8")))));
     assert.deepEqual([...new Set(seen.map(({ worker }) => worker))].sort(), [0, 1], "both workers tested, each on its own server");

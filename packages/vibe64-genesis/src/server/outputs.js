@@ -34,6 +34,9 @@ const MODES = new Set(["finite", "interactive"]);
 const DATA_MODES = new Set(["development", "test"]);
 const PRESENTATION_KINDS = new Set(["terminal", "web"]);
 const MAX_PARAMETERS = 16;
+// How many app servers a browser-test run asks a test target for: worker i listens on {port}+i (1 everywhere else).
+const WORKERS_PLACEHOLDER = "{workers}";
+const WORKERS_PLACEMENT = "Only the Run step of a web output target with `- Data: test` may use the {workers} placeholder.";
 const choices = (values) => [...values].map((value) => `\`${value}\``).join(" or ");
 // The heading and entry forms of every Outputs block, shared by errors and the agent spec.
 const OUTPUTS_HEADING_FORMS = Object.freeze([
@@ -78,9 +81,9 @@ function outputArguments(source, outputsPath, label, line) {
       invalid(outputsPath, `${label} has an invalid {parameter:id} placeholder.`, line);
     }
     if ([...argument.matchAll(PLACEHOLDER)].some((match) => (
-      !["host", "port"].includes(match[1]) && !/^parameter:[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(match[1])
+      !["host", "port", "workers"].includes(match[1]) && !/^parameter:[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(match[1])
     ))) {
-      invalid(outputsPath, `${label} supports only {host}, {port}, and {parameter:id} placeholders.`, line);
+      invalid(outputsPath, `${label} supports only {host}, {port}, {workers}, and {parameter:id} placeholders.`, line);
     }
   }
   return argv;
@@ -234,6 +237,9 @@ function parseTargetLine(draft, source, outputsPath, line) {
     const argv = outputArguments(step[3], outputsPath, "Output step command", line);
     if (role !== "run" && argv.some((argument) => /\{(?:host|port)\}/u.test(argument))) {
       invalid(outputsPath, "Only a web presentation's Run step may use {host} or {port} placeholders.", line);
+    }
+    if (role !== "run" && argv.some((argument) => argument.includes(WORKERS_PLACEHOLDER))) {
+      invalid(outputsPath, WORKERS_PLACEMENT, line);
     }
     draft.steps.push({
       label: oneLineText(step[2], ERROR_CODE, outputsPath, "Output step label", line),
@@ -450,6 +456,9 @@ function normalizeTarget(draft, outputsPath) {
   ));
   if (placeholders.some((value) => ["host", "port"].includes(value)) && presentation?.kind !== "web") {
     invalid(outputsPath, `Only a web output target may use {host} or {port} placeholders.`, draft.line);
+  }
+  if (placeholders.includes("workers") && (presentation?.kind !== "web" || draft.dataMode !== "test")) {
+    invalid(outputsPath, WORKERS_PLACEMENT, draft.line);
   }
   const parameters = draft.parameters.map(({ seen: _seen, ...parameter }) => parameter);
   const parameterIds = new Set(parameters.map(({ id }) => id));
