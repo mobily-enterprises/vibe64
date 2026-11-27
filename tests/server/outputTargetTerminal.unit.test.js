@@ -452,7 +452,7 @@ setInterval(() => {}, 1000);
     timeoutSeconds: 30
   });
   const wrapper = spawn("bash", ["-c", command], { cwd: root, detached: true, stdio: "ignore" });
-  t.after(() => { try { process.kill(-wrapper.pid, "SIGKILL"); } catch {} });
+  t.after(() => { try { process.kill(-wrapper.pid, "SIGKILL"); } catch { /* the group has ended */ } });
   for (let tries = 0; !existsSync(path.join(root, "started")); tries++) {
     assert.ok(tries < 200, "the launch started");
     await new Promise((resolve) => setTimeout(resolve, 25));
