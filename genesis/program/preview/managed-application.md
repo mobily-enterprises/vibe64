@@ -298,7 +298,15 @@ that read is returned rather than replaced.
 Output targets may declare `Data: test` or `Data: development` in the Vibe64-owned
 Outputs grammar. This optional field reaches target views unchanged. Test-data
 targets show a persistent amber banner in embedded Preview; their app launchers
-own database isolation. The existing serialized temporary-Preview run publishes
+own database isolation. A browser suite's own process opens only its target's
+database: on a test-data target every name the Stack's databases bind gives the
+target's browser-test database (its first app server's copy) on the session's
+server, and on development data a database that cannot connect
+(`vibe64_no_database_in_browser_runs` on
+`vibe64-no-database-in-browser-runs.invalid`). So a spec that opens the database
+itself never reaches the development one, whatever the app's generated `.env`
+says (`browserSuiteDatabaseEnvironment.js`).
+The existing serialized temporary-Preview run publishes
 its state through launch status and realtime refresh. Its changes, like Preview
 readiness, cleanup and Stop, name the session's project, so they reach the
 session's pages even when a terminal event or cleanup runs outside any request. Startup/running,

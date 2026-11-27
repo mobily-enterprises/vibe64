@@ -126,8 +126,16 @@ function createAgentPreviewBrowserTests({
   async function withTestApproval(sessionId, input, options, targetId, operation, validate) {
     // A browser test's progress text has nowhere to go when its caller streams none.
     const { onOutput = doNothing } = options;
-    const run = (startTarget) => launchTarget.withPreviewTarget(sessionId, targetId, async (token) => {
+    const run = (startTarget) => launchTarget.withPreviewTarget(sessionId, targetId, async (token, { testData = false } = {}) => {
       const pending = state.browserTestRuns.get(sessionId);
+      if (pending) {
+        // What the run's suite, started by its wrapper with the run's token, may open: its target's test database or
+        // none; and on a test-data target the port of its first app server ({port}, worker i's being {port}+i).
+        pending.testData = testData;
+        pending.appPort = testData
+          ? Number((await launchTarget.launchStatus(sessionId))?.activeTerminal?.metadata?.port) || 0
+          : 0;
+      }
       if (pending?.admissionId) {
         pending.state = "running";
         await publishSessionChanged(sessionId, { projectSlug: pending.projectSlug });
@@ -278,9 +286,12 @@ function createAgentPreviewBrowserTests({
         onOutput: options.onOutput,
         signal: options.signal,
         stateDirectory: pending?.stateDirectory || parent?.stateDirectory || "",
+        appPort: input.testRunToken ? parent?.appPort || 0 : 0,
         runCommand: async (request) => {
           if (pending && !input.targetId) pending.state = "running";
-          const commandResult = await workerRegistry.runBrowserCommand(request);
+          const commandResult = await workerRegistry.runBrowserCommand(request, {
+            testData: Boolean(input.testRunToken) && parent?.testData === true
+          });
           // The scoped wrapper may exit before its independently managed child.
           // Restoration must wait for every registered child to finish draining.
           const children = pending ? await Promise.all(pending.children) : [];

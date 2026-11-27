@@ -284,6 +284,8 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
  * @param {(targetId: string, operation: (testRunToken: string) => Promise<object>, validate: () => Promise<unknown>) => Promise<object>} options.withTarget
  * @param {string} [options.stateDirectory] the run's own directory, which the daemon removes when the run ends: a run
  *   with a target makes its sign-in states there, and its suite may name only states there in PLAYWRIGHT_WORKER_TARGETS
+ * @param {number} [options.appPort] for the own suite of a run on a test-data target, the port of the target's first
+ *   app server ({port}); 0 for any other command
  */
 async function runRegisteredPlaywrightCommand(sessionId, input, {
   browserWorkers,
@@ -291,7 +293,8 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
   signal,
   runCommand,
   withTarget,
-  stateDirectory = ""
+  stateDirectory = "",
+  appPort = 0
 }) {
   const registered = registeredBrowserWorkerForInput(sessionId, input, browserWorkers);
   if (registered.error) {
@@ -418,7 +421,10 @@ async function runRegisteredPlaywrightCommand(sessionId, input, {
       ...(storageStatePath ? {
         PLAYWRIGHT_STORAGE_STATE: storageStatePath
       } : {}),
-      ...(workerTargetList ? { PLAYWRIGHT_WORKER_TARGETS: workerTargets } : {})
+      ...(workerTargetList ? { PLAYWRIGHT_WORKER_TARGETS: workerTargets } : {}),
+      // The target's {port}: JSKIT finds worker i's own environment (its database copy) by it, in the file its
+      // browser-test server writes for the servers on {port}+i.
+      ...(appPort > 0 ? { PLAYWRIGHT_PORT: String(appPort) } : {})
     },
     envPolicy: "preview",
     execution: {

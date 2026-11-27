@@ -10,6 +10,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 import { initializeGenesisProject, inspectVibe64Outputs, inspectVibe64WorkspaceSetup } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createOutputTargetTerminalController } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
+import { browserSuiteDatabaseEnvironment } from "../../packages/vibe64-project/src/server/browserSuiteDatabaseEnvironment.js";
 import { createAgentPreviewCommandService, prepareAgentPreviewCommand } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 import { closeTerminalSessionsForNamespace, startTerminalSession } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
 import { outputTargetTerminalNamespace } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
@@ -162,9 +163,12 @@ process.stdout.write(JSON.stringify({
   await chmod(path.join(sourceRoot, "tools/test-identity"), 0o755);
   await writeFile(path.join(sourceRoot, "parallel.mjs"), `
 import http from 'node:http';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 const workers = Number(process.argv[2]);
 writeFileSync('parallel.pid', String(process.pid));
+// Each worker's own environment, by the first server's port, as JSKIT's browser-test server writes it for its suite.
+mkdirSync('.cache', { recursive: true });
+writeFileSync('.cache/workers-' + process.env.PORT + '.json', JSON.stringify(Array.from({ length: workers }, (_, worker) => ({ DB_NAME: 'parallel-' + worker + '.json' }))));
 for (let worker = 0; worker < workers; worker++) {
   const file = 'parallel-' + worker + '.json';
   writeFileSync(file, JSON.stringify({ count: 0 }));
@@ -259,7 +263,8 @@ process.stdout.write(JSON.stringify({
     try {
       return await runCaptureCommand(input.command, input.args, {
         ...input, execution: { ...input.execution, id },
-        env: { ...commandEnv, ...input.env, VIBE64_EXECUTION_ID: id }
+        // As runVibe64Command gives a command its project's Env under its own.
+        env: { ...commandEnv, ...input.project?.runtimeConfigEnv, ...input.env, VIBE64_EXECUTION_ID: id }
       });
     } finally {
       captureExecutionIds.delete(id);
@@ -1270,5 +1275,92 @@ test('parallel slow test', async () => {
       await new Promise(resolve => setTimeout(resolve, 50));
     }
     await leftNothing(targets);
+  });
+});
+
+test("a suite's own process opens only its test-data target's databases, and none on development data, whatever the app's .env says", async t => {
+  await runWithProjectRequestContext({ slug: "test-target" }, async () => {
+    const f = await fixture(t, "database", { testBudget: () => 8, availableMemory: async () => 64 * 1024 ** 3 },
+      { extraOutputs: parallelTarget });
+    const commands = await browserCommands(f);
+    // The session's development database, as its Env gives it and as Vibe64 writes it into the app's .env.
+    const development = { DB_HOST: "127.0.0.1", DB_PORT: "3306", DB_USER: "session", DB_PASSWORD: "pw-session",
+      DB_NAME: "session_dev", BROWSER_TEST_DB_NAME: "session_browser" };
+    await writeFile(path.join(f.sourceRoot, ".env"), Object.entries(development).map(([key, value]) => `${key}=${value}\n`).join(""));
+    const resources = [{ component: "app", resource: { id: "database", kind: "mysql", environmentAlternatives: [{ preferred: true,
+      bindings: { database: "DB_NAME", host: "DB_HOST", password: "DB_PASSWORD", port: "DB_PORT", username: "DB_USER" } }],
+    optionalBindings: { browserTestDatabase: "BROWSER_TEST_DB_NAME" } } }];
+    // As the project's session environment answers (projectSessionEnvironment.js): its Env, for a suite its databases'.
+    f.project.projectInspectionEnvironment = async (input) => input.browserSuiteData
+      ? { ...development, ...browserSuiteDatabaseEnvironment(resources, development, { testData: input.browserSuiteData === "test" }) }
+      : development;
+    // A spec that opens the database as a fixture does through the app's knexfile, with .env loaded into its process.
+    await writeFile(path.join(f.sourceRoot, "browser.spec.mjs"), `
+import { test } from '@playwright/test';
+import { writeFileSync } from 'node:fs';
+import { lookup } from 'node:dns/promises';
+test('opens the database', async () => {
+  process.loadEnvFile('.env');
+  const { DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, PLAYWRIGHT_PORT } = process.env;
+  const reached = await lookup(DB_HOST).then(() => 'resolved', (error) => error.message);
+  // The app server on PLAYWRIGHT_PORT, when the run names one: the target's own.
+  const served = PLAYWRIGHT_PORT ? (await (await fetch('http://127.0.0.1:' + PLAYWRIGHT_PORT + '/test-state')).json()).mode : undefined;
+  writeFileSync('database-opened.json', JSON.stringify({ DB_HOST, DB_NAME, DB_PASSWORD, DB_PORT, DB_USER, served, reached }));
+});
+`);
+    const opened = async (args) => {
+      await rm(path.join(f.sourceRoot, "database-opened.json"), { force: true });
+      assert.match((await commands.execute(args)).stdout, /1 passed/u);
+      return JSON.parse(await readFile(path.join(f.sourceRoot, "database-opened.json"), "utf8"));
+    };
+    // On a test-data target: its first app server's copy, on the session's server with its credentials, and the port
+    // that server listens on.
+    assert.deepEqual(await opened(["--target", "test-app", "test"]), {
+      DB_HOST: "127.0.0.1", DB_NAME: "session_browser", DB_PASSWORD: "pw-session", DB_PORT: "3306", DB_USER: "session",
+      served: "test-app", reached: "resolved"
+    });
+    // On development data, a named target's or the person's Preview: no database and no test server, and opening one
+    // says why.
+    for (const args of [["--target", "app", "test"], ["test"]]) {
+      const none = await opened(args);
+      assert.deepEqual({ ...none, reached: undefined }, {
+        DB_HOST: "vibe64-no-database-in-browser-runs.invalid", DB_NAME: "vibe64_no_database_in_browser_runs",
+        DB_PASSWORD: "vibe64_no_database_in_browser_runs", DB_PORT: "1", DB_USER: "vibe64_no_database_in_browser_runs",
+        reached: undefined
+      }, args.join(" "));
+      assert.match(none.reached, /vibe64-no-database-in-browser-runs\.invalid/u, args.join(" "));
+    }
+
+    // Two workers: each finds its own server's copy by PLAYWRIGHT_PORT, as JSKIT's browserTestConfig() does, and its
+    // write lands there.
+    await writeFile(path.join(f.sourceRoot, "playwright.config.mjs"), `
+const targets = JSON.parse(process.env.PLAYWRIGHT_WORKER_TARGETS || '[]');
+export default {
+  testDir: '.', testMatch: 'browser.spec.mjs', workers: Math.max(1, targets.length), fullyParallel: true,
+  reporter: 'line', timeout: 30000
+};`);
+    await writeFile(path.join(f.sourceRoot, "browser.spec.mjs"), `
+import { test, expect } from '@playwright/test';
+import { readFileSync, writeFileSync } from 'node:fs';
+const targets = JSON.parse(process.env.PLAYWRIGHT_WORKER_TARGETS || '[]');
+for (const n of [0, 1]) {
+  test('writes its own copy ' + n, async ({ request }, testInfo) => {
+    const worker = testInfo.parallelIndex;
+    const port = Number(process.env.PLAYWRIGHT_PORT);
+    expect(Number(new URL(targets[worker].baseURL).port)).toBe(port + worker);
+    const { DB_NAME } = JSON.parse(readFileSync('.cache/workers-' + port + '.json', 'utf8'))[worker];
+    const data = JSON.parse(readFileSync(DB_NAME, 'utf8'));
+    writeFileSync(DB_NAME, JSON.stringify({ ...data, count: data.count + 100 }));
+    const served = await (await request.get(new URL('worker', targets[worker].baseURL).href)).json();
+    expect(served.worker).toBe(worker);
+    expect(served.count).toBeGreaterThanOrEqual(100);
+    writeFileSync('copy-written-' + n + '.json', JSON.stringify({ worker, port }));
+  });
+}
+`);
+    const written = await commands.execute(["--target", "parallel", "--workers", "2", "--identity", "tester", "test"]);
+    assert.match(written.stdout, /2 passed/u);
+    const writes = await Promise.all([0, 1].map(async n => JSON.parse(await readFile(path.join(f.sourceRoot, `copy-written-${n}.json`), "utf8"))));
+    assert.equal(writes[0].port, writes[1].port, "one PLAYWRIGHT_PORT for the run: its first server's");
   });
 });
