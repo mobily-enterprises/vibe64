@@ -24,8 +24,8 @@ test("verify's Genesis step fails an invalid Program and names the module", () =
 test("verify's Genesis step fails managed skill copies that are not the pinned Genesis's, naming the sync", () => {
   for (const skills of ["outdated", "missing", "customized"]) {
     assert.deepEqual(genesisCheckFailures({ ...passing, skills }), [
-      `Agent Skills are ${skills}, not current: run \`genesis skills sync\` and commit the refreshed `
-        + ".agents/skills copies."
+      `Agent Skills are ${skills}, not current: run \`npm exec --no -- genesis skills sync\` `
+        + "(the pinned Genesis, never one on PATH) and commit the refreshed .agents/skills copies."
     ]);
   }
 });
