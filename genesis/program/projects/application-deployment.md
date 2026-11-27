@@ -103,6 +103,26 @@ disk, sign-ins in memory or files, a job that must run once): such state
 belongs in a declared resource. A host that runs one copy, such as a
 workspace's own staging service, ignores it; a host never guesses it.
 
+`- Production: managed by` names, in two backtick pairs, who deploys the
+application's Production instead of a host's Deploy to production and the
+https address where it does, such as
+`- Production: managed by \`Example Console\` at \`https://console.example.com/deployments\``.
+The name is 1 to 60 letters, digits, single spaces and `. & ' + ( ) _ -`,
+starting with a letter or digit; the address starts with `https://`, has a
+host and no user name or password, and is at most 2048 of RFC 3986's
+characters, kept exactly as written. The result is `productionManagedBy:
+{ name, url }`, only when the Stack says it, and outside the recipe, so the
+recipe's hash and Staging are the same with or without it. The Stack line is
+the one place the name and address live: a host's Deploy page reads them from
+each inspection and links there, and the deploy engine refuses Production
+naming them ([deploy engine](../deploy/deploy-engine.md), Needs). A Deployment
+of the line alone runs nothing on a host, as `- Nothing.` does; beside steps,
+Staging publishes as before. The entry is the whole Deployment's: under a
+`### Service` heading, where `- Production: \`N\` instances` is a service's
+starting count, it is refused with the fix; so is a top-level Production line of
+another form. An optional line within v2: a reader without it refuses it as an
+unknown entry.
+
 ## Services and resources
 
 A Deployment may describe the application's services: each kind of process it

@@ -19,6 +19,7 @@ import {
   INSTANCES_PREFIX,
   MACHINE_SETUP_PREFIX,
   PACKAGES_PREFIX,
+  PRODUCTION_PREFIX,
   RESTORE_PATHS_PREFIX,
   SANDBOX_ALLOWS_PREFIX,
   SETUP_CODE_PREFIX,
@@ -33,6 +34,7 @@ import {
   invalid,
   machineSetup,
   packages,
+  productionManagedBy,
   sandboxAllowances,
   setupCode
 } from "./deploymentEntries.js";
@@ -53,8 +55,9 @@ import {
 
 // v2: a Deployment may describe several services under `### Service` headings and say how development provides a
 // resource under `### Resource`; a Deployment without them is one public service, `web`, exactly as v1 read it.
-// An optional line added within v2 (Kept between builds, Machine setup) keeps v2: a Deployment without it reads and
-// hashes as before, and a reader without it refuses the line as an unknown entry rather than skipping it.
+// An optional line added within v2 (Kept between builds, Machine setup, Production managed by) keeps v2: a Deployment
+// without it reads and hashes as before, and a reader without it refuses the line as an unknown entry rather than
+// skipping it.
 const VIBE64_APPLICATION_DEPLOYMENT_CONTRACT = "vibe64.application-deployment.v2";
 // What a host recorded with a release made before services: such a release reads exactly as a v2 Deployment without
 // `### Service` headings.
@@ -88,6 +91,13 @@ function parseDeployment(lines, deploymentPath) {
   }
   const located = { services: [], resources: new Map() };
   if (isExplicitlyEmptyStackSection(lines)) return { result: emptyDeployment(), located };
+  // A Deployment of its Production line alone runs nothing on a host: Production is deployed where the line says, and
+  // Staging has nothing to publish, as with `- Nothing.`.
+  const entries = lines.map((text, index) => ({ source: text.trim(), line: index + 1 })).filter(({ source }) => source);
+  if (entries.length === 1 && entries[0].source.startsWith(PRODUCTION_PREFIX)) {
+    const [{ source, line }] = entries;
+    return { result: { ...emptyDeployment(), productionManagedBy: productionManagedBy(source, deploymentPath, line) }, located };
+  }
 
   const result = emptyDeployment();
   const seen = new Set();
@@ -207,6 +217,12 @@ function parseDeployment(lines, deploymentPath) {
       if (seen.has("machine-setup")) invalid(deploymentPath, "Duplicate Deployment Machine setup.", line);
       seen.add("machine-setup");
       result.machineSetup = machineSetup(source, deploymentPath, line);
+      continue;
+    }
+    if (source.startsWith(PRODUCTION_PREFIX)) {
+      if (seen.has("production")) invalid(deploymentPath, "Duplicate Deployment Production.", line);
+      seen.add("production");
+      result.productionManagedBy = productionManagedBy(source, deploymentPath, line);
       continue;
     }
     if (source.startsWith(INSTANCES_PREFIX)) {
@@ -365,6 +381,9 @@ function vibe64DeploymentInspection({ environment = {}, section = {} } = {}) {
     ...recipe,
     services: parsed.services,
     deploymentResources: parsed.deploymentResources,
+    // Who deploys Production instead of a host, only when the Stack says it: no part of the recipe, so Staging's
+    // identity stays the same with or without it.
+    ...(parsed.productionManagedBy ? { productionManagedBy: { ...parsed.productionManagedBy } } : {}),
     diagnostics
   };
 }

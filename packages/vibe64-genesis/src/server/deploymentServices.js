@@ -18,6 +18,7 @@ import {
   INSTANCES_MAX,
   INSTANCES_PREFIX,
   PACKAGES_PREFIX,
+  PRODUCTION_PREFIX,
   SANDBOX_ALLOWS_PREFIX,
   STEP_LINE,
   VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES,
@@ -186,7 +187,10 @@ function parseServiceLine(service, source, deploymentPath, line) {
     service.atLeast = { vcpus, memoryGib };
     return;
   }
-  if (source.startsWith("- Production: ")) {
+  if (source.startsWith(`${PRODUCTION_PREFIX}managed by `)) {
+    fail("who manages Production is the whole Deployment's: put `- Production: managed by` above the first ### heading.");
+  }
+  if (source.startsWith(PRODUCTION_PREFIX)) {
     once("Production");
     const count = wholeNumber(source.match(SERVICE_PRODUCTION_UNITS)?.[1] ?? "", { max: INSTANCES_MAX });
     if (count === null) fail("Production says how many instances Production starts with, such as `- Production: `2` instances`.");

@@ -99,6 +99,14 @@ Genesis boundary's result names the section's `### Resource` entries
 `deploymentResources`, since the inspection's `resources` already names
 `## Resources`.
 
+A Deployment whose `- Production: managed by` line says who deploys
+Production instead ([application deployment](../projects/application-deployment.md))
+is refused before anything else, `production_managed_elsewhere`, naming that
+manager and its address; the problem carries them as `managedBy: { name, url }`,
+read from the Stack at each inspection, so a host's page shows them and links
+there without keeping a copy. The engine never deploys such a project, whatever
+else its Deployment says.
+
 ## The package
 
 The saved commit is packed once (`packArchive`), with the shared build script

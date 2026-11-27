@@ -42,6 +42,18 @@ const MACHINE_SETUP_PATH_MAX = 1024;
 // requests that lives in one copy (files it writes, sign-ins kept in memory).
 const INSTANCES_PREFIX = "- Instances: up to ";
 const INSTANCES_MAX = 100;
+// Who deploys the application's Production when a host's Deploy to production doesn't (the project's own release
+// tooling, say): the name a person knows it by and the https address where its Production is deployed, kept only here.
+// A host's Deploy page shows it with a link there and its deploy engine refuses Production, naming it; Staging reads the
+// rest of the section as before. A service's own `- Production: `N` instances` is another line, under its heading.
+const PRODUCTION_PREFIX = "- Production: ";
+const PRODUCTION_MANAGED_LINE = /^- Production: managed by `([^`\r\n]*)` at `([^`\r\n]*)`$/u;
+const PRODUCTION_MANAGER_NAME_MAX = 60;
+// Words of letters, digits and . & ' + ( ) _ - between single spaces, starting with a letter or digit.
+const PRODUCTION_MANAGER_NAME = /^[\p{L}\p{N}](?:[\p{L}\p{N}.&'+()_-]| (?! |$))*$/u;
+const PRODUCTION_MANAGER_URL_MAX = 2048;
+// RFC 3986's characters, so the address is shown and linked exactly as written.
+const URL_CHARACTERS = /^[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/u;
 // What an application's own commands and service may do beyond an ordinary
 // sandbox, from a closed set. A host grants only what its owner permits.
 const VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES = Object.freeze(["fuse", "gvisor"]);
@@ -74,6 +86,7 @@ const DEPLOYMENT_ENTRY_FORMS = Object.freeze([
   `${BUILD_CACHE_PREFIX}\`~/folder\`...`,
   `${MACHINE_SETUP_PREFIX}\`path\``,
   `${INSTANCES_PREFIX}\`count\``,
+  `${PRODUCTION_PREFIX}managed by \`name\` at \`https://address\``,
   "- Ready when: `GET` `/path` returns `200`",
   `- ${DEPLOYMENT_STEP_ROLES.join("|")} \`label\`: \`command\` \`argument\`...`
 ]);
@@ -235,6 +248,51 @@ function instancesMax(source, deploymentPath, line) {
   return Number(count);
 }
 
+function productionManagedBy(source, deploymentPath, line) {
+  const match = source.match(PRODUCTION_MANAGED_LINE);
+  if (!match) {
+    invalid(
+      deploymentPath,
+      "Deployment Production says who deploys Production instead of a host, such as "
+        + "`- Production: managed by `Example Console` at `https://console.example.com/deployments``; a service's "
+        + "`- Production: `N` instances` goes under its ### Service heading.",
+      line
+    );
+  }
+  const [, name, url] = match;
+  if (name.length > PRODUCTION_MANAGER_NAME_MAX || !PRODUCTION_MANAGER_NAME.test(name)) {
+    invalid(
+      deploymentPath,
+      `Deployment Production names who manages it in 1 to ${PRODUCTION_MANAGER_NAME_MAX} letters, digits, single spaces `
+        + `and . & ' + ( ) _ -, starting with a letter or digit, such as \`Example Console\`; ${JSON.stringify(name)} isn't one.`,
+      line
+    );
+  }
+  if (!httpsAddress(url)) {
+    invalid(
+      deploymentPath,
+      "Deployment Production gives the https address where Production is managed, such as "
+        + `\`https://console.example.com/deployments\`, without a user name or password; ${JSON.stringify(url)} isn't one.`,
+      line
+    );
+  }
+  return { name, url };
+}
+
+// An https address with its host right after `https://`, as written: a parser takes `https:///path` as the host `path`.
+function httpsAddress(value) {
+  const scheme = "https://";
+  if (!value.startsWith(scheme) || value.length > PRODUCTION_MANAGER_URL_MAX || !URL_CHARACTERS.test(value)) return false;
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+  return Boolean(parsed.hostname) && !parsed.username && !parsed.password
+    && value.slice(scheme.length).toLowerCase().startsWith(parsed.hostname);
+}
+
 function deploymentStep(match, deploymentPath, line) {
   const argv = processArguments(match[3], ERROR_CODE, deploymentPath, "Deployment command", line);
   if (argv.some((value) => /\{(?:host|port)\}/u.test(value))) {
@@ -265,6 +323,7 @@ export {
   INSTANCES_PREFIX,
   MACHINE_SETUP_PREFIX,
   PACKAGES_PREFIX,
+  PRODUCTION_PREFIX,
   RESTORE_PATHS_PREFIX,
   SANDBOX_ALLOWS_PREFIX,
   SETUP_CODE_PREFIX,
@@ -279,6 +338,7 @@ export {
   invalid,
   machineSetup,
   packages,
+  productionManagedBy,
   sandboxAllowances,
   setupCode
 };
