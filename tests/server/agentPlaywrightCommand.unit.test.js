@@ -78,7 +78,8 @@ async function createProject(projectRoot, version) {
     "  workerTargets: process.env.PLAYWRIGHT_WORKER_TARGETS || \"\",",
     "  workerStates: JSON.parse(process.env.PLAYWRIGHT_WORKER_TARGETS || \"[]\")",
     "    .map((target) => JSON.parse(readFileSync(target.storageState, \"utf8\"))),",
-    "  workers: process.env.VIBE64_PLAYWRIGHT_WORKERS",
+    "  workers: process.env.VIBE64_PLAYWRIGHT_WORKERS,",
+    "  settings: Object.keys(process.env).filter((name) => /^(?:PLAYWRIGHT_|JSKIT_BROWSER_)/u.test(name)).sort()",
     "}));"
   ].join("\n") + "\n", "utf8");
 }
@@ -391,6 +392,32 @@ test("Preview Stop preserves the assistant registration for the next managed tes
   assert.equal((await fixture.commandService.stopBrowsersForSession("playwright-1.61.1")).ok, true);
   const result = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], options);
   assert.equal(JSON.parse(result.stdout).managed, "1");
+});
+
+test("the Playwright settings this test process carries, a test host lane's or an outer suite's, never reach the suite it starts", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-outer-settings-"));
+  const fixture = await prepareFixture(root, "1.61.1");
+  const outer = {
+    PLAYWRIGHT_PORT: "4173",
+    PLAYWRIGHT_WORKER_TARGETS: JSON.stringify([{ baseURL: "http://127.0.0.1:4173" }]),
+    PLAYWRIGHT_FUTURE_X: "1",
+    JSKIT_BROWSER_FUTURE_X: "1"
+  };
+  const before = Object.fromEntries(Object.keys(outer).map((name) => [name, process.env[name]]));
+  Object.assign(process.env, outer);
+  t.after(async () => {
+    for (const [name, value] of Object.entries(before)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    await fixture.commandService.closeAllForSession("playwright-1.61.1");
+    await rm(root, { recursive: true, force: true });
+  });
+  const result = JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
+    cwd: fixture.projectRoot, env: { ...process.env, ...fixture.prepared.env }
+  })).stdout);
+  assert.equal(result.managed, "1");
+  assert.deepEqual(result.settings.filter((name) => Object.hasOwn(outer, name)), []);
 });
 
 test("managed Playwright target selection crosses the real wrapper/socket boundary before test preparation", async (t) => {
