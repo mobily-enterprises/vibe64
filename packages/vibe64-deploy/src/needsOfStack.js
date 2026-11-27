@@ -25,9 +25,25 @@ function problem(code, message) {
  * @param {(resource: object) => { bindings: Record<string, string>, allowEmpty?: string[] }} resourceRules.preferredAlternative
  *   a declared resource's one preferred alternative, its bindings checked for its kind; throws naming what is wrong
  * @param {(kind: string) => boolean} resourceRules.resourceKindIsDatabase
- * @returns {{ needs: object | null, problem: { code: string, message: string } | null }}
+ * @returns {{ needs: object | null, problem: { code: string, message: string, line?: number,
+ *   managedBy?: { name: string, url: string } } | null }} `managedBy` when the Stack says who deploys Production instead
  */
 function needsOfStack(deployment, { preferredAlternative, resourceKindIsDatabase }) {
+  // The Stack says who deploys Production instead (its Deployment's `- Production: managed by` line): the engine never
+  // deploys it, and the refusal carries the name and address, read from the Stack each time, for the page to link.
+  if (deployment?.productionManagedBy) {
+    const { name, url } = deployment.productionManagedBy;
+    return {
+      needs: null,
+      problem: {
+        ...problem("production_managed_elsewhere", `genesis/stack.md says ${name} manages this app's Production, at ${url}, `
+          + `so Vibe64 doesn't deploy it to production: deploy it with ${name}. To deploy it from Vibe64 instead, remove the `
+          + "Production line from genesis/stack.md's Deployment section (the coding agent can do this), Save, then deploy "
+          + "to production."),
+        managedBy: { name, url }
+      }
+    };
+  }
   if (!deployment || deployment.status === "unconfigured") {
     return {
       needs: null,
