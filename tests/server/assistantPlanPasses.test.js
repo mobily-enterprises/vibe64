@@ -501,6 +501,29 @@ test("a planning turn that finds the plan already at its passes reports it compl
   }
 });
 
+test("\"Run the Review pass\" while the plan's Review is still to run is the plan's own Review: no second Review joins its Passes", async (t) => {
+  const passes = ["Review: the plan's changes", "Security pass: the plan's changes"];
+  for (const reviewed of [true, false]) {
+    const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
+    await publishPlanFixture(f.context, reviewed ? reviewedPlan(passes) : planWith(passes));
+    const before = (await readWorkPlan(f.context)).revision;
+    await f.service.send("session-1", { messageId: "run-1", message: "Run the Review pass", submissionKind: "send" }, f.context);
+    assert.equal((await readWorkPlan(f.context)).revision, before, `reviewed ${reviewed}: the plan's Passes stay as they are`);
+    assert.ok(!noticeTexts(f).some((text) => text.startsWith("Added to the plan's Passes")), `reviewed ${reviewed}`);
+    assert.equal(f.helperCalls(), 0);
+    if (reviewed) {
+      // The plan at its passes: the message continues them, from its next pass.
+      assert.deepEqual([f.state().stage, f.state().pass?.item], ["pass", passes[0]]);
+      assert.equal(requestOf(f.sends[0]), since("Review", f.source.canonical));
+      continue;
+    }
+    // Before Senior's review, Senior says Review is in the plan already and runs nothing.
+    assert.equal(f.sends[0].input.genesisTask, undefined);
+    assert.match(f.sends[0].input.message,
+      /\[Vibe64: Review is in the current plan's Passes already: they run once Senior has reviewed the plan\. Tell the person so/u);
+  }
+});
+
 test("a new plan's Passes section starts with the chat's After a plan ticks; a plan Senior writes with its own Passes keeps them", async (t) => {
   const f = await fixture(t, { mode: "auto", afterPlan: ["review", "security-pass", "ui-pass", "deslop"], afterPlanDeep: ["deslop"] },
     { readyPlan: false, source: true });
