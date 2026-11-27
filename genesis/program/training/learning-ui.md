@@ -316,7 +316,7 @@ owner with its normal/author-preview store selector (`selectOwners`).
 
 Evidence: `tests/server/vibe64LearningDashboardRoutes.unit.test.js` (no Dashboard
 action declares lesson access; no lesson URLs), `vibe64TrainingCodePracticals`
-(ledgered save through the owner) and `vibe64TrainingLearnerState` (ordinary
+(ledgered save through the owner) and `vibe64TrainingLearnerAttempts` (ordinary
 practice session after the lesson ends).
 
 ## Lesson stage

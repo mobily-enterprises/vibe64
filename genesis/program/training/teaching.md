@@ -243,7 +243,7 @@ Source and draft-original-file tests do not establish installed activation,
 actual installed history counts, all-provider continuity or learner acceptance.
 Sources: `packages/vibe64-training/src/server/practiceHistoryUpgrade.js`,
 `bin/upgrade-state.js`, existing Core `stateUpgrades.js`/`stateUpgradeFiles.js`,
-original `vibe64TrainingLearnerState.unit.test.js` and `stateUpgrades.unit.test.js`.
+original `vibe64TrainingLearnerAttempts.unit.test.js` and `stateUpgrades.unit.test.js`.
 
 ### Learning-space reset upgrade
 
