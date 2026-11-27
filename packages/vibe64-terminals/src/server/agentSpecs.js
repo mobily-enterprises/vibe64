@@ -1,6 +1,6 @@
 // Agent-readable specs of the Preview identity protocol and the managed app identity list, generated from the limits
-// this package, vibe64-core and vibe64-genesis enforce, and of how an agent runs browser suites and managed Git: the
-// detail the always-loaded session guidance points to instead of carrying.
+// this package, vibe64-core and vibe64-genesis enforce, and of how an agent runs browser suites, what a check gets and
+// managed Git: the detail the always-loaded session guidance points to instead of carrying.
 import {
   PREVIEW_APPLICATION_IDENTITY_LIMIT,
   PREVIEW_APPLICATION_IDENTITY_RESERVED_NAMES,
@@ -150,6 +150,33 @@ How a coding agent writes, runs and reports a project's own Playwright suite in 
 
 - Keep test output small: run relevant files/cases, save stdout/stderr to local artifacts and keep exit status. Report counts, duration, failed cases, actionable errors and artifact paths, reading only needed failure excerpts.
 - Retain startup, resource and Preview-restoration errors even if tests pass, and trailing wrapper diagnostics separately from JSON. Do not rerun for output or reread unchanged logs.
+`
+  },
+  {
+    name: "checks",
+    title: "Checks: what a check gets wherever it runs, and the Verification that declares the whole suite",
+    text: () => `# Checks
+
+A check is a command that tests the project: its lint, its tests, its browser suite or its build. The Stack's \`## Verification\` declares the project's checks. A host may run a declared check on another machine that serves the session, and keeps focused runs, undeclared commands and any check it has a reason to keep (working changes that hold something shaped like a credential, say) where the session is.
+
+## What a check gets
+
+Wherever it runs, a check gets this and nothing more, so write checks that need nothing else:
+
+- The session's tree as it is: its last commit plus every working change, untracked files included, possibly at another absolute path: never hard-code one. A machine that ran the session's checks before keeps ignored and untracked folders such as \`node_modules\` and \`node_modules/.cache\` between checks, and puts the tracked files back to the session's.
+- Workspace setup's Prepare steps run again only when their inputs change: the setup's recipe, and for each step the tracked files its declared inputs match, or the whole tree for a step that declares none. Declare each step's inputs (\`package-lock.json\`, say), so a change elsewhere does not run it again.
+- The test budget, set by the host, never by the project: \`V64_TEST_CONCURRENCY\`, the processors the machine gives the check (at least 1), and \`PLAYWRIGHT_WORKERS\`, half of that (at least 1), as JSKIT's \`browserTestConfig()\` counts them. Where a host sets neither, JSKIT's \`testConcurrency()\` takes half the processors.
+- \`APP_ENV=development\` and, from the Development Env, the names the Stack declares (its environment defaults and resource bindings), secrets included; nothing the Stack does not declare. \`PATH\` holds the project's declared runtimes, and Playwright's browsers are the host's (\`PLAYWRIGHT_BROWSERS_PATH\`): download none.
+- Its databases, from the host's own development provisioning where the check runs: the database, its test database (\`TEST_DB_NAME\`) and its browser test database (\`BROWSER_TEST_DB_NAME\`), which a database resource binds through \`testDatabase\` and \`browserTestDatabase\` to exactly those names; Vibe64 refuses any other. The application's own database user makes and drops the copies JSKIT's test runners make of them for their workers; a check never gets administrator credentials. The host grants a fixed number of copies: with more test workers than that, JSKIT runs that many database files at once.
+- Temporary files go where \`TMPDIR\` or the system puts them: depend on no location, and remove what a check makes.
+
+## The Verification that declares the whole suite
+
+- Declare every part of the project's checks as its own \`- Verify\` entry, each a command the project has: its lint, unit tests, database tests, client tests, browser suite and build. A part missing from Verification is a part no whole run covers.
+- The declared Verification is the whole suite: a whole run runs every entry once. The project's one command for a whole run (\`npm run verify\`, say) runs exactly those parts, once each, the browser suite included: never a listing (\`test:e2e:list\`, \`playwright test --list\`) in a suite's place.
+- Each part owns its databases, ports and output folder (\`test-results/<part>\`, say), so parts run side by side and identical runs agree.
+- Budgets come from the machine (\`V64_TEST_CONCURRENCY\`, \`PLAYWRIGHT_WORKERS\`, JSKIT's \`testConcurrency()\`): never pin a worker or concurrency count, to make a run pass or otherwise.
+- A run reports each part's wall time and its 10 slowest files, so a slow part shows, and its cause is measured before anything waits longer.
 `
   },
   {

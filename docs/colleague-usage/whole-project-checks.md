@@ -15,6 +15,18 @@ for what it changed. Outside a plan the AI follows the same rule: it runs the
 whole test suite only with your OK, which it asks for once the work is complete,
 saying what will run and roughly how long.
 
+## What they run
+
+The whole-project checks are the checks your project's Stack declares under
+**Verification**, each part its own entry: its lint, unit tests, database
+tests, client tests, browser tests and build. A part missing from Verification
+is a part no whole run covers, so if one is missing, ask the coding agent to
+declare it. The project's one command for a whole run (`npm run verify`, for
+example) runs exactly those parts, once each, the browser tests included, never
+just a list of them. The coding agent sets each part up to report how long it
+took and its 10 slowest test files, and to take the number of tests run at once
+from the computer that runs them, never a fixed number in the project.
+
 Genesis records a pass as completed only after its whole run passed, or after
 you said to finish without it. So a plan's passes that Genesis records (run
 over the **Whole app**, **Since last completed** or **Deep**; see [Run a pass on
