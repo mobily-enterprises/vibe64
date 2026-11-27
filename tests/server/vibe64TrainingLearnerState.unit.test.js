@@ -22,7 +22,11 @@ import { createTrainingLearnerState } from "../../packages/vibe64-training/src/s
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { projectServiceCollaborators } from "./vibe64TestHelpers.js";
 
-async function fixture(t, { published = true, noExercise = false, secondLesson = false } = {}) {
+// A preparation waits five seconds for another to finish before it refuses; the tests that expect that refusal wait
+// this long instead.
+const SHORT_PREPARATION_WAIT_MS = 200;
+
+async function fixture(t, { published = true, noExercise = false, secondLesson = false, preparationBusyWaitMs } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "vibe64-learner-state-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const systemRoot = path.join(root, "system");
@@ -64,7 +68,7 @@ async function fixture(t, { published = true, noExercise = false, secondLesson =
   const pin = pinFor(0);
   const secondPin = secondLesson ? pinFor(1) : null;
   const actor = { uid: 42, username: "learner" };
-  const state = createTrainingLearnerState({ logger: silentLogger, systemRoot });
+  const state = createTrainingLearnerState({ logger: silentLogger, systemRoot, preparationBusyWaitMs });
   const userRoot = value => path.join(systemRoot, "training", "users", Buffer.from(String(value.uid ?? value.username)).toString("base64url"));
   const paths = { root: userRoot(actor), progress: path.join(userRoot(actor), "progress.json"), active: path.join(userRoot(actor), "active-lesson.json"),
     mode: path.join(userRoot(actor), "learning-mode.json"), lock: path.join(userRoot(actor), "state.lock") };
@@ -1405,13 +1409,13 @@ test("preparation exclusion spans an operation while original typed state writes
 });
 
 test("preparation exclusion uses a persistent cross-process lock without serializing different learners", async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, { preparationBusyWaitMs: SHORT_PREPARATION_WAIT_MS });
   const reserved = await f.reserve();
   const otherActor = { uid: 43 };
   const other = await f.reserve({ actor: otherActor });
   const input = { actor: f.actor, attemptId: reserved.attempt.attemptId };
   const otherInput = { actor: otherActor, attemptId: other.attempt.attemptId };
-  const fresh = createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot });
+  const fresh = createTrainingLearnerState({ logger: silentLogger, systemRoot: f.systemRoot, preparationBusyWaitMs: SHORT_PREPARATION_WAIT_MS });
   await f.state.runPreparationExclusive(input, () => null);
   await f.state.runPreparationExclusive(otherInput, () => null);
   const lock = path.join(f.paths.root, "preparation.lock");
@@ -1426,10 +1430,10 @@ test("preparation exclusion uses a persistent cross-process lock without seriali
   try {
     await Promise.race([entered.promise, holder]);
     const before = await treeState(f.systemRoot);
-    const script = 'import { createTrainingLearnerState } from "@local/vibe64-training/server/learner-state";\nimport { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";\nconst state=createTrainingLearnerState({systemRoot:process.env.FIXTURE_SYSTEM_ROOT,logger:silentLogger});\ntry { await state.runPreparationExclusive({actor:{uid:42},attemptId:process.env.FIXTURE_ATTEMPT_ID},()=>{throw new Error("Competing preparation entered.");}); process.exitCode=2; } catch(error) { if(error.code!=="VIBE64_TRAINING_PREPARATION_BUSY" || error.statusCode!==409) throw error; }\n';
+    const script = 'import { createTrainingLearnerState } from "@local/vibe64-training/server/learner-state";\nimport { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";\nconst state=createTrainingLearnerState({systemRoot:process.env.FIXTURE_SYSTEM_ROOT,logger:silentLogger,preparationBusyWaitMs:Number(process.env.FIXTURE_BUSY_WAIT_MS)});\ntry { await state.runPreparationExclusive({actor:{uid:42},attemptId:process.env.FIXTURE_ATTEMPT_ID},()=>{throw new Error("Competing preparation entered.");}); process.exitCode=2; } catch(error) { if(error.code!=="VIBE64_TRAINING_PREPARATION_BUSY" || error.statusCode!==409) throw error; }\n';
     await promisify(execFile)(process.execPath, ["--input-type=module", "-e", script], {
       cwd: fileURLToPath(new URL("../../", import.meta.url)),
-      env: { ...process.env, FIXTURE_SYSTEM_ROOT: f.systemRoot, FIXTURE_ATTEMPT_ID: input.attemptId }
+      env: { ...process.env, FIXTURE_SYSTEM_ROOT: f.systemRoot, FIXTURE_ATTEMPT_ID: input.attemptId, FIXTURE_BUSY_WAIT_MS: String(SHORT_PREPARATION_WAIT_MS) }
     });
     let competingCalled = false;
     await assert.rejects(() => fresh.runPreparationExclusive(input, () => { competingCalled = true; }),
@@ -1466,7 +1470,7 @@ test("preparation exclusion waits for a short holder instead of refusing a concu
 });
 
 test("preparation exclusion preserves callback results and errors and releases after nested or short-state contention", async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, { preparationBusyWaitMs: SHORT_PREPARATION_WAIT_MS });
   const reserved = await f.reserve();
   const input = { actor: f.actor, attemptId: reserved.attempt.attemptId };
   const original = await f.state.readState({ actor: f.actor });
@@ -1647,7 +1651,7 @@ test("Learn mode is a saved per-learner flag and switching it never ends or chan
 });
 
 test("attempt end refuses malformed, other-actor and stale admissions and composes with the original preparation exclusion", async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, { preparationBusyWaitMs: SHORT_PREPARATION_WAIT_MS });
   const reserved = await f.reserve();
   const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "end-1", expectedRevision: 1, reason: "deleted" };
   const before = await treeState(f.systemRoot);
