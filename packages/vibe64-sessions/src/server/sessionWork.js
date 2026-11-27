@@ -114,6 +114,22 @@ function connectedUpdateFailure(result) {
  * @param {SessionWorkOperations} dependencies.workOperations
  * @param {SessionWorkspaceSetup} dependencies.workspaceSetup
  */
+/**
+ * The commit message a caller in this process gives its Save, trimmed: one or more lines of at most 2000 characters,
+ * without NUL. Only such a caller can give one, since Save's action input (its route and the assistant's tool) has no
+ * `commitMessage` field. Absent, it is "" and the session's Quick helper names the commit, as before.
+ * @param {unknown} value
+ */
+function callerCommitMessage(value) {
+  if (value === undefined) return "";
+  const message = typeof value === "string" ? value.trim() : "";
+  if (message && message.length <= 2000 && !message.includes("\0")) return message;
+  throw vibe64Error(
+    "Save's commitMessage must be text of 1 to 2000 characters once trimmed, without NUL.",
+    "vibe64_session_save_commit_message_invalid"
+  );
+}
+
 function createSessionWork({
   logger,
   project,
@@ -293,6 +309,7 @@ function createSessionWork({
 
   async function saveSessionWork(sessionId, input) {
     return sessionResult(async () => {
+      const commitMessage = callerCommitMessage(input.commitMessage);
       // Refused before any record of it is written while a planned restart is near.
       refuseDuringPlannedRestart("save");
       const vibe64User = trustedAssistantUser(input);
@@ -317,6 +334,7 @@ function createSessionWork({
       let operationStarted = false;
       try {
         const result = await terminals.saveSessionWork(sessionId, {
+          commitMessage,
           destinationReview: input.destinationReview,
           onRepositoryWriteAcquired: async () => {
             operationStarted = true;
