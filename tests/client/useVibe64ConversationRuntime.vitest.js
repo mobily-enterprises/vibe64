@@ -152,7 +152,7 @@ describe("retained project conversation ownership", () => {
       return { ok: true };
     });
     expect(await runtime.send({ message: "Run the full test suite.", wholeChecks: "run", submissionKind: "send" },
-      { messageId: "yes-1" })).toEqual({ ok: true });
+      { messageId: "yes-1" })).toEqual({ ok: true, status: "accepted", messageId: "yes-1" });
     expect(mocks.request.mock.lastCall[1].body).toMatchObject({ messageId: "yes-1", text: "Run the full test suite.",
       data: { wholeChecks: "run" } });
   });
@@ -249,7 +249,7 @@ describe("retained project conversation ownership", () => {
     expect(await runtime.send({ message: "Check it" }, { messageId: "same-id" })).toBe(false);
     await vi.waitFor(() => expect(mocks.request).toHaveBeenCalledTimes(1));
     f.receipt(runtime.identity, { user: { messageId: "same-id", text: "Check it" } });
-    expect(await sending).toEqual({ ok: true });
+    expect(await sending).toEqual({ ok: true, status: "accepted", messageId: "same-id" });
     expect(mocks.request).toHaveBeenCalledTimes(1);
     expect(runtime.delivery.state.messages).toEqual([]);
     pending.reject(new Error("The HTTP receipt was lost")); await nextTick();
@@ -331,13 +331,13 @@ describe("retained project conversation ownership", () => {
       return { ok: true };
     });
     f.snapshot(runtime.identity, { status: "ready" });
-    expect(await first).toEqual({ ok: true });
+    expect(await first).toEqual({ ok: true, status: "accepted", messageId: "speech-a" });
     await vi.waitFor(() => expect(runtime.delivery.state.messages.map(message => message.id)).toEqual(["speech-b"]));
     expect(mocks.request).toHaveBeenCalledTimes(1);
     expect(mocks.request.mock.calls[0][1].body).toEqual({ text: "First spoken follow-up", data: { originId: expect.stringMatching(/^tab:/) }, messageId: "speech-a" });
     const authoredOrigin = mocks.request.mock.calls[0][1].body.data.originId;
     f.snapshot(runtime.identity, { status: "ready" });
-    expect(await second).toEqual({ ok: true });
+    expect(await second).toEqual({ ok: true, status: "accepted", messageId: "speech-b" });
     expect(mocks.request).toHaveBeenCalledTimes(2);
     expect(mocks.request.mock.calls[1][1].body).toEqual({ text: "Second spoken follow-up", data: { originId: authoredOrigin }, messageId: "speech-b" });
     expect(runtime.delivery.state.messages).toEqual([]);
@@ -752,7 +752,7 @@ describe("a Main chat message the server holds while its delivery waits", () => 
     const sending = runtime.send({ message: "Rename the page" }, { messageId: "held-3" });
     await vi.waitFor(() => expect(checks.length).toBeGreaterThan(0), { timeout: 5_000 });
     f.receipt(runtime.identity, { user: { messageId: "held-3", text: "Rename the page" } });
-    expect(await sending).toEqual({ ok: true });
+    expect(await sending).toEqual({ ok: true, status: "accepted", messageId: "held-3" });
     const seen = checks.length;
     await new Promise(resolve => setTimeout(resolve, 1_500));
     expect(checks.length).toBeLessThanOrEqual(seen + 1);
