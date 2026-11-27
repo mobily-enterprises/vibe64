@@ -185,7 +185,7 @@ it("offers no Continue while the workflow waits for the person's answer", async 
   expect(planning).toContain("Implement plan"); expect(planning).not.toContain("Continue planning");
 });
 
-it("asks once a plan is finished whether to run the whole-project checks, with Yes and No, and each answers it", async () => {
+it("asks once a plan is finished whether to run the full test suite, with Yes and No, and each answers it", async () => {
   const asked = { messageId: "finished-plan", status: "complete", stage: "pass", workflow: true, delivery: "accepted",
     resolvedMode: "senior", wholeChecks: { status: "asked", plan: "Required-field validation" } };
   const html = await render(asked);
@@ -209,7 +209,7 @@ it("asks once a plan is finished whether to run the whole-project checks, with Y
   expect(onChecks).toHaveBeenCalledOnce(); expect(onChecks).toHaveBeenLastCalledWith("yes");
   // Once answered or ended by another message, and for a plan finished before this question existed, nothing shows.
   for (const status of ["declined", "run", "offered"]) {
-    expect(await render({ ...asked, wholeChecks: { status, plan: "Required-field validation" } })).not.toContain("whole-project checks");
+    expect(await render({ ...asked, wholeChecks: { status, plan: "Required-field validation" } })).not.toContain("Run the full test suite?");
   }
   expect(await render({ ...asked, wholeChecks: undefined })).not.toContain("v-alert");
 });

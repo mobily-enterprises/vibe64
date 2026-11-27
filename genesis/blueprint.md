@@ -768,9 +768,12 @@ passes is completed by Senior's review. No step of a plan runs the whole-project
 checks (such as one whole run of the test suite), since the passes would leave a
 run before them behind. Once the plan is finished (completed, archived and, with
 Automatically save changes on, saved), Vibe64 asks the person once, in the chat
-and with Yes and No above the composer, whether to run them now. Yes runs one
-Senior turn without Router that runs them once, records each check's result and
-fixes what they find as new work, saved like any finished work; No runs nothing.
+and with Yes and No above the composer: "Run the full test suite?", the words the
+person reads for them. Yes sends "Run the full test suite." and runs one Senior
+turn without Router, an ordinary request that hears nothing about the finished
+plan, which runs each entry of the project's Verification once, reports the
+results plainly and fixes what they find, saved like any finished work; No runs
+nothing.
 A message typed instead ends the question, and its turn is told what was asked,
 so a typed yes runs them. Vibe64 never asks twice for one plan and never runs
 them without the person's yes. An item that names the whole run, in a plan made

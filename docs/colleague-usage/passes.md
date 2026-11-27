@@ -88,11 +88,11 @@ current task.
 
 Genesis records a pass as completed only after a **Whole app**, **Since last
 completed** or **Deep** run of it finishes; a pass over a plan's changes or a
-section of the app is not recorded as the pass. It also waits for the
-whole-project checks: in a plan, Vibe64 asks you about them once the plan is
-finished, and the turn your **Yes** starts records the plan's passes once every
-check passes; after **No** they stay unrecorded (see [Run the whole-project
-checks after a plan](whole-project-checks.md)).
+section of the app is not recorded as the pass. It also waits for the full
+test suite: in a plan, Vibe64 asks you about it once the plan is finished, and
+the turn your **Yes** starts records the plan's passes once every check passes;
+after **No** they stay unrecorded (see [Run the full test suite after a
+plan](full-test-suite.md)).
 
 The run buttons are unavailable while:
 
@@ -163,9 +163,9 @@ real device, an account, a click) or what the session can't reach, each with its
 reason; a choice is asked as a numbered question with a recommended answer.
 Vibe64 refuses a Progress whose Leftovers name a failing or flaky test, and
 refuses to complete a plan while they do, so the AI fixes the test instead.
-A plan's pass runs the focused tests for what it changed, never the
-whole-project checks (such as one whole run of the test suite), even where the
-pass's own guidance asks for one: no step of a plan runs them.
+A plan's pass runs the focused tests for what it changed, never the full test
+suite, even where the pass's own guidance asks for one: no step of a plan runs
+it.
 
 Senior's review and every pass end one of two ways:
 
@@ -191,9 +191,9 @@ can fix. After it, Vibe64 completes and archives the plan, and its reply is the
 plan's one closing message: a line per step saying what it fixed, the choices
 made for you, and the Leftovers, each with its reason. It never offers to make a
 plan for them. Then, with **Automatically save changes** on, **Save** runs, and
-Vibe64 asks you once whether to run the whole-project checks, with **Yes** and
-**No** above the message box; see [Run the whole-project checks after a
-plan](whole-project-checks.md).
+Vibe64 asks you once: **Run the full test suite?**, with **Yes** and **No**
+above the message box; see [Run the full test suite after a
+plan](full-test-suite.md).
 
 ### What the chat shows while a plan's passes run
 

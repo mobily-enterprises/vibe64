@@ -97,10 +97,9 @@ as items get built instead of waiting for the end:
 
 A screen reader reads each box's label, shown in bold above.
 
-No item is the whole-project checks (such as one whole run of the test suite):
-no step of a plan runs them, and once the plan is finished Vibe64 asks you
-whether to run them (see [Run the whole-project checks after a
-plan](whole-project-checks.md)).
+No item is the full test suite: no step of a plan runs it, and once the plan
+is finished Vibe64 asks you whether to run it (see [Run the full test suite
+after a plan](full-test-suite.md)).
 
 Checklist wording stays stable while the marks update during development. The AI
 never leaves a built item empty, and a partly done item stays empty. Review moves
@@ -115,9 +114,9 @@ plan. Updates appear while the viewer is open.
 
 The AI ticks each item the moment it is built and its own checks pass, not at
 the end of its turn, and the last item too. It never asks you whether to run the
-plan's passes, save or run the whole-project checks: the passes are the plan's
+plan's passes, save or run the full test suite: the passes are the plan's
 next step, which Vibe64 runs after Senior's review, Vibe64 saves the work when
-the plan completes, and then asks you about the whole-project checks itself. When work on one item also builds others (a foundation
+the plan completes, and then asks you about the full test suite itself. When work on one item also builds others (a foundation
 item, say, that the later items use), it walks the whole checklist and
 half-ticks each item that is built, notes in Progress what is only partly built,
 and never holds every tick until the first item is finished. Senior writes a
@@ -144,7 +143,7 @@ built: that is the AI's to judge. The AI then stops, and the work goes on as it
 would have (Senior's review next, say).
 
 A turn that ended asking you a question gets the check too: the note tells the
-AI that Senior's review, the plan's passes, Save and the whole-project checks
+AI that Senior's review, the plan's passes, Save and the full test suite
 are never a question for it to ask you, and to ask any other question again,
 which then waits for your answer.
 

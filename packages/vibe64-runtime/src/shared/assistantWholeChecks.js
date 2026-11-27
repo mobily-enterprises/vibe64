@@ -29,13 +29,13 @@ function passTitles(passes) {
   return titles.length < 2 ? titles.join("") : `${titles.slice(0, -1).join(", ")} and ${titles.at(-1)}`;
 }
 
-// The question Vibe64 asks once a plan is finished, above the message box with its Yes and No.
-const WHOLE_CHECKS_QUESTION = "Run the whole-project checks once now?";
-// What the Yes sends as the person's message: the request the turn that runs the checks works from, whole in itself,
-// as a release before this one reads it when it resumes that turn.
-const WHOLE_CHECKS_YES_MESSAGE = "Yes, run the whole-project checks once now, on the finished plan's work. " +
-  "The plan is finished, so this is new work, not one of its steps.";
-const WHOLE_CHECKS_LABEL = "Whole-project checks";
+// The person knows the whole-project checks as the full test suite. The question Vibe64 asks once a plan is finished,
+// in the chat and above the message box with its Yes and No.
+const WHOLE_CHECKS_QUESTION = "Run the full test suite?";
+// What the Yes sends as the person's message: an ordinary request, as a release before this one reads it too when it
+// resumes that turn. The session has no current plan by then, and nothing about the plan rides on it.
+const WHOLE_CHECKS_YES_MESSAGE = "Run the full test suite.";
+const WHOLE_CHECKS_LABEL = "Full test suite";
 
 /**
  * The chat note Vibe64 writes once a plan is finished (completed, archived and,
@@ -46,9 +46,7 @@ const WHOLE_CHECKS_LABEL = "Whole-project checks";
 function assistantWholeChecksQuestionNotice(key) {
   return {
     messageId: `assistant-whole-checks:${key}`,
-    text: "The plan is finished. Run the whole-project checks once now, on the finished plan's work? " +
-      "They are the checks the project runs as a whole, such as one whole run of the test suite, and can take a long time. " +
-      "Choose Yes or No above the message box."
+    text: WHOLE_CHECKS_QUESTION
   };
 }
 
@@ -56,20 +54,22 @@ function assistantWholeChecksQuestionNotice(key) {
 function assistantWholeChecksDeclinedNotice(key, { passes = [] } = {}) {
   return {
     messageId: `assistant-whole-checks-declined:${key}`,
-    text: "Whole-project checks not run. Vibe64 won't ask again for this plan." +
-      (passes.length ? ` ${passTitles(passes)} ${passes.length === 1 ? "stays" : "stay"} unrecorded as completed, since the whole-project checks didn't run.` : "")
+    text: "Full test suite not run. Vibe64 won't ask again for this plan." +
+      (passes.length ? ` ${passTitles(passes)} ${passes.length === 1 ? "stays" : "stay"} unrecorded as completed, since the full test suite didn't run.` : "")
   };
 }
 
 /**
- * What the turn the person's Yes starts is told to do: run the whole-project
- * checks once, on the finished plan's work, and fix what they find as new work.
+ * What the turn the person's Yes starts is told to do: run the project's Verification once, as it is, fix what it
+ * finds, and report the results plainly. It is an ordinary request on a session with no current plan, so it is told
+ * nothing about the plan.
  */
 const ASSISTANT_WHOLE_CHECKS_INSTRUCTION = [
-  "Run the project's whole-project checks once: the checks it states for the whole project, such as one whole run of the test suite, through its own verification command, in this session, never detached to outlive it.",
-  "The person chose to run them now, after a finished plan, on the work as it is. Never run them a second time in this request: after a fix, run the focused tests for what you changed.",
-  "Fix what they find as new work: a failing or flaky test is a defect to fix, each fix proven by a test that failed first. Explain every failure; never call one pre-existing or environmental: a missing tool or an environment's refusal is a defect to fix, reported with what is missing. The plan is completed and archived: make no plan and change none.",
-  "Preserve unrelated work and staged changes. Do not commit, push or deploy."
+  "Run each entry of the project's Verification once (the checks its Stack declares there, such as one whole run of the test suite), each through its own command, in this session, never detached to outlive it.",
+  "Never run them a second time in this request: after a fix, run the focused tests for what you changed.",
+  "Fix what they find: a failing or flaky test is a defect to fix, each fix proven by a test that failed first. Explain every failure; never call one pre-existing or environmental: a missing tool or an environment's refusal is a defect to fix, reported with what is missing.",
+  "Preserve unrelated work and staged changes. Do not commit, push or deploy.",
+  "The person calls this the full test suite. Report the results plainly: what ran and how it went. Don't narrate the process."
 ].join(" ");
 
 /**
@@ -79,17 +79,17 @@ const ASSISTANT_WHOLE_CHECKS_INSTRUCTION = [
  */
 function assistantWholeChecksInstructions({ autoSave, passes = [] }) {
   const record = passes.length
-    ? `Once every check passes, record the plan's ${passes.length === 1 ? "pass" : "passes"} ${passTitles(passes)}, which waited for this run: take the Genesis \`passes done\` operation for ${passes.map((id) => `\`${id}\``).join(", ")}, one pass each, invoked as each pass's skill says, and leave the records with your other changes. Record none while a check fails. `
+    ? `Once every check passes, record the ${passes.length === 1 ? "pass" : "passes"} ${passTitles(passes)} as completed, which waited for this run: take the Genesis \`passes done\` operation for ${passes.map((id) => `\`${id}\``).join(", ")}, one pass each, invoked as each pass's skill says, and leave the records with your other changes. Record none while a check fails. `
     : "";
   return [
     "Use vibe64-helper plan read to obtain workflow.messageId, workflow.turnId and workflow.stage, then report one outcome before your final response through vibe64-helper plan outcome with JSON on stdin: {messageId, turnId, stage, decision, explanation, progress}.",
-    `${record}handoff: you fixed what the checks found${passes.length ? " or recorded the plan's passes" : ""} (files changed); ${autoSave ? "Vibe64 then saves the fixes" : "the person saves the fixes with Save"}. complete: every check passed and you changed no files. continue: you ran out of room, and your next turn carries on without running the checks again. wait: a check can't run here or a failure needs the person: numbered questions, each with a recommended answer, in your final reply.`,
+    `${record}handoff: you fixed what the checks found${passes.length ? ` or recorded ${passes.length === 1 ? "that pass" : "those passes"}` : ""} (files changed); ${autoSave ? "Vibe64 then saves the fixes" : "the person saves the fixes with Save"}. complete: every check passed and you changed no files. continue: you ran out of room, and your next turn carries on without running the checks again. wait: a check can't run here or a failure needs the person: numbered questions, each with a recommended answer, in your final reply.`,
     "Your final reply records the result: each check you ran, with its command, whether it passed and its counts, then what you fixed and the test that proves each fix."
   ].join(" ");
 }
 
 // A message the person typed while the question was asked, instead of pressing Yes or No.
-const WHOLE_CHECKS_OFFERED_NOTE = "Vibe64 had just asked the person whether to run the whole-project checks once now, on the finished plan's work, and this message came instead of Yes or No. When it asks for them (\"yes, run them\", say), run them once and fix what they find, as for any request; otherwise ignore this note.";
+const WHOLE_CHECKS_OFFERED_NOTE = "Vibe64 had just asked the person whether to run the full test suite, and this message came instead of Yes or No. When it asks for it (\"yes, run it\", say), run each entry of the project's Verification once and fix what it finds, as for any request; otherwise ignore this note.";
 
 /** Whether a request is the turn the person's Yes started, which runs the whole-project checks. */
 const assistantRunsWholeChecks = (request) => request?.wholeChecks?.status === "run";

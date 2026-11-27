@@ -1,23 +1,23 @@
-# Run the whole-project checks after a plan
+# Run the full test suite after a plan
 
-Once a plan is finished, Vibe64 asks you once whether to run the project's
-whole-project checks now, such as one whole run of the test suite. **Yes** runs
-them once in a Senior turn that fixes what they find; **No** runs nothing.
+Once a plan is finished, Vibe64 asks you once: **Run the full test suite?**
+**Yes** runs it once in a Senior turn that fixes what it finds; **No** runs
+nothing.
 
-## Why no step of a plan runs them
+## Why no step of a plan runs it
 
-The whole-project checks are the checks the project runs as a whole, such as one
-whole run of the test suite. They can take a long time, and the plan's passes
-would leave a run before them behind, so no step of a plan runs them: not
-Junior's implementation, not Senior's review (see [A plan's
-steps](plan-steps.md#a-plans-steps)) and not a pass. Each step runs the focused tests
-for what it changed. Outside a plan the AI follows the same rule: it runs the
-whole test suite only with your OK, which it asks for once the work is complete,
-saying what will run and roughly how long.
+The full test suite is every check the project runs as a whole, such as one
+whole run of its tests. It can take a long time, and the plan's passes would
+leave a run before them behind, so no step of a plan runs it: not Junior's
+implementation, not Senior's review (see [A plan's
+steps](plan-steps.md#a-plans-steps)) and not a pass. Each step runs the focused
+tests for what it changed. Outside a plan the AI follows the same rule: it runs
+the whole test suite only with your OK, which it asks for once the work is
+complete, saying what will run and roughly how long.
 
-## What they run
+## What it runs
 
-The whole-project checks are the checks your project's Stack declares under
+The full test suite is the checks your project's Stack declares under
 **Verification**, each part its own entry: its lint, unit tests, database
 tests, client tests, browser tests and build. A part missing from Verification
 is a part no whole run covers, so if one is missing, ask the coding agent to
@@ -36,44 +36,43 @@ answer here.
 ## The question
 
 Once the plan is finished (completed, archived and, with **Automatically save changes**
-on, saved), the chat asks, after the save's own note: **The plan is finished.
-Run the whole-project checks once now, on the finished plan's work?** The line
-above the message box shows **Run the whole-project checks once now?** with
-**Yes** and **No**. While the assistant answers, both stay greyed out, with the
-reason beside them.
+on, saved), the chat asks, after the save's own note: **Run the full test
+suite?** The line above the message box asks the same, with **Yes** and
+**No**. While the assistant answers, both stay greyed out, with the reason
+beside them.
 
 ## Your answer
 
-- **Yes** sends **Yes, run the whole-project checks once now, on the finished
-  plan's work. The plan is finished, so this is new work, not one of its
-  steps.** as your message, and Senior runs them once in its own turn, labelled
-  **Whole-project checks**, without the Router (a Custom chat's own agent runs
-  them in a Custom chat). Its reply records each check, its command, whether it
-  passed and its counts.
-  It fixes what they find as new work, each fix proven by a test that failed
-  first, and never runs them a second time: after a fix it runs that fix's
+- **Yes** sends **Run the full test suite.** as your message, an ordinary
+  request: the plan is archived by then, so nothing about it rides on the
+  message. Senior runs each entry of the project's Verification once in its own
+  turn, labelled **Full test suite**, without the Router (a Custom chat's own
+  agent runs it in a Custom chat). Its reply reports the results plainly: each
+  check, its command, whether it passed and its counts.
+  It fixes what the suite finds, each fix proven by a test that failed first,
+  and never runs the suite a second time: after a fix it runs that fix's
   focused tests. It explains every failure and never calls one pre-existing or
   environmental: a missing tool or a refusal by the environment is a defect to
-  fix, reported with what is missing. It runs them in the session, never
+  fix, reported with what is missing. It runs the suite in the session, never
   detached to outlive it. Once every check passes, it records the plan's passes
   that waited for this answer. The plan stays completed. When it fixed something, the fixes
   are saved like any other finished work (with **Automatically save changes**
   on); when everything passed and nothing changed, nothing is saved.
-- **No** runs nothing. The chat notes **Whole-project checks not run. Vibe64
+- **No** runs nothing. The chat notes **Full test suite not run. Vibe64
   won't ask again for this plan.** When the plan ran passes that Genesis
   records, the note names them, for example **Deslop stays unrecorded as
-  completed, since the whole-project checks didn't run.**
+  completed, since the full test suite didn't run.**
 - **Typing a message instead** ends the question too, and that message's turn is
-  told what Vibe64 had asked: when it asks for the checks (**yes, run them**,
-  say), the AI runs them once; otherwise it does what you asked.
+  told what Vibe64 had asked: when it asks for the suite (**yes, run it**,
+  say), the AI runs it once; otherwise it does what you asked.
 
 ## Asked once
 
 Vibe64 asks only once per finished plan: after Yes, No or another message, it
-never asks again, and nothing runs the checks without your Yes or your request.
+never asks again, and nothing runs the suite without your Yes or your request.
 A plan finished before this question existed is not asked about. Colleague can
 explain the question and, at your request, answer it for you through its chat
-action: Yes sends that message with the whole-project checks marked to run, and
+action: Yes sends that message with the full test suite marked to run, and
 No answers the finished plan's request with the No.
 
 ## An older plan that lists the whole run

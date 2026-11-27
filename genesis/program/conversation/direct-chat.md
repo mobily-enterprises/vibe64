@@ -2692,7 +2692,8 @@ ordinary `updateSessionWork`, task and publications included, then Save again;
 it stops only when that Update fails, its note naming the conflict's repository
 and files (or the Update's own message) and the Update notice's Fix it with AI.
 
-A finished plan then asks the person about the whole-project checks. The shared
+A finished plan then asks the person about the whole-project checks, which the
+person reads as the full test suite. The shared
 `assistantWholeChecks.js` holds the question's words, notes, turn instructions
 and predicates, and the server's `assistantWholeChecks.js` routing's side of it:
 `finishPlan` sets `state.wholeChecks` to `{ status: "asked", plan: <title> }` on
@@ -2701,26 +2702,29 @@ plan's finished Passes items over the whole app, since last completed or deep
 (`planPassesToRecord`), when it has any: Genesis records a pass only after its
 whole-suite run passed with the person's OK, so a plan's pass turn never takes
 its `PASS RECORD` step and those passes wait for the answer. After the lock, once the
-save notes are written, routing writes `assistantWholeChecksQuestionNotice` (**The plan is finished. Run the
-whole-project checks once now, on the finished plan's work?**). While `assistantAsksWholeChecks` holds (complete, asked, not
-stopped), `assistantRoutingNotice` gives the composer notice the label **Run the
-whole-project checks once now?** and the action kind `checks` (Yes), held while
+save notes are written, routing writes `assistantWholeChecksQuestionNotice` (**Run the full test suite?**).
+While `assistantAsksWholeChecks` holds (complete, asked, not
+stopped), `assistantRoutingNotice` gives the composer notice the same label
+(`WHOLE_CHECKS_QUESTION`) and the action kind `checks` (Yes), held while
 an answer runs; `Vibe64RoutingNotice` adds No. Yes sends
-`WHOLE_CHECKS_YES_MESSAGE` as a new message with `wholeChecks: "run"`:
+`WHOLE_CHECKS_YES_MESSAGE` (**Run the full test suite.**) as a new message with `wholeChecks: "run"`:
 admission makes it a direct implementation-stage request on Senior (a Custom
 chat's own agent) with no Router, review, plan or after-plan record, and
 `wholeChecks.status` `run`; delivery gives it the `checks` intent
-(`ASSISTANT_WHOLE_CHECKS_INSTRUCTION`) and `assistantWholeChecksInstructions` in
-place of the workflow's, labels its follow-ups **Whole-project checks**, and
-`prepareFollowup` continues it as **Continue the whole-project checks.** without
-running them again. `answerWholeChecks` carries `passes` to the Yes's request
+(`ASSISTANT_WHOLE_CHECKS_INSTRUCTION`: each entry of the project's Verification
+once, the results reported plainly without narrating the process) and
+`assistantWholeChecksInstructions` in place of the workflow's, labels its
+follow-ups **Full test suite**, and `prepareFollowup` continues it as **Continue
+the full test suite.** without running it again. The session has no current
+plan by then and the request carries none (`workPlan`, `afterPlan` null,
+`planInvolved` false), so nothing it is told mentions the finished plan. `answerWholeChecks` carries `passes` to the Yes's request
 only, and `assistantWholeChecksInstructions` then has the turn take Genesis's
 `passes done` for each once every check passes, never while one fails. The
 instruction runs them in the session, never detached, and has every failure
 explained, never called pre-existing or environmental. Its handoff ends the work and saves like any finished
 implementation; complete saves nothing. No is the Continue route's direct POST
 with `reviewAction: "skip-checks"` and the finished request's messageId: it sets
-`declined`, writes **Whole-project checks not run. Vibe64 won't ask again for
+`declined`, writes **Full test suite not run. Vibe64 won't ask again for
 this plan.**, naming any `passes` that stay unrecorded, and starts no turn. Any other new message ends the question as
 `offered`, with `WHOLE_CHECKS_OFFERED_NOTE` before the person's words, so a
 typed yes runs them. Admission reads the No through `declineWholeChecks` and a new message through
@@ -2728,7 +2732,7 @@ typed yes runs them. Admission reads the No through `declineWholeChecks` and a n
 (`vibe64_assistant_routing_whole_checks_not_asked`). The field is optional and
 written only by new requests; an older release reading it ignores it and sees an
 ordinary completed or implementation request, so it needs no state upgrade.
-The Colleague guide `docs/colleague-usage/whole-project-checks.md` explains the
+The Colleague guide `docs/colleague-usage/full-test-suite.md` explains the
 question and its answers to the person.
 
 In plan-running chats (Main chat with a chat mode, not a lesson, Fix it or

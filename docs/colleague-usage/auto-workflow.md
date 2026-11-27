@@ -77,10 +77,9 @@ outcomes:
 Once you approve a plan, it runs to the end. Junior works its items in the
 plan's order, doing one earlier only when the plan says another depends on it,
 and recording why in Progress. It runs each item's own focused checks, never
-the whole-project checks (such as one whole run of the test suite): no step of
-a plan runs them, Senior's review and the passes included. Once the plan is
-finished and saved, Vibe64 asks you once whether to run them (see [Run the
-whole-project checks after a plan](whole-project-checks.md)).
+the full test suite: no step of a plan runs it, Senior's review and the passes
+included. Once the plan is finished and saved, Vibe64 asks you once whether to
+run it (see [Run the full test suite after a plan](full-test-suite.md)).
 When the plan changes during Implementation, because Junior hands an item to
 Senior to correct or you ask for a change while the implementation waits for
 you, the chat says **Senior is changing the plan. Implementation continues once

@@ -77,7 +77,7 @@ desktop and mobile.
   focused tests for what changed, fixes what it finds within the plan, and
   either ticks every item (**Done**) or asks you numbered questions (**Needs
   you**), or hands substantial rework back to Junior. No step of a plan runs the
-  whole-project checks, such as one whole run of the test suite. A **Senior**
+  full test suite. A **Senior**
   chat reviews its own plan. A **Junior** or **Custom** chat never completes a
   plan: its work ends after its own turn, saved as usual, with the plan left
   active for Senior.
@@ -85,10 +85,10 @@ desktop and mobile.
   runs in its own Senior turn, in the plan's order; after the last, Vibe64
   completes and archives the plan and **Save** runs last. A plan without passes
   is completed by Senior's review. See [A plan's passes](passes.md#a-plans-passes).
-- **Once the plan is finished**: Vibe64 asks you once whether to run the
-  whole-project checks now. **Yes** runs them once in a Senior turn, which fixes
-  what they find, and those fixes are saved as usual; **No** runs nothing. See
-  [Run the whole-project checks after a plan](whole-project-checks.md).
+- **Once the plan is finished**: Vibe64 asks you once: **Run the full test
+  suite?** **Yes** runs it once in a Senior turn, which fixes what it finds, and
+  those fixes are saved as usual; **No** runs nothing. See [Run the full test
+  suite after a plan](full-test-suite.md).
 
 Nothing is saved automatically when:
 

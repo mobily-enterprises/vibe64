@@ -15,8 +15,8 @@ asking in chat), it runs to the end on its own; only a question for you or
 - **Implementation**: the plan stays here until every item outside Passes is
   built (`- [~]`). Junior works the items in the plan's order; it does one
   earlier only when the plan says another depends on it, and records why in
-  Progress. It runs each item's own focused checks, never the whole-project
-  checks (such as one whole run of the test suite): no step of a plan runs them.
+  Progress. It runs each item's own focused checks, never the full test suite:
+  no step of a plan runs it.
   Vibe64 refuses Junior's report that it has finished while an item is still
   not done, naming the item. When the plan changes during Implementation,
   because Junior hands an item to Senior to correct, you ask for a change, or
@@ -30,17 +30,17 @@ asking in chat), it runs to the end on its own; only a question for you or
   every item outside Passes against the code as it is now, runs the focused
   tests for what changed, fixes what it finds within the plan, each fix proven
   by a test that failed first, and full-ticks each item its review proves. It
-  runs no whole-project checks. It ends **Done** or **Needs you** (numbered
+  never runs the full test suite. It ends **Done** or **Needs you** (numbered
   questions with a recommended answer each), or hands substantial rework back
   to Junior.
 - **Passes**: each item in the plan's Passes section runs in its own Senior
-  turn, in order; see [A plan's passes](passes.md#a-plans-passes). A pass runs
-  no whole-project checks either, and a pass Genesis records waits for your
-  answer about them before it is recorded as completed.
+  turn, in order; see [A plan's passes](passes.md#a-plans-passes). A pass never
+  runs the full test suite either, and a pass Genesis records waits for your
+  answer about it before it is recorded as completed.
 - **Completed**: once every item and every pass is ticked and no question is
   open, Vibe64 completes the plan and archives it, and saves it when
-  **Automatically save changes** is on. Then it asks you once whether to run
-  the whole-project checks; see [The whole-project checks](whole-project-checks.md).
+  **Automatically save changes** is on. Then it asks you once: **Run the full
+  test suite?**; see [The full test suite](full-test-suite.md).
 
 **Continue** resumes a paused plan from the plan as it now is, including after
 items changed while it was paused.

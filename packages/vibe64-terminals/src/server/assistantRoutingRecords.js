@@ -145,8 +145,8 @@ function createAssistantRoutingRecords({
     }
     // The whole-project checks the person said Yes to go on from where the last turn stopped, never from the start.
     if (stage === "implementation" && assistantRunsWholeChecks(state)) {
-      displayMessage = "Continue the whole-project checks.";
-      lead = "Continue the whole-project checks the person asked for from where the last turn stopped: they run once in this request, never again, and what they found is fixed as new work.";
+      displayMessage = "Continue the full test suite.";
+      lead = "Continue the full test suite from where the last turn stopped: it runs once in this request, never again, and what it found is fixed.";
     }
     if (handoff) lead = handoff.implementing ? ASSISTANT_PLAN_CHANGE_MESSAGE : ASSISTANT_PLAN_HANDOFF_MESSAGE;
     if (stage === "review") lead = checksPlan ? ASSISTANT_PLAN_COMPLETION_MESSAGE : ASSISTANT_SENIOR_VERIFICATION_MESSAGE;
