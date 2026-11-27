@@ -97,8 +97,11 @@ async function connectedRepositoriesInFolders({ sourceRoot, inspection }) {
       "vibe64_connected_development_required"
     );
   }
-  return resolvedConnections(configured.repositories, inspection,
-    connection => sessionConnectedCopyPath(sourceRoot, connectedRepositoryName(connection.repository)));
+  return resolvedConnections(
+    configured.repositories,
+    inspection,
+    connection => sessionConnectedCopyPath(sourceRoot, connectedRepositoryName(connection.repository))
+  );
 }
 
 /**
@@ -120,8 +123,11 @@ async function readConnectedDevelopmentInputs({
       "vibe64_connected_development_required"
     );
   }
-  const resolved = await resolvedConnections(configured.repositories, inspection,
-    connection => connectedCopyFor(session, connection)?.path);
+  const resolved = await resolvedConnections(
+    configured.repositories,
+    inspection,
+    connection => connectedCopyFor(session, connection)?.path
+  );
   const relativePath = inspection.sourcesFile || "";
   const value = { schema: CONNECTED_SOURCES_CONTRACT, sessionId: session.sessionId, repositories: resolved };
   const { filePath, existing } = relativePath ? await readConnectedSourceProjection({
