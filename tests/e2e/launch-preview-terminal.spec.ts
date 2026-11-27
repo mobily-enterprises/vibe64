@@ -2761,7 +2761,7 @@ test("@preview-lifecycle reports a failed app module and retries the iframe once
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-  await expect(page.locator(".v-snackbar", {
+  await expect(page.locator(".v-snackbar__wrapper", {
     hasText: "Preview could not load an application resource. Retrying automatically…"
   })).toBeVisible();
   await expect.poll(() => launchSession.getPreviewModuleRequestCount()).toBe(2);
@@ -2781,7 +2781,7 @@ test("@preview-lifecycle bounds automatic retries when an app module keeps faili
 
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
 
-  await expect(page.locator(".v-snackbar", {
+  await expect(page.locator(".v-snackbar__wrapper", {
     hasText: "Preview could not load an application resource after retrying. Use Reload preview to try again."
   })).toBeVisible();
   await expect.poll(() => launchSession.getPreviewModuleRequestCount()).toBe(2);
@@ -3533,7 +3533,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 960, height: 900 
         failWrite = approach.kind;
         await save.focus();
         await save.press("Enter");
-        await expect(page.locator(".v-snackbar", { hasText: `${approach.kind} save failed for this test.` })).toBeVisible();
+        await expect(page.locator(".v-snackbar__wrapper", { hasText: `${approach.kind} save failed for this test.` })).toBeVisible();
         await expect(page.getByRole("dialog")).toHaveCount(0);
         await expect(page.locator(".v-overlay__scrim:visible")).toHaveCount(0);
         await expect(save).toBeEnabled();
