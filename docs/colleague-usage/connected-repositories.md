@@ -66,6 +66,13 @@ The output has one line per repository:
   that copy's commits and files; the next preparation then removes it. For work
   Save does not take, such as a stash, apply or drop it, or move the folder away.
 
+When a typed npm dependency left the list, the same preparation puts npm's
+published package back in place of the connected copy and says so, for example
+`[Connected] Put back the published @example/library at
+/…/node_modules/@example/library in place of the removed connection's copy.`
+Other package types name the files they removed. This happens at the next
+preparation even when it was the last connection.
+
 Preparation then writes the Stack's `Sources file` pointing at the copies (when
 Stack names one), puts each typed dependency copy in effect, proves it, and
 runs any declared connected Prepare and Verify commands; see

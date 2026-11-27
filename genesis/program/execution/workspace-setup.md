@@ -86,7 +86,14 @@ valid. Preparation with connected development first makes the session's
 missing connected repository copies (`prepareConnectedRepositories` in
 `serviceSessionConnectedCopies.js`) and then asks Project to write the declared
 Sources file pointing at those copies, and takes back what an adapter generated
-for a connection that left the list (`restoreDisconnected`). Project reports
+for a connection that left the list (`restoreDisconnected`). That step runs
+even once the last connection is gone, while the session still records a copy
+(`inspectConnectedWorkspaceSetup`); with no connection left and no Connected
+development in the Stack, Project only takes back what adapters changed
+(`prepareConnectedDevelopmentInputs` in `projectRepositories.js`). npm's
+restore says `Put back the published <package> at <path> in place of the
+removed connection's copy.`, and once no typed dependency remains, preparation
+stops the sync that kept the swaps in step (`ensureConnectedSync`). Project reports
 `inputs-prepared`; it does not run the recipe. Preparation then executes
 ordinary setup and the connected Prepare commands, with one adapter keep step
 per typed dependency after each of those Prepare steps but the last, then one

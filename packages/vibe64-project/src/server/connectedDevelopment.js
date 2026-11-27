@@ -4,7 +4,12 @@ import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { connectedRepositoryName, sessionConnectedCopies, sessionConnectedCopyPath } from "@local/vibe64-core/server/projectRepository";
+import {
+  connectedRepositoryName,
+  sessionConnectedCopies,
+  sessionConnectedCopyPath,
+  sessionConnectedRoots
+} from "@local/vibe64-core/server/projectRepository";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import {
@@ -227,7 +232,10 @@ async function inspectConnectedWorkspaceSetup({
 } = {}) {
   const sourceRoot = sessionSourcePath(session);
   const configured = await readConnectedProjects(sourceRoot);
-  if (!connectedDevelopmentApplies(inspection, configured.repositories)) return setup;
+  // A copy of a connection the list no longer names keeps the connected step, which removes it and takes back what
+  // an adapter changed for it, even once the last connection is gone (unreadable copy records count as none, as
+  // before: Save and Update report them).
+  if (!connectedDevelopmentApplies(inspection, configured.repositories) && !sessionConnectedRoots(session).length) return setup;
   if (!["ready", "unconfigured"].includes(setup.status)) return setup;
   const steps = inspection.status === "ready" ? inspection.steps : [];
   const customRunner = inspection.status === "ready" ? inspection.customRunner : null;

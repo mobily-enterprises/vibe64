@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { Vibe64SessionRuntime } from "@local/vibe64-runtime/server/runtime";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import {
@@ -19,11 +20,14 @@ import {
   materializeConnectedDevelopmentInputs
 } from "../../packages/vibe64-project/src/server/connectedDevelopment.js";
 import {
+  connectedSyncRunning,
   inspectConnectedAdapters,
   runConnectedAdapterStep,
   stopConnectedSync,
   syncConnectedRepositories
 } from "../../packages/vibe64-project/src/server/connectedAdapters/index.js";
+import { createProjectRepositories } from "../../packages/vibe64-project/src/server/projectRepositories.js";
+import { prepareConnectedRepositories } from "../../packages/vibe64-terminals/src/server/serviceSessionConnectedCopies.js";
 import { createWorkspaceSetupRunner } from "../../packages/vibe64-terminals/src/server/workspaceSetup.js";
 import { vibe64RuntimePacks } from "../../packages/vibe64-terminals/src/server/vibe64OutputTargets.js";
 import { projectRuntimeRoot, sourceMetadata, sourcePath } from "./vibe64TestHelpers.js";
@@ -338,6 +342,74 @@ test("a typed npm dependency nothing installs leaves preparation succeeding, say
   assert.equal(await runner.isPrepared({ runtime: task.runtime, session }), true, "an unused connection needs no preparation again");
   const [proof] = await connectedProofs(task);
   assert.deepEqual([proof.inEffect, proof.unused, proof.reason], [false, true, said.slice("[Connected] ".length)]);
+});
+
+// The last typed dependency removed from the list: the next preparation still runs its connected step, through the
+// project's own repositories and the real copy preparation. The swap goes back to the published package before any
+// install runs, the person is told so, the copy with no work goes, and the sync that kept the swap in step stops.
+test("removing a session's last typed npm dependency puts the published package back at its next preparation, says so and stops its sync", { timeout: 180_000 }, async t => {
+  const previousNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
+  process.env.VIBE64_RUNTIME_NAMESPACE = "connected-node-last-removed";
+  t.after(() => {
+    if (previousNamespace === undefined) delete process.env.VIBE64_RUNTIME_NAMESPACE;
+    else process.env.VIBE64_RUNTIME_NAMESPACE = previousNamespace;
+  });
+  const tempRoot = await mkdtemp(path.join(tmpdir(), "vibe64-connected-node-removed-"));
+  t.after(() => rm(tempRoot, { recursive: true, force: true }));
+  const env = { ...process.env, npm_config_cache: path.join(tempRoot, "npm-cache") };
+  const published = path.join(tempRoot, "published-library");
+  const releaseRoot = path.join(tempRoot, "release");
+  await writeLibrary(published, "published library");
+  await mkdir(path.join(releaseRoot, "release"), { recursive: true });
+  const packed = await exec("npm", ["pack", "--json", "--ignore-scripts", "--offline", "--pack-destination", path.join(releaseRoot, "release")], { cwd: published, env });
+  await writeFile(path.join(releaseRoot, "package.json"), JSON.stringify({
+    name: "connected-removed-proof", version: "1.0.0", private: true, type: "module",
+    dependencies: { [packageName]: `file:./release/${JSON.parse(packed.stdout)[0].filename}` }
+  }));
+  await writeFile(path.join(releaseRoot, "consume.mjs"), consumeScript);
+  await exec("npm", ["install", ...npmOptions], { cwd: releaseRoot, env });
+  const target = path.join(tempRoot, "project");
+  const task = await createTask(target, "task-r", releaseRoot, env);
+  t.after(() => stopConnectedSync(task.session.sessionId));
+  // The copy is a clone with nothing unsaved, as Prepare makes one.
+  const identity = ["-c", "user.name=Vibe64 Test", "-c", "user.email=test@example.invalid"];
+  await exec("git", ["init", "--initial-branch=main"], { cwd: task.copyRoot, env });
+  await exec("git", ["add", "--all"], { cwd: task.copyRoot, env });
+  await exec("git", [...identity, "commit", "-m", "library"], { cwd: task.copyRoot, env });
+  const commit = (await exec("git", ["rev-parse", "HEAD"], { cwd: task.copyRoot, env })).stdout.trim();
+  await task.runtime.store.writeMetadataValue(task.session.sessionId, "connected_copies", JSON.stringify({
+    library: { repository: "example/library", branch: "main", path: task.copyRoot, baseCommit: commit, canonicalCommit: commit }
+  }));
+  // As the project service offers its repositories, and the terminals their connected preparation.
+  const repositories = createProjectRepositories({ env, logger: silentLogger, publishProjectChanged: async () => {},
+    selection: { selectedProjectRuntimeRoot: () => projectRuntimeRoot(target) } });
+  const project = { ...repositories, projectEnvironmentStatus: async () => ({ status: "ready" }), readCurrentProject: async () => ({}) };
+  const connectedPreparation = options => prepareConnectedRepositories({ ...options, codexGitCommand: {}, env, project });
+  const runner = createWorkspaceSetupRunner({ project, connectedPreparation });
+  const current = () => task.runtime.getSessionWithoutSource(task.session.sessionId);
+  const consume = async () => (await exec(process.execPath, ["consume.mjs"], { cwd: task.root, env })).stdout.trim();
+
+  const first = await (await runner.start({ runtime: task.runtime, session: await current() })).completion;
+  assert.equal(first?.status, "succeeded", JSON.stringify(first));
+  assert.equal(await consume(), "task-r original source");
+  assert.equal(connectedSyncRunning(task.session.sessionId), true);
+
+  await writeFile(path.join(task.root, "vibe64.connections.json"), JSON.stringify({ repositories: [] }));
+  // Preparation still has a connected step to run, for what the removed connection left.
+  assert.ok((await repositories.inspectWorkspaceSetup({ session: await current() })).connectedDevelopment,
+    "the session's copy of a removed connection keeps its connected step");
+  const prepared = await connectedPreparation({ mode: "prepare", runtime: task.runtime, session: await current() });
+  assert.ok(prepared.lines.includes("[Connected] library removed; it is no longer listed."), prepared.lines.join("\n"));
+  assert.ok(prepared.lines.includes(`[Connected] Put back the published ${packageName} at ${path.join(task.root, "node_modules", packageName)} ` +
+    "in place of the removed connection's copy."), prepared.lines.join("\n"));
+  assert.equal(await consume(), "published library", "no install ran: the restore put it back");
+  await assert.rejects(lstat(task.copyRoot), { code: "ENOENT" });
+
+  const second = await (await runner.start({ runtime: task.runtime, session: await current() })).completion;
+  assert.equal(second?.status, "succeeded", JSON.stringify(second));
+  assert.equal(await consume(), "published library");
+  assert.equal(connectedSyncRunning(task.session.sessionId), false, "nothing is left to keep in step");
+  assert.equal(await runner.isPrepared({ runtime: task.runtime, session: await current() }), true);
 });
 
 async function connectedProofs(task) {

@@ -9,6 +9,7 @@ import {
 import {
   bumpConnectedDependencies,
   inspectConnectedAdapters,
+  restoreDisconnected,
   runConnectedAdapterStep,
   syncConnectedRepositories
 } from "./connectedAdapters/index.js";
@@ -160,17 +161,21 @@ function createProjectRepositories({
     return bumpConnectedDependencies({ repositories: inputs.repositories, sessionSourceRoot: sessionSourcePath(session), runCommand });
   }
 
+  /**
+   * The connected step's Sources file and restore. With no connection left and no Connected development in the
+   * Stack there is nothing to write, but what an adapter changed for a removed connection still goes back; a
+   * declared Sources file is written listing none.
+   */
   async function prepareConnectedDevelopmentInputs({ session, environment = env } = {}) {
-    const inspection = await inspectVibe64ConnectedDevelopment({
-      projectRoot: sessionSourcePath(session),
-      environment
-    });
-    if (!connectedDevelopmentApplies(inspection, await readSessionConnectedRepositories(session))) {
-      return { status: "unconfigured" };
-    }
+    const sourceRoot = sessionSourcePath(session);
+    const inspection = await inspectVibe64ConnectedDevelopment({ projectRoot: sourceRoot, environment });
+    const writes = inspection.status === "ready" ||
+      connectedDevelopmentApplies(inspection, await readSessionConnectedRepositories(session));
     return runProjectSourceExclusive(
       selection.selectedProjectRuntimeRoot(),
-      () => materializeConnectedDevelopmentInputs({ session, inspection, env: environment }),
+      async () => writes
+        ? materializeConnectedDevelopmentInputs({ session, inspection, env: environment })
+        : { status: "unconfigured", lines: await restoreDisconnected({ repositories: [], sessionSourceRoot: sourceRoot }) },
       { operation: "prepare-connected-development-inputs" }
     );
   }
