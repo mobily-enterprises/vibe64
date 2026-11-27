@@ -1,4 +1,5 @@
 {
+  "genesisVersion": "1.10.31",
   "schemaVersion": 1,
   "skills": {
     "genesis-data-pass": {
