@@ -78,6 +78,54 @@ import {
   createWebSocketTerminalDriver
 } from "../../src/lib/vibe64TerminalDriver.js";
 
+class FakeWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
+  static instances = [];
+
+  constructor(url) {
+    this.listeners = new Map();
+    this.readyState = FakeWebSocket.CONNECTING;
+    this.sent = [];
+    this.url = url;
+    FakeWebSocket.instances.push(this);
+  }
+
+  addEventListener(eventName, handler) {
+    this.listeners.set(eventName, handler);
+  }
+
+  close() {
+    this.readyState = FakeWebSocket.CLOSED;
+    this.dispatch("close");
+  }
+
+  disconnect() {
+    if (this.readyState === FakeWebSocket.CLOSED) {
+      return;
+    }
+    this.readyState = FakeWebSocket.CLOSED;
+    this.dispatch("close");
+  }
+
+  dispatch(eventName, event = {}) {
+    if (eventName === "open") {
+      this.readyState = FakeWebSocket.OPEN;
+    }
+    this.listeners.get(eventName)?.(event);
+  }
+
+  send(message) {
+    this.sent.push(JSON.parse(String(message || "{}")));
+  }
+
+  sentMessages() {
+    return this.sent;
+  }
+}
+
 describe("useVibe64Terminal", () => {
   let originalWebSocket;
   let originalWindow;
@@ -648,52 +696,4 @@ function fakeTerminalHost() {
     removeEventListener: vi.fn(),
     replaceChildren: vi.fn()
   };
-}
-
-class FakeWebSocket {
-  static CONNECTING = 0;
-  static OPEN = 1;
-  static CLOSING = 2;
-  static CLOSED = 3;
-  static instances = [];
-
-  constructor(url) {
-    this.listeners = new Map();
-    this.readyState = FakeWebSocket.CONNECTING;
-    this.sent = [];
-    this.url = url;
-    FakeWebSocket.instances.push(this);
-  }
-
-  addEventListener(eventName, handler) {
-    this.listeners.set(eventName, handler);
-  }
-
-  close() {
-    this.readyState = FakeWebSocket.CLOSED;
-    this.dispatch("close");
-  }
-
-  disconnect() {
-    if (this.readyState === FakeWebSocket.CLOSED) {
-      return;
-    }
-    this.readyState = FakeWebSocket.CLOSED;
-    this.dispatch("close");
-  }
-
-  dispatch(eventName, event = {}) {
-    if (eventName === "open") {
-      this.readyState = FakeWebSocket.OPEN;
-    }
-    this.listeners.get(eventName)?.(event);
-  }
-
-  send(message) {
-    this.sent.push(JSON.parse(String(message || "{}")));
-  }
-
-  sentMessages() {
-    return this.sent;
-  }
 }
