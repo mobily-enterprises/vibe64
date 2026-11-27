@@ -38,15 +38,41 @@ const readablePlan = context => readWorkPlan(context).catch(() => null);
 /**
  * Whether this request brought its plan to its passes, or completed it: a request the chat runs a
  * plan's passes for, whose plan reached its Passes step or completed during it rather than being
- * found that way when it was admitted. Only Senior's review brings a plan to its passes: Junior's
+ * found that way when it was admitted, or whose Senior reported complete on it at its Passes step.
+ * That report is Senior's review of the plan however the request found it (recordOutcome accepts it
+ * only for the agreed plan with every item outside Passes proven), so a plan an earlier review
+ * left at its passes moves on too. A turn that only replies leaves a plan found there as it is: the
+ * person may have stopped its passes. Only Senior's review brings a plan to its passes: Junior's
  * ticks leave it for that review.
  * @param {object} request the saved routing request
  * @param {{ status: string, revision: string, text: string } | null} plan the current plan
  */
 function planFinishedDuringRequest(request, plan) {
+  const reviewed = request?.planInvolved === true && request.outcome?.decision === "complete" &&
+    request.outcome.turnId === request.turnId && workPlanAtPasses(plan);
   return Boolean(request?.afterPlan) && Boolean(plan) &&
     (plan.status === "completed" || workPlanAtPasses(plan) && assistantWorkflowRole(request) === "senior") &&
-    request.afterPlan.planAtAdmission?.revision !== plan.revision;
+    (reviewed || request.afterPlan.planAtAdmission?.revision !== plan.revision);
+}
+
+/**
+ * Refuses an outcome planning may not report: planning alone authorises neither implementation nor a plan's
+ * completion. A plan the planning request found built and reviewed (at its Passes step, as it was admitted) has
+ * nothing left to authorise: its passes are its next step, which Senior's complete on the plan starts. Planning that
+ * ticks a plan to its Passes step itself completes nothing.
+ * @param {object} state the saved routing request
+ * @param {{ decision: string, expectedRevision?: string }} input the reported outcome
+ */
+function refusePlanningOutcome(state, input) {
+  if (state.stage !== "planning" || ["continue", "wait"].includes(input.decision)) return;
+  const atPasses = workPlanAtPasses(state.workPlan) && state.workPlan.revision === state.afterPlan?.planAtAdmission?.revision;
+  if (atPasses && input.decision === "complete" && input.expectedRevision !== undefined) return;
+  if (atPasses) {
+    const message = "This plan is built and reviewed: its passes are its next step. Leave it as it is and report " +
+      "complete with the plan's revisions; Vibe64 then runs its Passes items, each in its own turn.";
+    throw failure(message, "vibe64_assistant_workflow_planning_plan_at_passes");
+  }
+  throw failure("Planning alone does not authorise implementation or plan completion.", "vibe64_assistant_workflow_planning_outcome_refused");
 }
 
 /**
@@ -125,9 +151,7 @@ function createAssistantRoutingOutcomes({
       }
       // A plan change made while the plan is being implemented hands the implementation back once it is saved.
       const resumes = state.stage === "planning" && state.resumeImplementation === true && input.decision === "handoff";
-      if (state.stage === "planning" && !["continue", "wait"].includes(input.decision) && !resumes) {
-        throw failure("Planning alone does not authorise implementation or plan completion.", "vibe64_assistant_workflow_planning_outcome_refused");
-      }
+      if (!resumes) refusePlanningOutcome(state, input);
       const pass = state.stage === "pass" ? state.pass : null;
       if (pass && input.decision === "handoff") {
         throw failure("A pass reports continue, wait or complete: it fixes what it finds itself.", "vibe64_assistant_workflow_pass_handoff_refused");
