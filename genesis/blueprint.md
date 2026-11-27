@@ -820,7 +820,12 @@ none. Any other handoff after implementation ends the work, saved when
 Automatically save changes is on, with no review, Deslop or UI pass turn. Senior,
 Junior and Custom chats report the same outcomes; their work ends with their own
 agent's last turn. Unfinished checks of a plan stay with Senior. A changed product requirement
-needs the person's decision. Planning alone does not authorise implementation.
+needs the person's decision. Planning alone does not authorise implementation;
+a planning turn that finds the plan already built and reviewed (at its Passes
+step) may report it complete, and its passes run. Senior's check that waits for
+the person (a question, or a reported wait) takes their next message back to
+that check, on Senior, without Router; its complete moves the plan on to its
+passes, also when the plan reached its Passes step before the request.
 Only Senior explicitly completes an involved plan; Junior and Custom never do.
 A native turn ending or a fully checked checklist does not complete the workflow.
 

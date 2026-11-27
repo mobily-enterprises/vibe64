@@ -3755,6 +3755,12 @@ not hide them, and nothing is offered while that reply is being written. A
 workflow turn that ends with such questions waits for the person's answer
 (`awaitingAnswer`), reading the same questions from the saved tail since the
 person's latest message, which holds every message the lookback can reach.
+The person's next message is a new request that Router routes, except after a
+plan's pass or Auto's Senior review of a plan that waits for them (a question,
+or a reported wait): admission's `waitingForReply` sends it straight back to
+that step on Senior. A review reply (`reviewReply`) is Senior's review of the
+plan with the person's message first and the review's own request after it, and
+renders no Genesis review task; its complete moves the plan on to its passes.
 Numbered question labels and their suggested choices use the shared inline
 Markdown renderer, preserving bold text, code, and links without interpreting
 raw HTML. Their file links use the same source-editor navigation as prose.

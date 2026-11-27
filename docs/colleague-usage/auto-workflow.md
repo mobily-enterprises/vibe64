@@ -115,7 +115,9 @@ says **Waiting for your answer. Reply in chat to continue.** and offers no stage
 nothing. Your reply is a new request that Router routes as usual, so answering
 "Yes, fix them" starts implementation, which, for a plan, Senior then reviews.
 A reply to a plan's pass that asked you questions goes straight back to that
-pass instead, on Senior, without Router. At Planning with an active saved plan,
+pass instead, on Senior, without Router. So does a reply to Senior's review of a
+plan that asked you questions or waited for you: the review goes on with your
+answer, and once it finds every item done, the plan's passes run. At Planning with an active saved plan,
 **Implement plan** remains available.
 
 The agent's concrete explanation appears as an ordinary **Status** message in

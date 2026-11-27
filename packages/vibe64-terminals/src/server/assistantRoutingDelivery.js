@@ -19,7 +19,11 @@ import {
   assistantWorkflowRole
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantTaskPurpose, uiPassRequest } from "@local/vibe64-runtime/shared/assistantExplicitTask";
-import { assistantPassInstructions, assistantPlanCompletionFollows } from "@local/vibe64-runtime/shared/assistantFinishing";
+import {
+  ASSISTANT_PLAN_COMPLETION_MESSAGE,
+  assistantPassInstructions,
+  assistantPlanCompletionFollows
+} from "@local/vibe64-runtime/shared/assistantFinishing";
 import {
   WHOLE_CHECKS_LABEL,
   WHOLE_CHECKS_OFFERED_NOTE,
@@ -271,6 +275,10 @@ function createAssistantRoutingDelivery({
     // Genesis recognises it: after the person's reply when the pass was waiting for one.
     const person = Boolean(pass) && !followup && state.passReply === true;
     if (pass) request = person ? `${input.message}\n\n${pass.request}` : pass.request;
+    // The person's reply to Senior's review of the plan that waited for them: the reply, then that review's request.
+    if (state.reviewReply && !followup && !pass && !planCheck) {
+      request = `${input.message}\n\n[Vibe64: the message above is the person's reply to your review of the plan, which waited for them. Continue that review with it.]\n\n${ASSISTANT_PLAN_COMPLETION_MESSAGE}`;
+    }
     // Passes the person asked for that can't start yet: Senior says so, and runs nothing.
     if (state.planPassNote && !pass && !planCheck) request = `[Vibe64: ${state.planPassNote} Tell the person so in a sentence or two; run no pass and change nothing.]\n\n${request}`;
     // A message the person typed while Vibe64 asked about the whole-project checks: its turn hears what was asked.
@@ -309,7 +317,8 @@ function createAssistantRoutingDelivery({
     // A pass renders its own Genesis task, and a review Genesis's review task. Senior's
     // check of a plan Junior implemented is not a pass: it renders no task of its own.
     let genesisTask = taskPurpose ? pass?.id || state.task : "";
-    if (!genesisTask && state.stage === "review" && !(followup && (state.mode === "auto" || state.planReview) && state.planInvolved)) genesisTask = "review";
+    if (!genesisTask && state.stage === "review" &&
+        !((followup || state.reviewReply) && (state.mode === "auto" || state.planReview) && state.planInvolved)) genesisTask = "review";
     // The plan check renders no task and reports no outcome: the request settles as the turn before it would have.
     if (planCheck) genesisTask = "";
     // A plan's pass, and the whole-project checks, get their outcome instructions before their request.

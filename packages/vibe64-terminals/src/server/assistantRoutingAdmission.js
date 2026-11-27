@@ -72,6 +72,24 @@ const STOPPED_TURN_POLL_MS = 100;
 const isStoppedRequest = request => request?.stopped === true && request.delivery === "accepted" && Boolean(request.turnId);
 
 /**
+ * What the person's new message answers when the request before it waits for them: a plan's pass waiting for their
+ * answer (pass), or Auto's Senior review of a plan that asked them a question or reported wait (review). Either takes
+ * their next message straight back, on Senior, never through Router, which would class an answer to the review as
+ * planning, and planning can't move a plan on to its passes.
+ * @param {object | null} state the saved routing request
+ * @param {{ messageId: string }} input the new message
+ * @returns {{ pass?: object, review?: true }}
+ */
+function waitingForReply(state, input) {
+  if (!state || state.messageId === input.messageId || state.status !== "waiting" || state.stopped) return {};
+  if (state.stage === "pass") return state.awaitingAnswer === true && state.pass?.request ? { pass: state.pass } : {};
+  const review = state.mode === "auto" && state.stage === "review" && state.planInvolved === true &&
+    // A question waits on the turn's delivery; a reported wait holds its next review turn, prepared and unsent.
+    ["accepted", "pending"].includes(state.delivery) && (state.awaitingAnswer === true || state.outcome?.decision === "wait");
+  return review ? { review: true } : {};
+}
+
+/**
  * Whether the running native turn is the one the person stopped: the saved request was stopped after its turn was
  * accepted, and the turn running is that turn (or reports no id of its own).
  */
@@ -342,9 +360,7 @@ function createAssistantRoutingAdmission({
       if (state?.messageId === input.messageId) refusedBeforeAdmission = false;
       // A finished plan's question about the whole-project checks: the Yes runs them, any other message ends it.
       const wholeChecks = answerWholeChecks(state, input);
-      // A plan's pass waiting for the person's answer: their next message goes straight back to it.
-      const waitingPass = state?.messageId !== input.messageId && state?.stage === "pass" && state.status === "waiting" &&
-        state.awaitingAnswer === true && !state.stopped && state.pass?.request ? state.pass : null;
+      const { pass: waitingPass = null, review: waitingReview = false } = waitingForReply(state, input);
       const duplicate = await store.conversationMessageIdExists(sessionId, input.messageId);
       records.mark(input.messageId, "duplicate-checked");
       if (duplicate) {
@@ -516,8 +532,11 @@ function createAssistantRoutingAdmission({
         if (hasPlanRevision && (!plan || plan.status !== "active" || plan.revision !== input.planRevision)) {
           throw failure("The active plan changed. Read the current plan before sending your request.", "vibe64_assistant_routing_plan_changed");
         }
+        // The reply to Senior's waiting review of the active plan: that review, with the reply.
+        const reviewReply = waitingReview && mode === "auto" && finishes && !planPass && !planPassNote && !wholeChecks.runs &&
+          !hasPlanRevision && plan?.status === "active";
         let resolvedMode = mode;
-        if (explicitTask || planPass || planPassNote || wholeChecks.runs) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
+        if (explicitTask || planPass || planPassNote || wholeChecks.runs || reviewReply) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
         else if (mode === "auto") resolvedMode = "";
         const review = mode === "auto" && finishes && !planPass && !planPassNote && !wholeChecks.runs;
         // A Senior, Junior or Custom chat's request is its agent's work from the
@@ -543,8 +562,9 @@ function createAssistantRoutingAdmission({
           ...(explicitTask ? { task: explicitTask } : {}),
           ...(planPass ? { pass: planPass } : {}),
           ...(answering ? { passReply: true } : {}),
+          ...(reviewReply ? { reviewReply: true } : {}),
           ...(planPassNote ? { planPassNote } : {}),
-          reason: explicitTask || planPass ? "review" : planPassNote ? "conversation" : wholeChecks.runs ? "implementation" : "",
+          reason: explicitTask || planPass || reviewReply ? "review" : planPassNote ? "conversation" : wholeChecks.runs ? "implementation" : "",
           afterPlan: finishes && !wholeChecks.runs
             ? { planAtAdmission: plan ? { status: plan.status, revision: plan.revision } : null }
             : null,
@@ -563,12 +583,12 @@ function createAssistantRoutingAdmission({
           delivery: resolvedMode ? "sending" : "routing",
           createdAt: new Date().toISOString(),
           review,
-          workflow: direct || Boolean(planPass),
-          stage: planPass ? "pass" : direct ? "implementation" : null,
+          workflow: direct || Boolean(planPass) || reviewReply,
+          stage: planPass ? "pass" : reviewReply ? "review" : direct ? "implementation" : null,
           steps: 0,
           stalledTurns: 0,
           steering: [],
-          planInvolved: hasPlanRevision || Boolean(planPass),
+          planInvolved: hasPlanRevision || Boolean(planPass) || reviewReply,
           submittedBy: context.vibe64User ? Object.fromEntries(["username", "id", "role", "email", "preferredName"]
             .filter((name) => context.vibe64User[name] !== undefined)
             .map((name) => [name, context.vibe64User[name]])) : null
