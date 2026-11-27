@@ -863,6 +863,41 @@ test("a target run with several app servers signs each worker in on its own and 
   assert.match(executed.stderr, /runs this suite on 3 app servers, one per Playwright worker/u);
   assert.doesNotMatch(executed.stderr, /never reads it/u);
 
+  // JSKIT's harness before 0.2.113 gives every worker the first server's test database: the run is refused, naming the
+  // update, before any test starts; from 0.2.113 each worker gets its own and the run goes ahead.
+  await writeFile(path.join(fixture.projectRoot, "playwright.config.mjs"),
+    "import { browserTestConfig } from \"@jskit-ai/jskit-catalog/browser-tests\";\nexport default browserTestConfig();\n");
+  const catalog = path.join(fixture.projectRoot, "node_modules", "@jskit-ai", "jskit-catalog");
+  await mkdir(catalog, { recursive: true });
+  t.after(() => rm(catalog, { force: true, recursive: true }));
+  const harnessRun = async (version) => {
+    await writeFile(path.join(catalog, "package.json"), JSON.stringify({ name: "@jskit-ai/jskit-catalog", version }));
+    return execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--identity", "admin", "test"], {
+      cwd: fixture.projectRoot,
+      env: {
+        ...process.env,
+        ...fixture.prepared.env,
+        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+        VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
+      }
+    });
+  };
+  for (const version of ["0.2.112", "0.1.900"]) {
+    await assert.rejects(harnessRun(version), (error) => {
+      assert.match(error.stderr, new RegExp(`refused to run this suite on 3 app servers: this app's JSKIT ` +
+        `\\(@jskit-ai/jskit-catalog ${version.replaceAll(".", "\\.")}\\) gives every Playwright worker the first ` +
+        "server's test database.*Run npm run jskit:update, or run with --workers 1\\. Project tests were not started", "u"));
+      assert.equal(error.stdout, "", "no test ran");
+      return true;
+    }, version);
+  }
+  for (const version of ["0.2.113", "0.3.0", "1.0.0"]) {
+    const current = await harnessRun(version);
+    assert.match(current.stderr, /runs this suite on 3 app servers, one per Playwright worker/u, version);
+    assert.equal(JSON.parse(current.stdout).baseUrl, origins[0], version);
+  }
+  await rm(catalog, { force: true, recursive: true });
+
   // A config that never reads the list is told every worker would share the first server.
   await writeFile(path.join(fixture.projectRoot, "playwright.config.mjs"),
     "export default { use: { baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: process.env.PLAYWRIGHT_STORAGE_STATE } };\n");

@@ -305,7 +305,10 @@ server, and on development data a database that cannot connect
 (`vibe64_no_database_in_browser_runs` on
 `vibe64-no-database-in-browser-runs.invalid`). So a spec that opens the database
 itself never reaches the development one, whatever the app's generated `.env`
-says (`browserSuiteDatabaseEnvironment.js`).
+says (`browserSuiteDatabaseEnvironment.js`). A test-data target's Preview identity
+command gets the same, since the target's launch records its data mode
+(`outputDataMode`, `launchPreviewAuth.js`); elsewhere it still gets only the
+exchange secret and its aliases.
 The existing serialized temporary-Preview run publishes
 its state through launch status and realtime refresh. Its changes, like Preview
 readiness, cleanup and Stop, name the session's project, so they reach the
@@ -503,6 +506,11 @@ it ended, and hands the suite `PLAYWRIGHT_WORKER_TARGETS` (each worker's
 `baseURL` and `storageState`), which the daemon accepts only from a run's own
 suite and only with states in that directory. The suite's execution and the
 target's workflow declare their `workers`, so a host admits them as that many.
+JSKIT's `browserTestConfig()` gives each worker its own server's environment,
+its copy of the test database, from `@jskit-ai/jskit-catalog` 0.2.113; with an
+older one every worker would get the first server's, so the wrapper refuses a
+run of several app servers through that harness before any test starts, naming
+`npm run jskit:update` and `--workers 1` (`agentPlaywrightConfigWarningsSource.js`).
 A run with several servers restores the previous Preview as it ends, as a
 refused or cancelled run does, instead of waiting as `restore_pending`: its
 target holds a server and a database copy per worker. A run with one is

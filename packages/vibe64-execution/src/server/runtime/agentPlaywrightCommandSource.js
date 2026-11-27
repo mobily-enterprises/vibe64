@@ -1,3 +1,5 @@
+import { CONFIG_WARNINGS_SOURCE } from "./agentPlaywrightConfigWarningsSource.js";
+
 // Shown where no managed browser runtime exists, so the project's own
 // Playwright is the way to run browser tests.
 const LOCAL_PLAYWRIGHT_MESSAGE =
@@ -113,53 +115,6 @@ function refuseConfigTamperingWithLogin(applicationRoot = "") {
         LOGIN_STATE_OWNERSHIP_MESSAGE + " Project tests were not started."
       );
     }
-  }
-}
-`;
-
-// The wrapper's warnings about a Playwright config that never reads what the host supplies.
-const CONFIG_WARNINGS_SOURCE = `// A run with several app servers needs a config that gives each Playwright worker its own: JSKIT's
-// browserTestConfig() does, from PLAYWRIGHT_WORKER_TARGETS. Any other config sends every worker to the first server
-// and its database, so they overwrite each other's data.
-function warnWhenConfigIgnoresWorkers(applicationRoot = "", workerCount = 1) {
-  const configName = ["playwright.config.mjs", "playwright.config.js", "playwright.config.ts", "playwright.config.cjs"]
-    .find((name) => existsSync(path.join(applicationRoot, name)));
-  if (!configName) {
-    return;
-  }
-  const source = readFileSync(path.join(applicationRoot, configName), "utf8");
-  const code = configCode(source);
-  const jskitHarness = source.includes("@jskit-ai/jskit-catalog/browser-tests") &&
-    /(?<![\\w$.])browserTestConfig\\s*\\(/u.test(code);
-  if (!jskitHarness && !/(?<![\\w$])PLAYWRIGHT_WORKER_TARGETS(?![\\w$])/u.test(code)) {
-    process.stderr.write(
-      "Vibe64 serves " + workerCount + " app servers for this run in PLAYWRIGHT_WORKER_TARGETS, but " + configName +
-      " never reads it, so every worker uses the first server and its database. Build the config with JSKIT's " +
-      "browserTestConfig(), or run with --workers 1.\\n"
-    );
-  }
-}
-
-// A config that never reads the supplied login runs every test signed out, which looks like broken
-// sign-in; saying which variable to read points at the one-line fix. A config reads it when its code, not a
-// comment, names PLAYWRIGHT_STORAGE_STATE, or when JSKIT's browserTestConfig() builds it: that harness passes
-// the supplied login to use.storageState itself.
-function warnWhenConfigIgnoresLogin(applicationRoot = "") {
-  const configName = ["playwright.config.mjs", "playwright.config.js", "playwright.config.ts", "playwright.config.cjs"]
-    .find((name) => existsSync(path.join(applicationRoot, name)));
-  if (!configName) {
-    return;
-  }
-  const source = readFileSync(path.join(applicationRoot, configName), "utf8");
-  const code = configCode(source);
-  const namesLogin = /(?<![\\w$])PLAYWRIGHT_STORAGE_STATE(?![\\w$])/u.test(code);
-  const jskitHarness = source.includes("@jskit-ai/jskit-catalog/browser-tests") &&
-    /(?<![\\w$.])browserTestConfig\\s*\\(/u.test(code);
-  if (!namesLogin && !jskitHarness) {
-    process.stderr.write(
-      "Vibe64 supplies the signed-in browser state in PLAYWRIGHT_STORAGE_STATE, but " + configName +
-      " never reads it, so these tests run signed out. Pass process.env.PLAYWRIGHT_STORAGE_STATE to use.storageState there.\\n"
-    );
   }
 }
 `;
@@ -547,6 +502,15 @@ async function managedExecution(runtime = {}, applicationRoot = "", {
     fail(
       "This managed preview does not support application identity selection. " +
       "Project tests were not started."
+    );
+  }
+  const olderJskit = preview.workerUrls?.length > 1 ? jskitHarnessWithoutWorkerDatabases(applicationRoot) : "";
+  if (olderJskit) {
+    fail(
+      "Vibe64 refused to run this suite on " + preview.workerUrls.length + " app servers: this app's JSKIT " +
+      "(@jskit-ai/jskit-catalog " + olderJskit + ") gives every Playwright worker the first server's test database, so " +
+      "their data would mix; JSKIT 0.2.113 gives each worker its own. Run npm run jskit:update, or run with " +
+      "--workers 1. Project tests were not started."
     );
   }
   const suppliesLogin = preview.managed && preview.identityRequired;

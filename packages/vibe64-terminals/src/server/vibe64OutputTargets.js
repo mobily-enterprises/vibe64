@@ -257,6 +257,8 @@ function vibe64WebOutputDescriptor(target = {}, options = {}) {
       outputDownloads: structuredClone(target.downloads || []),
       outputParameters: target.parameterValues || {},
       outputMode: target.mode,
+      // A test-data target's identity command opens only its test database (launchPreviewAuth.js).
+      ...(target.dataMode ? { outputDataMode: target.dataMode } : {}),
       outputPresentationKind: "web",
       ...(prepareMarker ? { outputPrepareMarker: prepareMarker } : {}),
       outputResultsMarker: marker,
