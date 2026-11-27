@@ -491,7 +491,10 @@ test("agent preview help distinguishes duplicate previews from explicit referenc
   assert.match(result.stdout, /canonical preview server for the configured primary application/u);
   assert.match(result.stdout, /Do not start a duplicate copy/u);
   assert.match(result.stdout, /distinct secondary application explicitly requested by the user/u);
-  assert.match(result.stdout, /vibe64-helper playwright \[--target <target-id>\] \[--identity <default\|guest\|configured-name>\] test/u);
+  assert.match(
+    result.stdout,
+    /vibe64-helper playwright \[--target <target-id> \[--workers <n>\]\] \[--identity <default\|guest\|configured-name>\] test/u
+  );
   assert.doesNotMatch(result.stdout, /only preview server the agent may use/u);
   assert.doesNotMatch(result.stdout, /any other development server/u);
 });
@@ -1250,7 +1253,7 @@ test("agent preview wrapper forwards command input over the private session sock
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID_ENV], "wrapper-session");
     assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_SOCKET_ENV], prepared.hostSocketPath);
     assert.match(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_TOKEN_ENV], /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u);
-    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "11");
+    assert.equal(prepared.env[VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV], "12");
 
     const executed = await execFileAsync(prepared.hostWrapperPath, [
       "status",

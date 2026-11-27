@@ -4,7 +4,7 @@ import { closeTerminalSession, listTerminalSessions } from "@local/vibe64-execut
 import { stableHash } from "@local/vibe64-execution/server";
 import { outputTargetTerminalNamespace } from "./terminalShared.js";
 import { normalizedRuntimeRequirements } from "./vibe64OutputTargets.js";
-import { launchIsReady } from "./outputTargetMetadata.js";
+import { launchIsReady, launchWorkerCount } from "./outputTargetMetadata.js";
 import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
 
 // The launch terminals of a session: their execution kind, the actions they
@@ -120,7 +120,8 @@ function launchTerminalCanBeReused(runningSession = {}, options = {}) {
   return spec.reuseRunning !== false &&
     runningSession.metadata?.envHash === launchEnvHash &&
     runningSession.metadata?.outputTargetId === outputTargetId &&
-    isDeepStrictEqual(runningSession.metadata?.outputParameters || {}, spec.metadata?.outputParameters || {});
+    isDeepStrictEqual(runningSession.metadata?.outputParameters || {}, spec.metadata?.outputParameters || {}) &&
+    launchWorkerCount(runningSession) === launchWorkerCount(spec);
 }
 
 function reusableLaunchTerminal(sessionId = "", options = {}) {
@@ -242,6 +243,7 @@ async function cleanupSupersededLaunchTerminals({
 }
 
 export {
+  launchTerminalCanBeReused,
   previewRuntimesForSpec,
   outputTargetExecutionDescriptor,
   launchActionsFromOutput,

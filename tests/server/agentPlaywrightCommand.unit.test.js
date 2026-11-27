@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
-import { access, chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -74,7 +74,11 @@ async function createProject(projectRoot, version) {
     "    ? JSON.parse(readFileSync(storageStatePath, \"utf8\"))",
     "    : null,",
     "  storageStateExists: Boolean(storageStatePath && existsSync(storageStatePath)),",
-    "  storageStatePath",
+    "  storageStatePath,",
+    "  workerTargets: process.env.PLAYWRIGHT_WORKER_TARGETS || \"\",",
+    "  workerStates: JSON.parse(process.env.PLAYWRIGHT_WORKER_TARGETS || \"[]\")",
+    "    .map((target) => JSON.parse(readFileSync(target.storageState, \"utf8\"))),",
+    "  workers: process.env.VIBE64_PLAYWRIGHT_WORKERS",
     "}));"
   ].join("\n") + "\n", "utf8");
 }
@@ -123,8 +127,8 @@ function proxyStorageState(identity = "default") {
   };
 }
 
-// What the suite receives for the direct application endpoint http://127.0.0.1:4104.
-function authenticatedStorageState(identity = "default") {
+// What the suite receives for the direct application endpoint http://127.0.0.1:4104, or another worker's.
+function authenticatedStorageState(identity = "default", origin = "http://127.0.0.1:4104") {
   return {
     cookies: [{
       domain: "127.0.0.1",
@@ -147,13 +151,14 @@ function authenticatedStorageState(identity = "default") {
     }],
     origins: [{
       localStorage: [{ name: "app_identity", value: identity }],
-      origin: "http://127.0.0.1:4104"
+      origin
     }]
   };
 }
 
 async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl, managedNpmPath, {
-  identityTypes = ["email"]
+  identityTypes = ["email"],
+  testWorkers = []
 } = {}) {
   await writeExecutable(wrapperPath, [
     "#!/usr/bin/env node",
@@ -169,14 +174,16 @@ async function writeAuthenticatedPreviewWrapper(wrapperPath, previewUrl, managed
     "}",
     "if ([\"ensure\", \"status\"].includes(args[0])) {",
     "  process.stdout.write(JSON.stringify({",
-    "    diagnostics: { directApplicationEndpoint: { url: previewUrl } },",
+    `    diagnostics: { directApplicationEndpoint: { url: previewUrl }${testWorkers.length
+      ? `, testWorkers: ${JSON.stringify(testWorkers.map((url, index) => ({ index, url })))}` : ""} },`,
     `    identityTypes: ${JSON.stringify(identityTypes)},`,
     "    ready: true",
     "  }));",
     "  process.exit(0);",
     "}",
     "if (args[0] === \"browser\" && args[1] === \"storage-state\" && args[2]) {",
-    "  const identity = args[2];",
+    "  const workerIndex = args.indexOf(\"--worker\");",
+    "  const identity = args[2] + (workerIndex >= 0 ? \"@\" + args[workerIndex + 1] : \"\");",
     `  const storageState = ${proxyStorageState.toString()}(identity);`,
     "  const outputIndex = args.indexOf(\"--output\");",
     "  const outputPath = outputIndex >= 0 ? args[outputIndex + 1] : \"\";",
@@ -226,7 +233,11 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
       "    ? JSON.parse(readFileSync(storageStatePath, \"utf8\"))",
       "    : null,",
       "  storageStateExists: Boolean(storageStatePath && existsSync(storageStatePath)),",
-      "  storageStatePath",
+      "  storageStatePath,",
+      "  workerTargets: process.env.PLAYWRIGHT_WORKER_TARGETS || \"\",",
+      "  workerStates: JSON.parse(process.env.PLAYWRIGHT_WORKER_TARGETS || \"[]\")",
+      "    .map((target) => JSON.parse(readFileSync(target.storageState, \"utf8\"))),",
+      "  workers: process.env.VIBE64_PLAYWRIGHT_WORKERS",
       "}));"
     ].join("\n") + "\n"
   );
@@ -386,12 +397,14 @@ test("managed Playwright target selection crosses the real wrapper/socket bounda
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-target-"));
   let active = false;
   const selected = [];
+  const askedWorkers = [];
   const fixture = await prepareFixture(root, "1.61.1", "1.61.1", {
     onEnsurePreview() { assert.fail("A scoped target has already completed startup."); },
-    async withPreviewTarget(sessionId, targetId, operation, { waitUntilReady }) {
+    async withPreviewTarget(sessionId, targetId, operation, { waitUntilReady, workers }) {
       assert.equal(sessionId, "playwright-1.61.1");
       assert.equal(active, false);
       selected.push(targetId);
+      askedWorkers.push(workers);
       active = true;
       try {
         await waitUntilReady({ id: "managed-preview-terminal" });
@@ -415,6 +428,7 @@ test("managed Playwright target selection crosses the real wrapper/socket bounda
     assert.equal(active, false);
   }
   assert.deepEqual(selected, ["test-app", "test-app"]);
+  assert.deepEqual(askedWorkers, [0, 0], "a run that asks for no count gets the target's default");
   assert.deepEqual(fixture.managedCommands.map((request) => request.execution.kind), ["control", "browser", "control", "browser"]);
   assert.equal(fixture.managedCommands[0].command, fixture.managedCommands[1].command);
   assert.equal(fixture.managedCommands[0].args[0], fixture.prepared.hostPlaywrightWrapperPath);
@@ -438,6 +452,28 @@ test("managed Playwright target selection crosses the real wrapper/socket bounda
     ...options, env: { ...options.env, PLAYWRIGHT_BASE_URL: "https://production.example" }
   }), /own managed Preview URL/u);
   assert.deepEqual(selected, ["test-app", "test-app"]);
+
+  // --workers asks the target run for that many app servers, across the same boundary.
+  await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--target", "test-app", "--workers", "3", "test"], options);
+  await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--workers=2", "--target=test-app", "test"], options);
+  assert.deepEqual(askedWorkers.slice(2), [3, 2]);
+  for (const [args, message] of [
+    [["--workers", "2", "test"], /--workers needs --target/u],
+    [["--target", "test-app", "--workers", "0", "test"], /--workers requires a whole number of app servers from 1 to 99/u],
+    [["--target", "test-app", "--workers", "100", "test"], /from 1 to 99/u],
+    [["--target", "test-app", "--workers", "2", "--workers", "3", "test"], /--workers only once/u],
+    [["--target", "test-app", "test", "--workers", "2"], /not Playwright's --workers or -j/u],
+    [["--target", "test-app", "test", "--workers=2"], /not Playwright's --workers or -j/u],
+    [["--target", "test-app", "npm-run", "e2e", "--", "-j", "2"], /not Playwright's --workers or -j/u],
+    [["--target", "test-app", "--workers", "2", "status"], /apply only to test and npm-run/u]
+  ]) {
+    await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, args, options), (error) => {
+      assert.equal(error.code, 64, args.join(" "));
+      assert.match(error.stderr, message);
+      return true;
+    });
+  }
+  assert.equal(selected.length, 4, "a refused command selects no target");
 });
 
 test("managed browser startup and restoration can outlast the launch probe without waiting forever", async (t) => {
@@ -729,7 +765,7 @@ test("managed Playwright test command uses the exact versioned browser runtime w
   }
 });
 
-test("managed Playwright supplies and removes authenticated browser state", async () => {
+test("managed Playwright supplies authenticated browser state in the run's own directory, and refuses a run without one", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-auth-"));
   let fixture;
   try {
@@ -739,63 +775,42 @@ test("managed Playwright supplies and removes authenticated browser state", asyn
       "http://127.0.0.1:4104/home",
       path.join(fixture.runtimeRoot, "node26", "bin", "npm")
     );
-    const expectedState = authenticatedStorageState("default");
-
-    const executed = JSON.parse((await execFileAsync(
-      fixture.prepared.hostPlaywrightWrapperPath,
-      ["test", "--grep", "authenticated"],
-      {
+    // As the daemon runs a target run's setup: in a directory of its own, which it removes when the run ends.
+    const run = async (args) => {
+      const directory = await mkdtemp(path.join(root, "run-"));
+      const result = JSON.parse((await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, args, {
         cwd: fixture.projectRoot,
         env: {
           ...process.env,
           ...fixture.prepared.env,
-          VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
+          VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+          VIBE64_PLAYWRIGHT_STATE_DIR: directory
         }
-      }
-    )).stdout);
+      })).stdout);
+      assert.equal(path.dirname(result.storageStatePath), directory);
+      // One app server: the suite's environment is the one it always had.
+      assert.equal(result.workerTargets, "");
+      return result;
+    };
+
+    const executed = await run(["test", "--grep", "authenticated"]);
     assert.equal(executed.storageStateExists, true);
-    assert.deepEqual(executed.storageState, expectedState);
-    await assert.rejects(access(executed.storageStatePath), {
-      code: "ENOENT"
-    });
+    assert.deepEqual(executed.storageState, authenticatedStorageState("default"));
 
     const explicitIdentity = "admin";
-    const explicit = JSON.parse((await execFileAsync(
-      fixture.prepared.hostPlaywrightWrapperPath,
-      ["--identity", explicitIdentity, "test", "--grep", "expanded jobs"],
-      {
-        cwd: fixture.projectRoot,
-        env: {
-          ...process.env,
-          ...fixture.prepared.env,
-          VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
-        }
-      }
-    )).stdout);
+    const explicit = await run(["--identity", explicitIdentity, "test", "--grep", "expanded jobs"]);
     assert.deepEqual(explicit.args, ["test", "--grep", "expanded jobs"]);
     assert.deepEqual(explicit.storageState, authenticatedStorageState(explicitIdentity));
-    await assert.rejects(access(explicit.storageStatePath), {
-      code: "ENOENT"
-    });
 
-    const npmRun = JSON.parse((await execFileAsync(
-      fixture.prepared.hostPlaywrightWrapperPath,
-      ["--identity=app-user-42", "npm-run", "e2e"],
-      {
-        cwd: fixture.projectRoot,
-        env: {
-          ...process.env,
-          ...fixture.prepared.env,
-          VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
-        }
-      }
-    )).stdout);
+    const npmRun = await run(["--identity=app-user-42", "npm-run", "e2e"]);
     assert.equal(npmRun.storageStateExists, true);
     assert.deepEqual(npmRun.storageState, authenticatedStorageState("app-user-42"));
     assert.notEqual(npmRun.storageStatePath, executed.storageStatePath);
-    await assert.rejects(access(npmRun.storageStatePath), {
-      code: "ENOENT"
-    });
+
+    await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
+      cwd: fixture.projectRoot,
+      env: { ...process.env, ...fixture.prepared.env, VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run" }
+    }), /did not give this browser test its own directory for the signed-in state\. Project tests were not started\./u);
   } finally {
     await fixture?.commandService.closeAllForSession("playwright-1.61.1");
     await rm(root, {
@@ -803,6 +818,78 @@ test("managed Playwright supplies and removes authenticated browser state", asyn
       recursive: true
     });
   }
+});
+
+test("a target run with several app servers signs each worker in on its own and lists them in PLAYWRIGHT_WORKER_TARGETS", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-workers-"));
+  const fixture = await prepareFixture(root, "1.61.1");
+  t.after(async () => {
+    await fixture.commandService.closeAllForSession("playwright-1.61.1");
+    await rm(root, { force: true, recursive: true });
+  });
+  const workerUrls = ["http://127.0.0.1:4104/home", "http://127.0.0.1:4105/home", "http://127.0.0.1:4106/home"];
+  await writeAuthenticatedPreviewWrapper(
+    fixture.prepared.hostWrapperPath,
+    workerUrls[0],
+    path.join(fixture.runtimeRoot, "node26", "bin", "npm"),
+    { testWorkers: workerUrls }
+  );
+  const directory = await mkdtemp(path.join(root, "run-"));
+  await writeFile(path.join(fixture.projectRoot, "playwright.config.mjs"),
+    "export default { use: { baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: process.env.PLAYWRIGHT_STORAGE_STATE } };\n" +
+    "export const targets = process.env.PLAYWRIGHT_WORKER_TARGETS;\n");
+  const executed = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--identity", "admin", "test"], {
+    cwd: fixture.projectRoot,
+    env: {
+      ...process.env,
+      ...fixture.prepared.env,
+      VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+      VIBE64_PLAYWRIGHT_STATE_DIR: directory
+    }
+  });
+  const result = JSON.parse(executed.stdout);
+  const origins = workerUrls.map((url) => new URL(url).origin);
+  assert.deepEqual(JSON.parse(result.workerTargets), origins.map((baseURL, worker) => ({
+    baseURL,
+    storageState: path.join(directory, `storage-state-${worker}.json`)
+  })));
+  // Worker i signs in on its own server (--worker i), and its state moves to that server's origin.
+  assert.deepEqual(result.workerStates, origins.map((origin, worker) => (
+    authenticatedStorageState(worker === 0 ? "admin" : `admin@${worker}`, origin)
+  )));
+  // Worker 0's server and state are also the single-server variables, as a run with one has them.
+  assert.equal(result.baseUrl, origins[0]);
+  assert.equal(result.storageStatePath, path.join(directory, "storage-state-0.json"));
+  assert.match(executed.stderr, /runs this suite on 3 app servers, one per Playwright worker/u);
+  assert.doesNotMatch(executed.stderr, /never reads it/u);
+
+  // A config that never reads the list is told every worker would share the first server.
+  await writeFile(path.join(fixture.projectRoot, "playwright.config.mjs"),
+    "export default { use: { baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: process.env.PLAYWRIGHT_STORAGE_STATE } };\n");
+  const unread = await execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--identity", "admin", "test"], {
+    cwd: fixture.projectRoot,
+    env: {
+      ...process.env,
+      ...fixture.prepared.env,
+      VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+      VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
+    }
+  });
+  assert.match(unread.stderr, /playwright\.config\.mjs never reads it, so every worker uses the first server and its database/u);
+  // A config that reads a worker's state file itself tampers with the supplied login, as with the single state.
+  await writeFile(path.join(fixture.projectRoot, "playwright.config.mjs"),
+    "import { readFileSync } from 'node:fs';\n" +
+    "const first = JSON.parse(process.env.PLAYWRIGHT_WORKER_TARGETS)[0];\n" +
+    "export default { use: { storageState: JSON.parse(readFileSync(first.storageState, 'utf8')) } };\n");
+  await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["--identity", "admin", "test"], {
+    cwd: fixture.projectRoot,
+    env: {
+      ...process.env,
+      ...fixture.prepared.env,
+      VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+      VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
+    }
+  }), /playwright\.config\.mjs reads or changes the signed-in browser state in PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_WORKER_TARGETS/u);
 });
 
 test("managed Playwright test command reports a managed-preview blocker before starting tests", async () => {
@@ -843,12 +930,14 @@ test("managed Playwright warns when the project's config never reads the supplie
       path.join(fixture.runtimeRoot, "node26", "bin", "npm")
     );
     const configPath = path.join(fixture.projectRoot, "playwright.config.mjs");
-    const run = () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
+    // As the daemon runs a target run's setup: in a directory of its own.
+    const run = async () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
       env: {
         ...process.env,
         ...fixture.prepared.env,
-        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
+        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+        VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
       }
     });
 
@@ -923,12 +1012,14 @@ test("managed Playwright refuses a config that reads or edits the supplied login
       path.join(fixture.runtimeRoot, "node26", "bin", "npm"),
       { identityTypes }
     );
-    const run = () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
+    // As the daemon runs a target run's setup: in a directory of its own.
+    const run = async () => execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
       env: {
         ...process.env,
         ...fixture.prepared.env,
-        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run"
+        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+        VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
       }
     });
     const refusal = (configName, reason) => (error) => {
@@ -991,7 +1082,12 @@ if (["ensure", "status"].includes(process.argv[2])) {
 `);
     await assert.rejects(execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
       cwd: fixture.projectRoot,
-      env: { ...process.env, ...fixture.prepared.env, VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run" }
+      env: {
+        ...process.env,
+        ...fixture.prepared.env,
+        VIBE64_PLAYWRIGHT_TARGET_RUN: "fixture-parent-run",
+        VIBE64_PLAYWRIGHT_STATE_DIR: await mkdtemp(path.join(root, "run-"))
+      }
     }), (error) => {
       assert.match(error.stderr, /could not prepare the managed browser and application identity/iu);
       assert.match(error.stderr, /unverified listener/iu);

@@ -203,6 +203,8 @@ async function startResourceWorkflow({
     label,
     estimates,
     mode: configuration?.mode || "finite",
+    // A browser-test target serving several app servers (vibe64OutputTargets.js): hosts admit it as that many.
+    ...(configuration?.workers > 1 ? { workers: configuration.workers } : {}),
     // Who asked for the work and what it replaces, for the workflow's record (a Preview start's `launchRequest`).
     ...(request ? { request } : {}),
     ...await resourceWorkflowIdentity({ sourceRoot, operation, runtimes, steps, configuration, env })

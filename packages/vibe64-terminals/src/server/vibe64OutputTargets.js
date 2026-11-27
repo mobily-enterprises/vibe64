@@ -163,8 +163,15 @@ async function inspectVibe64WorkspaceSetupForContext(context) {
  */
 async function listVibe64OutputTargets(context = {}, options = {}) {
   const outputs = await (options.outputs || inspectVibe64OutputsForContext(context, options));
+  const estimates = outputs?.resourceEstimates?.status === "ready" ? outputs.resourceEstimates.outputs : [];
   return (Array.isArray(outputs?.targets) ? outputs.targets : [])
-    .map(vibe64OutputTargetView)
+    .map((target) => {
+      const view = vibe64OutputTargetView(target);
+      if (!outputTargetServesWorkers(target)) return view;
+      // A browser-test run sizes its app servers by the target's Running high estimate (browserTestWorkers.js).
+      const runningHighBytes = estimates.find((estimate) => estimate.targetId === view.id)?.running?.highBytes;
+      return { ...view, servesWorkers: true, ...(runningHighBytes ? { runningHighBytes } : {}) };
+    })
     .filter((target) => target.id && target.label);
 }
 
@@ -172,16 +179,18 @@ function vibe64OutputCommand(argv = [], options = {}) {
   const {
     host = "127.0.0.1",
     port = "",
-    parameters = {}
+    parameters = {},
+    workers = 1
   } = options;
+  const values = { host, port, workers };
   return (Array.isArray(argv) ? argv : [])
     .map((argument) => String(argument)
-      .replace(/\{(host|port|parameter:([a-z0-9]+(?:-[a-z0-9]+)*))\}/gu, (_match, placeholder, id) => {
+      .replace(/\{(host|port|workers|parameter:([a-z0-9]+(?:-[a-z0-9]+)*))\}/gu, (_match, placeholder, id) => {
         if (id) {
           if (!Object.hasOwn(parameters, id)) throw new Error(`Missing output parameter: ${id}.`);
           return parameters[id];
         }
-        return String(placeholder === "host" ? host : port);
+        return String(values[placeholder]);
       }))
     .map(shellQuote)
     .join(" ");
@@ -211,6 +220,7 @@ function vibe64WebOutputDescriptor(target = {}, options = {}) {
     host = "127.0.0.1",
     marker = "",
     port,
+    workers = 1,
     worktreePath
   } = options;
   const runtime = vibe64RuntimePacks(target.runtimeRequirements);
@@ -219,7 +229,7 @@ function vibe64WebOutputDescriptor(target = {}, options = {}) {
   const prepareMarker = outputPrepareMarker(steps);
   const lastPrepare = steps.findLastIndex(({ role }) => role === "prepare");
   const commands = steps.flatMap((step, index) => {
-    const command = vibe64OutputCommand(step.argv, { host, port, parameters: target.parameterValues });
+    const command = vibe64OutputCommand(step.argv, { host, port, parameters: target.parameterValues, workers });
     const entry = {
       command,
       commandPreview: command,
@@ -359,10 +369,16 @@ function createVibe64GenericOutputTargetTerminalSpec({
   };
 }
 
+/**
+ * @param {{ context?: object, outputTargetId?: string, outputParameters?: object, workers?: number }} request `workers`:
+ *   the app servers a browser-test run asks a test target for (browserTestWorkers.js); a target whose Run step takes
+ *   no {workers} always serves one
+ */
 async function createVibe64OutputTargetTerminalSpec({
   context = {},
   outputTargetId = "",
-  outputParameters
+  outputParameters,
+  workers = 1
 } = {}, options = {}) {
   const outputs = await inspectVibe64OutputsForContext(context, options);
   const targetId = String(outputTargetId || "").trim();
@@ -397,6 +413,7 @@ async function createVibe64OutputTargetTerminalSpec({
     };
   }
   const marker = outputResultsReadyMarker();
+  const serverCount = outputTargetServesWorkers(target) ? Math.max(1, workers) : 1;
   const spec = await createVibe64WebLaunchTargetTerminalSpec({
     launchTarget: {
       id: targetView.id,
@@ -406,9 +423,11 @@ async function createVibe64OutputTargetTerminalSpec({
     resolveLaunch: ({ port, worktreePath }) => vibe64WebOutputDescriptor(target, {
       marker,
       port,
+      workers: serverCount,
       worktreePath
     }),
-    session: context.session || {}
+    session: context.session || {},
+    workers: serverCount
   });
   if (spec?.ok === false) {
     return spec;
@@ -423,12 +442,22 @@ async function createVibe64OutputTargetTerminalSpec({
   return {
     ...spec,
     stackHash: outputs.stackHash,
-    resourceWorkflow: resourceWorkflowRecipe(target, outputs.resourceEstimates),
+    resourceWorkflow: resourceWorkflowRecipe(target, outputs.resourceEstimates, serverCount),
     metadata
   };
 }
 
-function resourceWorkflowRecipe(target, estimates) {
+/**
+ * Whether a target's Run step takes {workers}: it serves as many app servers as a browser-test run asks for.
+ * @param {{ steps?: Array<{ role: string, argv: string[] }> }} target
+ */
+function outputTargetServesWorkers(target = {}) {
+  return (Array.isArray(target.steps) ? target.steps : [])
+    .some(({ role, argv }) => role === "run" && argv.some((argument) => String(argument).includes("{workers}")));
+}
+
+// A run with several app servers is admitted as one workflow of that many, so a host can scale its memory and task limits.
+function resourceWorkflowRecipe(target, estimates, workers = 1) {
   return {
     operation: { kind: "output", targetId: target.id },
     runtimes: vibe64RuntimePacks(target.runtimeRequirements).runtimes,
@@ -436,7 +465,8 @@ function resourceWorkflowRecipe(target, estimates) {
     configuration: {
       mode: target.mode,
       presentation: target.presentation?.kind || "none",
-      ...(target.parameters?.length ? { parameters: target.parameterValues } : {})
+      ...(target.parameters?.length ? { parameters: target.parameterValues } : {}),
+      ...(workers > 1 ? { workers } : {})
     },
     estimates
   };
@@ -456,6 +486,7 @@ const __testables = Object.freeze({ vibe64OutputCommand, vibe64OutputTargetView,
 export {
   createVibe64OutputTargetTerminalSpec,
   inspectVibe64OutputsForContext,
+  outputTargetServesWorkers,
   inspectVibe64WorkspaceSetupForContext,
   listVibe64OutputTargets,
   normalizedRuntimeRequirements,

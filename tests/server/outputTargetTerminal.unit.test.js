@@ -1610,3 +1610,31 @@ test("launch restart baseline is unavailable outside git worktrees", async () =>
     });
   }
 });
+
+test("HTTP launch readiness of a test target with several app servers waits for every one, and names the one that never answered", async () => {
+  const { createServer } = await import("node:http");
+  const requests = [0, 0];
+  const servers = [0, 1].map((index) => createServer((request, response) => {
+    requests[index] += 1;
+    // The second server answers only on its third probe, and /never never.
+    response.writeHead(request.url === "/never" ? 503 : index === 0 || requests[1] >= 3 ? 200 : 503);
+    response.end();
+  }));
+  await Promise.all(servers.map((server) => new Promise((resolve) => server.listen(0, "127.0.0.1", resolve))));
+  try {
+    const [first, second] = servers.map((server) => `http://127.0.0.1:${server.address().port}/api/health`);
+    const ready = httpReadinessProbeCommand({ href: first, moreHrefs: [second], marker: "[[ALL-READY]]", timeoutSeconds: 10 });
+    assert.match((await execFileAsync("bash", ["-lc", ready])).stdout, /\[\[ALL-READY\]\]/u);
+    assert.deepEqual(requests, [1, 3], "an answered server is not probed again; the launch waits for the last");
+    const never = `http://127.0.0.1:${servers[1].address().port}/never`;
+    const unready = httpReadinessProbeCommand({ href: first, moreHrefs: [never], marker: "[[ALL-READY]]", timeoutSeconds: 1 });
+    await assert.rejects(execFileAsync("bash", ["-lc", unready], { timeout: 10_000 }), (error) => {
+      assert.equal(error.code, 1);
+      assert.doesNotMatch(error.stdout, /ALL-READY/u);
+      assert.match(error.stderr, new RegExp(`GET ${never.replace(/[.]/gu, "\\.")} did not return 200`, "u"));
+      return true;
+    });
+  } finally {
+    await Promise.all(servers.map((server) => new Promise((resolve) => server.close(resolve))));
+  }
+});

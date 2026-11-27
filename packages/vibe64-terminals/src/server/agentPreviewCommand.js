@@ -49,7 +49,7 @@ const AGENT_PREVIEW_BROWSER_WORKER_NAME = "vibe64-preview-browser-worker";
 const AGENT_PREVIEW_BROWSER_SOCKET_NAME = "preview-browser.sock";
 const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
 const AGENT_PREVIEW_COMMAND_SOCKET_NAME = "preview-command.sock";
-const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "11";
+const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "12";
 const AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
 const DEFAULT_PREVIEW_BROWSER_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_PREVIEW_BROWSER_SUSPEND_AFTER_MS = 30 * 1000;
@@ -64,7 +64,8 @@ const commandServers = createSessionCommandServers({
   routePrefix: "/agent-preview-command",
   routes: {
     "/agent-preview-command/identity": {
-      handle: ({ commandService, input, sessionId }) => commandService.authorizeBrowserIdentity(sessionId, input.identity),
+      handle: ({ commandService, input, sessionId }) =>
+        commandService.authorizeBrowserIdentity(sessionId, input.identity, input.worker ?? 0),
       status: vibe64StatusCode
     },
     "/agent-preview-command/playwright-status": {

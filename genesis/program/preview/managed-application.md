@@ -160,6 +160,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/outputTargetLaunchStart.js`
 - `packages/vibe64-terminals/src/server/outputTargetLaunchRequests.js`
 - `packages/vibe64-terminals/src/server/outputTargetPreviewTests.js`
+- `packages/vibe64-terminals/src/server/browserTestWorkers.js`
 - `packages/vibe64-terminals/src/server/outputTargetLaunchStatus.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminalSessions.js`
 - `packages/vibe64-terminals/src/server/outputTargetLaunchContext.js`
@@ -471,6 +472,33 @@ cancellation use the same cleanup, and a cleanup failure still keeps the
 command waiting and makes it fail; a later restore that fails shows as
 `restore_failed`, and the next turn's end, start or restart tries it again. One
 command owns the entire suite: several tests share one startup.
+
+A test target whose Run step takes `{workers}` (only a web target with
+``- Data: `test` `` may, `outputs.js`) serves a run several app servers, one per
+Playwright worker, worker *i* on `{port}`+*i* with its own copy of the test
+database (`vibe64OutputTargets.js`, `launchTargetTerminal.js`). The run's count
+is decided once, under the session's launch lock, from the machine's test budget
+(JSKIT's `testConcurrency()`): half of it, or the run's `--workers` capped at
+it, never more than 80% of the free memory fits at the target's Running high
+estimate plus a Chromium per worker, at least one and at most 64
+(`browserTestWorkers.js`). The free memory is the managed host's own
+(`availableMemoryBytes()` of its execution provider), and a host that cannot
+tell gets one; without a provider it is this process's. The launch reserves
+that many consecutive ports, waits for every server's readiness, and records
+them as the terminal's `testWorkers`, the one record of the count: a start
+asking another count does not reuse it. Each worker signs in on its own server:
+the identity grant names worker *i* (`previewAuth.js`), the Preview refuses one
+it does not serve, and the identity command gets that server's URL. The
+wrapper makes every worker's state at once in the run's own directory, which
+the daemon makes for each run with a target and removes when it ends however
+it ended, and hands the suite `PLAYWRIGHT_WORKER_TARGETS` (each worker's
+`baseURL` and `storageState`), which the daemon accepts only from a run's own
+suite and only with states in that directory. The suite's execution and the
+target's workflow declare their `workers`, so a host admits them as that many.
+A run with several servers restores the previous Preview as it ends, as a
+refused or cancelled run does, instead of waiting as `restore_pending`: its
+target holds a server and a database copy per worker. A run with one is
+unchanged.
 `vibe64-helper playwright status` reads the current run ID, target, phase, start
 time and elapsed time. `cancel <run-id>` cancels only that run and waits for
 cleanup. A stale ID cannot cancel a replacement run. Concurrent cancellation

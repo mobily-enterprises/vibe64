@@ -63,6 +63,39 @@ Batch related tests into one invocation: the entire suite gets one target startu
 and one restoration. Separate invocations each switch and restore Preview. Vibe64
 does not switch targets between individual tests or add background retry loops.
 
+## Parallel test targets
+
+A test target whose Run step takes `{workers}` runs a suite in parallel: it
+serves one app server per Playwright worker, worker *i* on `{port}`+*i*, and the
+project's harness gives each its own copy of the test database. Every other
+target serves one server, as before.
+
+- **How many.** The machine's test budget decides: a worker is a browser and an
+  app server, so a run gets half of `V64_TEST_CONCURRENCY` (else half of the CPUs
+  the process may use). `vibe64-helper playwright --target <id> --workers <n>`
+  asks for another count, never above the budget. A run never plans more than
+  80% of the memory free for its work, at the target's Running high estimate
+  plus 512 MiB for Chromium per worker (1.5 GiB per worker without an estimate),
+  and gets at least one and at most 64. A host that cannot tell its free memory
+  runs one.
+- **What the suite gets.** `PLAYWRIGHT_WORKER_TARGETS` lists each worker's
+  server and signed-in state as JSON, `[{ "baseURL", "storageState" }]`; worker
+  0's are also `PLAYWRIGHT_BASE_URL` and `PLAYWRIGHT_STORAGE_STATE`. Each worker
+  signs in on its own server, through that server's Preview identity command,
+  and the states sit in the run's own directory, which Vibe64 removes when the
+  run ends. JSKIT's `browserTestConfig()` reads the list. Any other config must
+  give each Playwright worker its entry; one that never reads the list gets a
+  warning, because every worker would test the first server and its database.
+  Under `--target`, Playwright's own `--workers` and `-j` are refused: the
+  count is Vibe64's.
+- **How it ends.** A run with several servers closes its target as it ends and
+  brings back the previous Preview at once, since its target holds a server and
+  a database copy per worker. A run with one keeps the target up until the
+  turn's end, as above.
+- **While it runs.** `vibe64-helper preview status --json` lists the servers in
+  `diagnostics.testWorkers`. The suite's execution and the target's workflow
+  declare their worker count, so a managed host admits the run as that many.
+
 Inspect the current run before diagnosing a stuck test:
 
 ```sh
@@ -119,13 +152,13 @@ declares `test-app` beside the normal `app` target:
 - Mode: `interactive`
 - Data: `test`
 - Runtimes: `nodejs`
-- Run `Serve on the test database`: `node_modules/.bin/jskit` `browser-test-server` `{host}` `{port}`
+- Run `Serve on the test database`: `node_modules/.bin/jskit` `browser-test-server` `{host}` `{port}` `{workers}`
 ```
 
-`jskit browser-test-server` serves one worker's server of the app's own
-`browserTestConfig()`: the production build, the database its `prepare` module
-gives that worker (`BROWSER_TEST_DB_NAME` itself in JSKIT's database patterns),
-its test-only `env` and `APP_ENV=test`. Both JSKIT database pieces bind
+`jskit browser-test-server` serves `{workers}` servers of the app's own
+`browserTestConfig()`, worker *i* on `{port}`+*i*: the production build, the
+database its `prepare` module gives that worker (from `BROWSER_TEST_DB_NAME` in
+JSKIT's database patterns), its test-only `env` and `APP_ENV=test`. Both JSKIT database pieces bind
 `BROWSER_TEST_DB_NAME` and `TEST_DB_NAME` as optional database names, so a host
 that provisions a project's database gives the browser suite and the Node
 database tests one each. `vibe64-helper playwright --target test-app npm-run

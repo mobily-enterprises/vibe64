@@ -7,6 +7,7 @@ import { currentProjectSlug } from "./terminalShared.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { inspectVibe64WorkspaceSetupForContext, listVibe64OutputTargets } from "./vibe64OutputTargets.js";
 import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
+import { launchWorkerCount } from "./outputTargetMetadata.js";
 import { CONNECTED_PREPARATION_STEP_LABEL } from "./workspaceSetupRules.js";
 import { normalizeText } from "@jskit-ai/kernel/shared/support/normalize";
 
@@ -220,7 +221,8 @@ function managedPreviewLaunchPlan({
   previewStatus = {},
   outputParameters,
   restart = false,
-  savedOutputTarget = null
+  savedOutputTarget = null,
+  workers
 } = {}) {
   const activeTerminal = previewStatus.activeTerminal || null;
   const previewState = String(previewStatus.preview?.state || "").trim();
@@ -238,7 +240,9 @@ function managedPreviewLaunchPlan({
     outputParameters,
     activeTerminal?.metadata?.outputParameters || {}
   );
-  if (!restart && sameTarget && sameParameters && (
+  // A browser-test run names the app servers it needs; any other start takes the running one as it is.
+  const sameWorkers = workers === undefined || launchWorkerCount(activeTerminal || {}) === workers;
+  if (!restart && sameTarget && sameParameters && sameWorkers && (
     previewState === "ready" ||
     (previewState === "starting" && launchTerminalIsRunning(activeTerminal || {}))
   )) {

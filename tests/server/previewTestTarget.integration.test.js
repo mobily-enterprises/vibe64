@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { execFile, spawn } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -42,7 +42,30 @@ test("shared assistant instructions point browser suites at the browser-tests sp
   ]) assert.ok(instructions.includes(required), required);
 });
 
-async function fixture(t, name, workflowHooks = {}) {
+// A test target whose Run step takes {workers}: one process serving that many app servers, server i on PORT+i with its
+// own data, and an identity command whose cookie names the server it signed in on.
+const parallelTarget = (previewPort) => `### Target \`parallel\`: parallel
+- Mode: \`interactive\`
+- Data: \`test\`
+- Runtimes: \`nodejs\`
+- Run \`Start\`: \`node\` \`parallel.mjs\` \`{workers}\`
+#### Presentation
+- Kind: \`web\`
+- Preferred port: \`${previewPort}\`
+- URL path: \`/\`
+- Ready when: \`GET\` \`/api/health\` returns \`200\`
+#### Preview identity
+- Command: \`tools/parallel-identity\`
+- Protocol: \`vibe64.preview-identity.command.v1\`
+- Identity types: \`email\`
+- Runtimes: \`nodejs\`
+`;
+
+/**
+ * @param {object} [workflowHooks] the controller's options to replace (a test budget, the free memory, a workflow)
+ * @param {{ extraOutputs?: (previewPort: number) => string }} [options] more targets for the Stack's Outputs
+ */
+async function fixture(t, name, workflowHooks = {}, { extraOutputs = () => "" } = {}) {
   // Managed Git needs a permitted checkout path; control sockets still use the
   // ordinary short OS temp directory, independently of this fixture location.
   const root = await mkdtemp(path.join(process.env.VIBE64_TEST_FIXTURE_ROOT || os.tmpdir(), `vibe64-test-target-${name}-`));
@@ -88,6 +111,7 @@ ${target("authenticated-test", "test-app")}
 - Identity types: \`email\`
 - Runtimes: \`nodejs\`
 ${target("broken", "broken")}
+${extraOutputs(previewPort)}
 ### Target \`terminal\`: terminal
 - Mode: \`interactive\`
 - Runtimes: \`nodejs\`
@@ -136,6 +160,34 @@ process.stdout.write(JSON.stringify({
 }));
 `);
   await chmod(path.join(sourceRoot, "tools/test-identity"), 0o755);
+  await writeFile(path.join(sourceRoot, "parallel.mjs"), `
+import http from 'node:http';
+import { readFileSync, writeFileSync } from 'node:fs';
+const workers = Number(process.argv[2]);
+writeFileSync('parallel.pid', String(process.pid));
+for (let worker = 0; worker < workers; worker++) {
+  const file = 'parallel-' + worker + '.json';
+  writeFileSync(file, JSON.stringify({ count: 0 }));
+  http.createServer((req, res) => {
+    if (req.url === '/api/health') { res.end('ok'); return; }
+    if (req.url === '/worker') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ worker, workers, count: JSON.parse(readFileSync(file)).count })); return; }
+    if (req.url === '/add') { const data = JSON.parse(readFileSync(file)); data.count++; writeFileSync(file, JSON.stringify(data)); res.end('ok'); return; }
+    if (req.url === '/test-login') { res.end(req.headers.cookie || ''); return; }
+    res.setHeader('content-type', 'text/html');
+    res.end('<h1>parallel ' + worker + '</h1>');
+  }).listen(Number(process.env.PORT) + worker, process.env.HOST || '127.0.0.1');
+}
+`);
+  await writeFile(path.join(sourceRoot, "tools/parallel-identity"), `#!/usr/bin/env node
+import { readFileSync } from 'node:fs';
+const request = JSON.parse(readFileSync(0, 'utf8'));
+process.stdout.write(JSON.stringify({
+  protocol: request.protocol, requestId: request.requestId, ok: true,
+  identity: { userId: 'test-user', email: 'test@example.test' },
+  setCookie: ['test_login=port-' + new URL(request.target.href).port + '; Path=/; HttpOnly; SameSite=Lax']
+}));
+`);
+  await chmod(path.join(sourceRoot, "tools/parallel-identity"), 0o755);
   const setup = await inspectVibe64WorkspaceSetup({ projectRoot: sourceRoot });
   const outputs = await inspectVibe64Outputs({ projectRoot: sourceRoot });
   assert.equal(outputs.status, "ready", JSON.stringify(outputs));
@@ -1065,4 +1117,158 @@ test("output parameters survive reuse, restart and temporary test-target restora
   const url = new URL(restored.previewTarget.href);
   url.pathname = `${url.pathname.replace(/\/$/u, "")}/parameter`;
   assert.equal(await (await fetch(url)).text(), parameters.label);
+});
+
+// Whether the parallel target's process is gone and none of its app servers answers.
+async function parallelClosed(f, ports) {
+  const pid = Number(await readFile(path.join(f.sourceRoot, "parallel.pid"), "utf8"));
+  assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }, "the target's process is gone");
+  for (const port of ports) {
+    const answer = await fetch(`http://127.0.0.1:${port}/worker`).then(response => response.text(), () => "");
+    assert.doesNotMatch(answer, /"workers"/u, `nothing of the target answers on ${port}`);
+  }
+}
+
+test("a test target taking {workers} serves one app server per worker, each with its own data, and closes as a run with several ends", async t => {
+  const GIB = 1024 ** 3;
+  let freeBytes = 64 * GIB;
+  const f = await fixture(t, "parallel", { testBudget: () => 6, availableMemory: async () => freeBytes },
+    { extraOutputs: parallelTarget });
+  const parameters = { label: "the person's" };
+  const normal = await f.controller.startTerminal(f.sessionId, { outputTargetId: "app", outputParameters: parameters });
+  await f.waitReady(normal);
+  const run = async (workers) => {
+    let served;
+    const startsBefore = f.previewStarts.length;
+    const result = await f.controller.withPreviewTarget(f.sessionId, "parallel", async () => {
+      const status = await f.controller.launchStatus(f.sessionId);
+      // Each app server itself, as testWorkers lists them: the Preview's own address carries its access token, which a
+      // relative URL would drop.
+      const urls = (status.activeTerminal.metadata.testWorkers || [{ url: status.activeTerminal.metadata.targetUrl }])
+        .map(({ url }) => url);
+      served = await Promise.all(urls.map(async (url) => {
+        assert.equal(await (await fetch(new URL("add", url))).text(), "ok");
+        return { port: Number(new URL(url).port), ...await (await fetch(new URL("worker", url))).json() };
+      }));
+      return { ok: true, exitCode: 0 };
+    }, { waitUntilReady: f.waitReady, workers });
+    assert.ok(served, `the run reached its suite: ${JSON.stringify(result)}`);
+    return { result, served, starts: f.previewStarts.slice(startsBefore) };
+  };
+  const personsAppIsBack = async () => {
+    const status = await f.controller.launchStatus(f.sessionId);
+    assert.equal(status.previewTestRun, undefined);
+    assert.equal(status.activeTerminal.metadata.outputTargetId, "app");
+    assert.deepEqual(status.activeTerminal.metadata.outputParameters, parameters);
+  };
+
+  // Asked for 2 of a budget of 6: two servers on consecutive ports, each with its own data.
+  let { result, served, starts } = await run(2);
+  assert.deepEqual(result, { ok: true, exitCode: 0 }, "nothing waits for the turn's end: the run closed its target");
+  assert.deepEqual(served.map(({ worker, workers, count }) => ({ worker, workers, count })),
+    [{ worker: 0, workers: 2, count: 1 }, { worker: 1, workers: 2, count: 1 }]);
+  assert.equal(served[1].port, served[0].port + 1);
+  assert.deepEqual(starts, ["parallel", "app"], "the person's app comes back as the run ends");
+  await personsAppIsBack();
+  const appPort = (await f.controller.launchStatus(f.sessionId)).activeTerminal.metadata.port;
+  await parallelClosed(f, served.map(({ port }) => port).filter(port => port !== appPort));
+
+  // No count asked: the budget's browser share; more than the budget asked: the budget.
+  ({ served } = await run(0));
+  assert.deepEqual(served.map(({ worker }) => worker), [0, 1, 2]);
+  assert.ok(served.every(({ count }) => count === 1), "each run starts each server on fresh data");
+  ({ served } = await run(20));
+  assert.equal(served.length, 6);
+  // No more than 80% of the free memory fits, at 1.5 GiB a worker without a Running high estimate.
+  freeBytes = 3.75 * GIB;
+  ({ served } = await run(0));
+  assert.equal(served.length, 2);
+
+  // A host that cannot tell its free memory gets one server: the run is today's, its restore waiting for the turn's end.
+  freeBytes = null;
+  ({ result, served, starts } = await run(0));
+  assert.deepEqual(served.map(({ worker, workers }) => ({ worker, workers })), [{ worker: 0, workers: 1 }]);
+  assert.deepEqual(result, { ok: true, exitCode: 0, previewRestorePending: true });
+  assert.deepEqual(starts, ["parallel"]);
+  const waiting = await f.controller.launchStatus(f.sessionId);
+  assert.deepEqual(waiting.previewTestRun, { targetId: "parallel", state: "restore_pending" });
+  assert.equal(Object.hasOwn(waiting.activeTerminal.metadata, "testWorkers"), false);
+  await f.controller.restorePreviewAfterTurn(f.sessionId);
+  await personsAppIsBack();
+});
+
+test("a suite on a test target serving workers signs each Playwright worker in on its own server, and a normal end or a cancel leaves nothing behind", async t => {
+  await runWithProjectRequestContext({ slug: "test-target" }, async () => {
+    const f = await fixture(t, "parallel-suite", { testBudget: () => 8, availableMemory: async () => 64 * 1024 ** 3 },
+      { extraOutputs: parallelTarget });
+    const commands = await browserCommands(f);
+    await writeFile(path.join(f.sourceRoot, "playwright.config.mjs"), `
+const targets = JSON.parse(process.env.PLAYWRIGHT_WORKER_TARGETS || '[]');
+export default {
+  testDir: '.', testMatch: 'parallel.spec.mjs', workers: Math.max(1, targets.length), fullyParallel: true,
+  reporter: 'line', timeout: 30000,
+  use: { baseURL: process.env.PLAYWRIGHT_BASE_URL, storageState: process.env.PLAYWRIGHT_STORAGE_STATE || undefined }
+};`);
+    await writeFile(path.join(f.sourceRoot, "parallel.spec.mjs"), `
+import { test as base, expect } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
+const targets = JSON.parse(process.env.PLAYWRIGHT_WORKER_TARGETS || '[]');
+// Each Playwright worker on its own app server, signed in there, as JSKIT's browserTestConfig() gives a suite.
+const test = base.extend({
+  baseURL: async ({}, use, testInfo) => use(targets[testInfo.parallelIndex].baseURL),
+  storageState: async ({}, use, testInfo) => use(targets[testInfo.parallelIndex].storageState)
+});
+for (const n of [0, 1, 2, 3]) {
+  test('parallel test ' + n, async ({ page, baseURL }, testInfo) => {
+    const { worker } = await (await page.request.get('/worker')).json();
+    expect(worker).toBe(testInfo.parallelIndex);
+    await page.goto('/test-login');
+    await expect(page.locator('body')).toContainText('test_login=port-' + new URL(baseURL).port);
+    await writeFile('parallel-seen-' + n + '.json', JSON.stringify({ worker, targets }));
+  });
+}
+test('parallel slow test', async () => {
+  await writeFile('parallel-slow.json', JSON.stringify({ targets }));
+  await new Promise(resolve => setTimeout(resolve, 25000));
+});
+`);
+    const leftNothing = async (targets) => {
+      assert.equal(targets.length, 2);
+      const ports = targets.map(({ baseURL }) => Number(new URL(baseURL).port));
+      assert.equal(ports[1], ports[0] + 1);
+      const runDirectory = path.dirname(targets[0].storageState);
+      assert.equal(path.dirname(targets[1].storageState), runDirectory);
+      await assert.rejects(access(runDirectory), { code: "ENOENT" }, "the run's directory goes with it");
+      await parallelClosed(f, ports);
+      assert.equal(JSON.parse((await commands.execute(["status"])).stdout).run, null);
+      assert.equal(f.captureExecutionIds.size, 0, "nested managed test commands have drained");
+      assert.equal((await f.controller.launchStatus(f.sessionId)).activeTerminal, null, "nothing ran before: nothing runs after");
+    };
+
+    const result = await commands.execute(["--target", "parallel", "--workers", "2", "--identity", "tester",
+      "test", "--grep", "parallel test"]);
+    assert.match(result.stdout, /4 passed/u);
+    assert.match(result.stdout + result.stderr, /runs this suite on 2 app servers, one per Playwright worker/u);
+    const seen = await Promise.all([0, 1, 2, 3].map(async n => (
+      JSON.parse(await readFile(path.join(f.sourceRoot, `parallel-seen-${n}.json`), "utf8")))));
+    assert.deepEqual([...new Set(seen.map(({ worker }) => worker))].sort(), [0, 1], "both workers tested, each on its own server");
+    await leftNothing(seen[0].targets);
+
+    const launcher = commands.execute(["--target", "parallel", "--workers", "2", "--identity", "tester",
+      "test", "--grep", "parallel slow"]);
+    const cancellation = launcher.then(value => ({ value }), error => ({ error }));
+    const marker = path.join(f.sourceRoot, "parallel-slow.json");
+    for (let attempt = 0; attempt < 300 && !await readFile(marker, "utf8").catch(() => ""); attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    const { targets } = JSON.parse(await readFile(marker, "utf8"));
+    const active = JSON.parse((await commands.execute(["status"])).stdout).run;
+    assert.equal(active.targetId, "parallel");
+    assert.ok(JSON.parse((await commands.execute(["cancel", active.id])).stdout).ok);
+    assert.ok((await cancellation).error, "a cancelled run fails");
+    for (let attempt = 0; attempt < 100 && f.commandService.playwrightStatus(f.sessionId).run; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    await leftNothing(targets);
+  });
 });

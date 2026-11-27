@@ -60,46 +60,54 @@ function canListenOnPort(port) {
 }
 
 /**
- * A free localhost port at or after preferredPort for a Preview's Run command, held in this process until released.
- * The port is checked here and bound later by the Run command, in its own process, so it is never one in the host's
- * ephemeral range: there any outgoing connection may take it as its own port in between, and the Preview then cannot
- * listen (EADDRINUSE). Nor is it one the host's own services claim (the host profile's claimedPorts), which may be
- * free when checked and bound later by their owner. A preferred port in either is passed over like a taken one.
+ * Free localhost ports at or after preferredPort for a Preview's Run command, held in this process until released:
+ * `count` consecutive ones (a test target serving several app servers listens on port+i), released together. A port
+ * is checked here and bound later by the Run command, in its own process, so it is never one in the host's ephemeral
+ * range: there any outgoing connection may take it as its own port in between, and the Preview then cannot listen
+ * (EADDRINUSE). Nor is it one the host's own services claim (the host profile's claimedPorts), which may be free when
+ * checked and bound later by their owner. A preferred port in either is passed over like a taken one.
+ * @returns {Promise<{ port: number, ports: number[], release: () => void }>} port: the first of ports
  */
-async function reserveAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT, host = {}) {
+async function reserveAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT, host = {}, count = 1) {
   const startPort = normalizePort(preferredPort);
   const ephemeral = await ephemeralPortRange(host);
   const passedOver = [ephemeral, ...vibe64Host().claimedPorts];
-  for (let port = startPort; port <= 65535; port += 1) {
-    const range = passedOver.find(({ first, last }) => port >= first && port <= last);
-    if (range) {
-      port = range.last;
+  // The last port of the block a port at `port` would start that cannot be offered, or -1 when every one can.
+  async function blocked(port) {
+    for (let candidate = port; candidate < port + count; candidate += 1) {
+      const range = passedOver.find(({ first, last }) => candidate >= first && candidate <= last);
+      if (range) return range.last;
+      if (reservedWebLaunchTargetPorts.has(candidate) || !await canListenOnPort(candidate)) return candidate;
+    }
+    return -1;
+  }
+  for (let port = startPort; port + count - 1 <= 65535; port += 1) {
+    const last = await blocked(port);
+    if (last >= 0) {
+      port = last;
       continue;
     }
-    if (reservedWebLaunchTargetPorts.has(port)) {
-      continue;
-    }
-    if (!await canListenOnPort(port)) {
-      continue;
-    }
-    if (reservedWebLaunchTargetPorts.has(port)) {
+    const ports = Array.from({ length: count }, (_unused, index) => port + index);
+    // Another reservation may have taken one while this one listened.
+    if (ports.some((candidate) => reservedWebLaunchTargetPorts.has(candidate))) {
       continue;
     }
     let released = false;
-    reservedWebLaunchTargetPorts.add(port);
+    for (const candidate of ports) reservedWebLaunchTargetPorts.add(candidate);
     return {
       port,
+      ports,
       release() {
         if (released) {
           return;
         }
         released = true;
-        reservedWebLaunchTargetPorts.delete(port);
+        for (const candidate of ports) reservedWebLaunchTargetPorts.delete(candidate);
       }
     };
   }
-  throw new Error(`No localhost port outside the ephemeral range ${ephemeral.first}-${ephemeral.last} and the host's claimed `
-    + `ports is available at or after ${startPort}.`);
+  throw new Error(`No ${count > 1 ? `${count} consecutive localhost ports` : "localhost port"} outside the ephemeral range `
+    + `${ephemeral.first}-${ephemeral.last} and the host's claimed ports ${count > 1 ? "are" : "is"} available at or after ${startPort}.`);
 }
 
 function normalizeUrlPath(value = "/") {
@@ -162,19 +170,22 @@ function launchReadinessMarker({
   return `[[${LAUNCH_READY_MARKER_PREFIX}:${markerId}]]`;
 }
 
+// `moreHrefs`: the same check on a test target's other app servers, every one of which must answer before the launch
+// is ready.
 function httpReadinessProbeCommand({
   expectedStatus = 200,
   href = "",
   marker = "",
   method = "GET",
+  moreHrefs = [],
   timeoutSeconds = WEB_LAUNCH_READINESS_TIMEOUT_SECONDS
 } = {}) {
   const script = [
-    "const href = process.argv[1];",
     "const marker = process.argv[2];",
     "const timeoutMs = Number(process.argv[3]) * 1000;",
     "const method = process.argv[4];",
     "const expectedStatus = Number(process.argv[5]);",
+    "const waiting = new Set([process.argv[1], ...process.argv.slice(6)]);",
     "const deadline = Date.now() + timeoutMs;",
     "const statusFile = process.env.VIBE64_READINESS_STATUS_FILE || '';",
     "const launchPid = Number(process.env.VIBE64_READINESS_LAUNCH_PID || 0);",
@@ -191,7 +202,7 @@ function httpReadinessProbeCommand({
     "}",
     "async function retry() {",
     "  if (Date.now() >= deadline) {",
-    "    console.error(`[studio] Launch target did not become ready: ${method} ${href} did not return ${expectedStatus}.`);",
+    "    console.error(`[studio] Launch target did not become ready: ${method} ${[...waiting][0]} did not return ${expectedStatus}.`);",
     "    finish(1);",
     "  }",
     "  await new Promise((resolve) => setTimeout(resolve, 250));",
@@ -204,22 +215,25 @@ function httpReadinessProbeCommand({
     "      throw error;",
     "    }",
     "  }",
-    "  const controller = new AbortController();",
-    "  const timeout = setTimeout(() => controller.abort(), 1000);",
-    "  try {",
-    "    const response = await fetch(href, {",
-    "      method,",
-    "      headers,",
-    "      redirect: 'manual',",
-    "      signal: controller.signal",
-    "    });",
-    "    clearTimeout(timeout);",
-    "    if (response.status === expectedStatus) {",
-    "      console.log(marker);",
-    "      finish(0);",
+    "  await Promise.all([...waiting].map(async (href) => {",
+    "    const controller = new AbortController();",
+    "    const timeout = setTimeout(() => controller.abort(), 1000);",
+    "    try {",
+    "      const response = await fetch(href, {",
+    "        method,",
+    "        headers,",
+    "        redirect: 'manual',",
+    "        signal: controller.signal",
+    "      });",
+    "      if (response.status === expectedStatus) waiting.delete(href);",
+    "    } catch {",
+    "    } finally {",
+    "      clearTimeout(timeout);",
     "    }",
-    "  } catch {",
-    "    clearTimeout(timeout);",
+    "  }));",
+    "  if (waiting.size === 0) {",
+    "    console.log(marker);",
+    "    finish(0);",
     "  }",
     "  await retry();",
     "}",
@@ -233,7 +247,8 @@ function httpReadinessProbeCommand({
     shellQuote(marker),
     shellQuote(String(timeoutSeconds)),
     shellQuote(String(method)),
-    shellQuote(String(expectedStatus))
+    shellQuote(String(expectedStatus)),
+    ...moreHrefs.map((moreHref) => shellQuote(moreHref))
   ].join(" ");
 }
 
@@ -249,6 +264,7 @@ function commandWithHttpReadiness({
   href = "",
   marker = "",
   method = "GET",
+  moreHrefs = [],
   timeoutSeconds = WEB_LAUNCH_READINESS_TIMEOUT_SECONDS
 } = {}) {
   return [
@@ -275,6 +291,7 @@ function commandWithHttpReadiness({
       href,
       marker,
       method,
+      moreHrefs,
       timeoutSeconds
     })} ) &`,
     "  vibe64_readiness_pid=$!",
@@ -312,6 +329,7 @@ function addReadinessMarkerToLaunchCommands(commands = [], options = {}) {
     href = "",
     marker = "",
     method = "GET",
+    moreHrefs = [],
     waitForReadiness = true
   } = options;
   if (!waitForReadiness || !marker || !href) {
@@ -336,7 +354,8 @@ function addReadinessMarkerToLaunchCommands(commands = [], options = {}) {
             expectedStatus,
             href,
             marker,
-            method
+            method,
+            moreHrefs
           })
         }
       : entry),
@@ -466,12 +485,15 @@ function normalizeOpenTarget({
  * @param {typeof DEFAULT_WEB_LAUNCH_TARGET_PORT} [dependencies.preferredPort]
  * @param {(request: object) => Promise<object>} dependencies.resolveLaunch
  * @param {object} [dependencies.session]
+ * @param {number} [dependencies.workers] the app servers the launch serves, worker i on port+i: readiness waits for
+ *   every one, and the metadata's testWorkers lists them when there are several
  */
 async function createVibe64WebLaunchTargetTerminalSpec({
   launchTarget = {},
   preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT,
   resolveLaunch,
-  session = {}
+  session = {},
+  workers = 1
 }) {
   const worktreePath = sessionSourcePath(session);
   if (!worktreePath) {
@@ -482,7 +504,7 @@ async function createVibe64WebLaunchTargetTerminalSpec({
   }
 
   const resolvedWorktreeRoot = path.resolve(worktreePath);
-  const portReservation = await reserveAvailableWebLaunchTargetPort(preferredPort);
+  const portReservation = await reserveAvailableWebLaunchTargetPort(preferredPort, {}, workers);
   const releasePortReservation = portReservation.release;
   try {
     const port = portReservation.port;
@@ -514,14 +536,15 @@ async function createVibe64WebLaunchTargetTerminalSpec({
         message: "Launch target must declare one valid HTTP readiness predicate."
       };
     }
-    const readinessHref = declaredReadiness
-      ? new URL(declaredReadiness.path, `http://127.0.0.1:${port}/`).href
-      : "";
+    const [readinessHref = "", ...moreReadinessHrefs] = declaredReadiness
+      ? portReservation.ports.map((workerPort) => new URL(declaredReadiness.path, `http://127.0.0.1:${workerPort}/`).href)
+      : [];
     const readiness = addReadinessMarkerToLaunchCommands(normalizeLaunchCommands(launch), {
       expectedStatus: declaredReadiness?.status,
       href: readinessHref,
       marker: generatedReadinessMarker,
       method: declaredReadiness?.method,
+      moreHrefs: moreReadinessHrefs,
       waitForReadiness: launch.waitForReadiness !== false
     });
     const startupCommands = readiness.commands;
@@ -592,6 +615,10 @@ async function createVibe64WebLaunchTargetTerminalSpec({
       sessionRoot: String(session.sessionRoot || ""),
       sessionSourceRoot: resolvedWorktreeRoot,
       targetUrl,
+      // The one record of a test target's app servers: their count is the run's worker count.
+      ...(portReservation.ports.length > 1 ? {
+        testWorkers: portReservation.ports.map((workerPort, index) => ({ index, url: `http://127.0.0.1:${workerPort}${urlPath}` }))
+      } : {}),
       urlPath,
       ...terminalNoGithubActorMetadata({
         ownerUserKey: "launch-target",

@@ -168,6 +168,12 @@ function createOutputTargetLaunchStart({
         return { ok: true, restarted: false };
       }
       const testRun = state.previewTestRuns.get(sessionId);
+      // A browser-test run's own start of its target serves the app servers the run asked for, and its restore of the
+      // person's Preview serves one, so neither takes a running target with another count as it is. Any other start
+      // serves one and takes the running target as it is.
+      const testRunWorkers = testRun && input.previewTestRun === testRun
+        ? testRun.restoring ? 1 : testRun.workers || 1
+        : undefined;
       if (testRun && input.previewTestRun !== testRun) {
         if (input.ensurePreview !== true || (input.outputTargetId && input.outputTargetId !== testRun.targetId)) {
           return {
@@ -254,7 +260,8 @@ function createOutputTargetLaunchStart({
             previewStatus,
             outputParameters: input.outputParameters,
             restart: restartRequested,
-            savedOutputTarget
+            savedOutputTarget,
+            workers: testRunWorkers
           });
           if (launchPlan.ready) {
             return launchPlan.terminal;
@@ -333,7 +340,8 @@ function createOutputTargetLaunchStart({
             vibe64User: input.vibe64User || null
           },
           outputTargetId: outputTarget.id,
-          outputParameters
+          outputParameters,
+          workers: testRunWorkers !== undefined && outputTarget.id === testRun.targetId ? testRunWorkers : 1
         });
         if (spec?.ok === false) {
           return refuseStart("output_target_spec_failed", spec.message || "Output target terminal cannot start.", {

@@ -145,7 +145,7 @@ function createPreviewIdentityGrantConsumer(previewAuth = {}) {
       );
     }
     consumedPreviewIdentityGrantNonces.set(verified.nonce, verified.expiresAt);
-    return verified.selection;
+    return { selection: verified.selection, worker: verified.worker };
   };
 }
 
@@ -153,7 +153,8 @@ function createPreviewIdentityGrantConsumer(previewAuth = {}) {
  * @param {import("node:http").IncomingMessage} request
  * @param {import("node:http").ServerResponse} response
  * @param {object} options
- * @param {((grant: object) => object) | null} options.consumeIdentityGrant null when the Preview has no identity signing
+ * @param {((grant: string) => { selection: object, worker: number }) | null} options.consumeIdentityGrant null when the
+ *   Preview has no identity signing
  * @param {((input: object) => Promise<object>) | null} options.executePreviewIdentityCommand null when the Preview was launched without identity switching
  * @param {(header: string) => boolean} [options.holdCookie] keeps an app cookie the Preview holds for the page's held session
  */
@@ -176,7 +177,7 @@ async function proxyPreviewIdentityExchange(request, response, {
       );
     }
     const grant = await previewIdentityRequestGrant(request);
-    const selection = consumeIdentityGrant(grant);
+    const { selection, worker } = consumeIdentityGrant(grant);
     if (!executePreviewIdentityCommand) {
       throw previewIdentityProxyError(
         "Application preview identity command is unavailable. Restart the preview.",
@@ -186,7 +187,8 @@ async function proxyPreviewIdentityExchange(request, response, {
     }
     const commandResult = await executePreviewIdentityCommand({
       previewAuth,
-      selection
+      selection,
+      worker
     });
     // The app's session cookies, as the Preview's other answers give them (previewSetCookies).
     const appSetCookie = Array.isArray(commandResult?.setCookie) ? commandResult.setCookie : [];

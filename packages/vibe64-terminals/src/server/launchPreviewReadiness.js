@@ -327,11 +327,18 @@ async function ensureLaunchPreviewProxy({
       publicProtocol: options.publicProtocol
     }),
     executePreviewIdentityCommand: terminal?.metadata?.previewIdentity
-      ? async ({ selection }) => {
+      ? async ({ selection, worker = 0 }) => {
+        // A browser-test run's worker i signs in on its own app server, which has its own copy of the test database.
+        const workerHref = worker === 0 ? targetHref : terminal.metadata.testWorkers?.[worker]?.url;
+        if (!workerHref) {
+          throw new AppError(409, "This Preview serves no such browser-test worker.", {
+            code: "vibe64_preview_identity_worker_unavailable"
+          });
+        }
         const runner = previewIdentityCommandRunnerForLaunchTerminal({
           context,
           runCommand: options.runCommand,
-          targetHref,
+          targetHref: workerHref,
           terminal
         });
         if (!runner) {

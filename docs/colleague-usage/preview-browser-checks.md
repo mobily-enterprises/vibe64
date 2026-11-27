@@ -46,6 +46,20 @@ reading unchanged logs between short waits.
 Where its command tool supports `yield_time_ms`, an empty progress wait uses
 `30000`; shorter waits are for interactive input or a specific immediate check.
 
+A test target can run a suite in parallel when its Run step in
+`genesis/stack.md` takes `{workers}` (a JSKIT project's `test-app` does). It
+then serves one copy of your app per browser, each with its own copy of the
+test database, so a long suite finishes sooner. How many depends on the
+computer's processors and free memory; the agent can ask for fewer or more with
+`--workers`, up to what the computer's test budget allows. Such a run closes its
+test target as soon as it ends and your own Preview comes back at once, rather
+than at the end of the agent's turn. If the project's own Playwright
+configuration does not hand each browser its own copy (a JSKIT project's
+`browserTestConfig()` does), the agent's test command warns that every browser
+would share the first one. Ask the coding agent to fix the configuration or to
+run with `--workers 1`. Colleague can explain this and offer coding-agent help;
+it cannot change the computer's test budget.
+
 Ask the coding agent to run browser-owning Node integration tests through
 `vibe64-helper playwright npm-run` as well. The project can declare these as
 `test:playwright:<name>` npm scripts. They use the host's browser task budget,

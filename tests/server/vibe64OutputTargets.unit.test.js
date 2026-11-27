@@ -871,3 +871,83 @@ test("web parameter substitution does not expand placeholders inside supplied va
   assert.equal(descriptor.commands[0].command, "node server.js --project 'my project/{port}/$(printf unsafe)' --port 4321");
   assert.deepEqual(descriptor.metadata.outputParameters, target.parameterValues);
 });
+
+const workerLines = [
+  "### Target `e2e`: Browser tests",
+  "- Mode: `interactive`",
+  "- Data: `test`",
+  "- Runtimes: `nodejs`",
+  "- Prepare `Install`: `npm` `ci`",
+  "- Run `Serve`: `node` `server.mjs` `--port={port}` `--workers={workers}`",
+  "#### Presentation",
+  "- Kind: `web`",
+  "- URL path: `/`",
+  "- Ready when: `GET` `/api/health` returns `200`"
+];
+
+test("only the Run step of a web target with test data takes {workers}, and only such a target serves workers", async () => {
+  const target = parseVibe64OutputsLines(workerLines).targets[0];
+  const placement = {
+    code: "VIBE64_OUTPUTS_INVALID",
+    message: /Only the Run step of a web output target with `- Data: test` may use the \{workers\} placeholder\./u
+  };
+  for (const lines of [
+    workerLines.map((line) => line.replace("`test`", "`development`")),
+    workerLines.filter((line) => !line.startsWith("- Data:")),
+    workerLines.map((line) => line.replace("`npm` `ci`", "`npm` `ci` `--jobs={workers}`")),
+    [...workerLines.slice(0, 5), "- Run `Serve`: `node` `cli.mjs` `{workers}`", "#### Presentation", "- Kind: `terminal`"]
+  ]) {
+    assert.throws(() => parseVibe64OutputsLines(lines), placement);
+  }
+  assert.throws(() => parseVibe64OutputsLines(workerLines.map((line) => line.replace("{workers}", "{worker}"))),
+    { message: /supports only \{host\}, \{port\}, \{workers\}, and \{parameter:id\} placeholders/u });
+
+  const plain = parseVibe64OutputsLines(workerLines.map((line) => line.replace(" `--workers={workers}`", ""))).targets[0];
+  const views = await listVibe64OutputTargets({}, {
+    outputs: {
+      ...outputsInspection([target, { ...plain, id: "plain", label: "Plain" }]),
+      resourceEstimates: { status: "ready", outputs: [{ targetId: "e2e", running: { typicalBytes: 1, highBytes: 300 * 1024 * 1024 } }] }
+    }
+  });
+  assert.equal(views[0].servesWorkers, true);
+  assert.equal(views[0].runningHighBytes, 300 * 1024 * 1024);
+  assert.equal(Object.hasOwn(views[1], "servesWorkers"), false);
+  assert.equal(Object.hasOwn(views[1], "runningHighBytes"), false);
+});
+
+test("a test target serving workers renders {workers}, listens on consecutive ports, waits for each and records them", async (t) => {
+  const context = await outputContext(t);
+  const steps = (argv) => [{ argv, label: "Serve", role: "run" }];
+  const target = webOutputTarget({ id: "e2e", dataMode: "test", steps: steps(["node", "server.mjs", "--port={port}", "--workers={workers}"]) });
+  const plain = webOutputTarget({ id: "plain", default: false, dataMode: "test", steps: steps(["node", "server.mjs", "--port={port}"]) });
+  const spec = async (outputTargetId, workers) => {
+    const made = await createVibe64OutputTargetTerminalSpec({ context, outputTargetId, workers }, {
+      inspect: () => outputsInspection([target, plain])
+    });
+    t.after(() => made.releasePortReservation?.());
+    assert.equal(made.ok, true, JSON.stringify(made));
+    return made;
+  };
+
+  const three = await spec("e2e", 3);
+  const { port } = three.metadata;
+  assert.match(three.commandPreview, new RegExp(`--port=${port} --workers=3`, "u"));
+  assert.deepEqual(three.metadata.testWorkers, [0, 1, 2].map((index) => ({
+    index, url: `http://127.0.0.1:${port + index}/catalogue`
+  })));
+  for (const index of [0, 1, 2]) {
+    assert.ok(three.args().join(" ").includes(`http://127.0.0.1:${port + index}/api/health`), `readiness waits for ${port + index}`);
+  }
+  assert.equal(three.resourceWorkflow.configuration.workers, 3);
+
+  // One server: today's launch, with nothing about workers in it.
+  const one = await spec("e2e", 1);
+  assert.match(one.commandPreview, /--workers=1/u);
+  assert.equal(Object.hasOwn(one.metadata, "testWorkers"), false);
+  assert.equal(Object.hasOwn(one.resourceWorkflow.configuration, "workers"), false);
+  // A target whose Run step takes no {workers} serves one, whatever a run asks.
+  const unasked = await spec("plain", 3);
+  assert.equal(Object.hasOwn(unasked.metadata, "testWorkers"), false);
+  assert.equal(Object.hasOwn(unasked.resourceWorkflow.configuration, "workers"), false);
+  assert.ok(!unasked.args().join(" ").includes(`127.0.0.1:${unasked.metadata.port + 1}/api/health`));
+});

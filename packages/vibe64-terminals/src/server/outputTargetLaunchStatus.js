@@ -12,7 +12,7 @@ import {
   previewIdentityCommandRunnerForLaunchTerminal,
   previewIdentitySelection
 } from "./launchPreviewAuth.js";
-import { outputTargetFromMetadata, previewStopState } from "./outputTargetMetadata.js";
+import { launchWorkerCount, outputTargetFromMetadata, previewStopState } from "./outputTargetMetadata.js";
 import { launchTerminalIsRunning } from "./launchPreviewReadiness.js";
 import { latestLaunchTerminal, outputStatusResponseFromPreviewStatus } from "./launchPreviewStatus.js";
 import { readLatestPreviewDiagnostic } from "./launchPreviewDiagnostics.js";
@@ -174,8 +174,13 @@ function createOutputTargetLaunchStatus({
         identities: status.previewIdentity?.identities || [],
         skippedIdentities: status.previewIdentity?.skippedIdentities || []
       });
+      // A browser-test run signs each worker in on its own app server: worker i of the ones the Preview serves.
+      const worker = input.worker ?? 0;
+      if (!Number.isSafeInteger(worker) || worker < 0 || worker >= launchWorkerCount(status.activeTerminal || {})) {
+        throw vibe64Error("This Preview serves no such browser-test worker.", "vibe64_preview_identity_worker_unavailable");
+      }
       return {
-        grant: createPreviewIdentityGrant(previewAuth, identity.selection),
+        grant: createPreviewIdentityGrant(previewAuth, identity.selection, { worker }),
         ok: true,
         requestedIdentity: identity.requestedIdentity
       };
