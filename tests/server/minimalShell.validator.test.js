@@ -109,6 +109,16 @@ test("package publication runs the shared release tool with the tested runtime a
   assert.equal(packageJson.jskitRelease?.pack, "node ./tooling/release/pack-release.mjs");
 });
 
+test("a Genesis bump brings Vibe64's Genesis agent skills in the same pin commit", async () => {
+  // After the pin's install, the release tool runs the newly installed genesis-compiler's own CLI, by the bin its
+  // package declares, to sync .agents/skills, so genesis:check never refuses them as outdated against the version
+  // just pinned.
+  const packageJson = await readPackageJson();
+  const genesis = JSON.parse(await readFile(path.join(APP_ROOT, "node_modules/genesis-compiler/package.json"), "utf8"));
+  assert.deepEqual(packageJson.jskitRelease?.afterPin,
+    ["node", path.posix.join("node_modules/genesis-compiler", genesis.bin.genesis), "skills", "sync"]);
+});
+
 test("the application foundation files are present at the app root", async () => {
   const entries = await readTopLevelEntries();
   for (const requiredEntry of REQUIRED_TOP_LEVEL_ENTRIES) {
