@@ -117,6 +117,8 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
     signIn: async () => ({ ok: true }),
     onboarding: async () => onboardingAt("ready"),
     overview: async () => overviewRead(),
+    // What a chat's records publish: a scenario can hold it, as a slow host does.
+    publishConversation: async () => {},
     // The main chat's turn, as terminals reports it: null while the main chat is idle.
     mainTurn: null,
     workspaceSetup: setupFailed || { status: "succeeded" }
@@ -144,7 +146,7 @@ async function taskFixture(root, { updateFailure = conflictFailure, saveFailed =
         return result.value;
       },
       publishSessionChanged: async () => {},
-      publishConversation: async () => {},
+      publishConversation: (...args) => server.publishConversation(...args),
       conversationTurns: {
         starting: (sessionId, turn) => aiTasks.onTurnStarting({ sessionId, ...turn }),
         settled: (sessionId, conversationId, failure = null) => aiTasks.onTurnSettled({ sessionId, conversationId, failure })
@@ -222,6 +224,46 @@ test("a started task reaches the AI once, on the Fix route, with the result sche
   assert.match(f.native.turns[0].message, /Help resolve this Vibe64 Update problem/);
   assert.match(f.native.turns[0].message, /\[Vibe64 saved version\]/);
   assert.deepEqual(f.native.turns[0].schema.properties.kind.enum, ["cannot", "complete", "question"]);
+}));
+
+// On a slow host the send still records the turn (its receipt, the chat's binding, its transcript, the routed
+// request's delivery) well after the AI took it; here those records wait on a promise the test holds.
+async function heldAfterAdmission(f) {
+  let release;
+  const recorded = new Promise(resolve => { release = resolve; });
+  f.server.publishConversation = async () => { if (f.native.accepted.size > 0) await recorded; };
+  const running = f.boot();
+  const { task } = await f.start(running.aiTasks);
+  const driving = f.quiet(running.aiTasks);
+  await waitFor(() => f.native.accepted.size === 1, "The AI never took the task's first turn.");
+  return { driving, release, running, task };
+}
+
+test("a task is working once its AI admits the first turn, while Vibe64 still records the send", () => withFixture(async (f) => {
+  const { driving, release, task } = await heldAfterAdmission(f);
+  await waitFor(async () => (await f.task(task.id)).phase === "working", "The task stayed Starting while its AI worked.");
+  release();
+  await driving;
+  const saved = await f.task(task.id);
+  assert.equal(saved.phase, "working");
+  assert.equal(saved.pending, null);
+  assert.deepEqual(saved.log.map(entry => entry.text).filter(text => text === "The AI started."), ["The AI started."]);
+}));
+
+test("a chat whose message is still being sent shows its turn working, never an unconfirmed request to recover", () => withFixture(async (f) => {
+  const { driving, release, running, task } = await heldAfterAdmission(f);
+  const chat = await running.conversations.conversationBinding(SESSION, {
+    runtime: f.runtime, session: await f.runtime.getSession(SESSION), temporaryConversationId: task.id
+  });
+  const shown = await chat.read({ runtime: f.runtime, session: await f.runtime.getSession(SESSION) });
+  assert.equal(shown.phase, "working");
+  assert.equal(shown.status, "working");
+  assert.equal(shown.pendingRequest, null);
+  release();
+  await driving;
+  const after = await chat.read({ runtime: f.runtime, session: await f.runtime.getSession(SESSION) });
+  assert.equal(after.status, "working");
+  assert.equal(after.pendingRequest, null);
 }));
 
 test("a completed repair runs Update on the server with no browser, and the task ends Done", () => withFixture(async (f) => {
