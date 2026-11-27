@@ -335,6 +335,6 @@ since every test file owns its state.
   agent can still follow it to its real exit and stop it. Explain every
   failure; never call one pre-existing or environmental: a missing tool or an
   environment's refusal is a defect to fix, reported with what is missing.
-- Focused local tests are not the whole proof. After pushing to `main`, check
-  that repository's GitHub CI run (`gh run list`, `gh run watch`) and, if it is
-  red, fix it before moving on.
+- Focused local tests are not the whole proof. After a session's Save or a
+  push to `main`, check that repository's GitHub CI run (`gh run list`,
+  `gh run watch`) and, if it is red, fix it before moving on.
