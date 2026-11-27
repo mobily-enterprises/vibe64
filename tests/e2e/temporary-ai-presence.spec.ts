@@ -14,6 +14,8 @@ for (const engineId of ["codex", "opencode"]) {
     const server = await assistantStatusServer({ temporaryEngineId: engineId });
     server.state.session.agentSession.turn.active = false;
     Object.assign(server.state.session, { assistantSelection: { engineId } });
+    // The AI's turn after Send runs until the test ends it, as a loaded host's runs on for seconds.
+    server.temporary!.captured.nativeTurn = () => ({ status: "inProgress" });
     const context = await browser.newContext();
     // AI onboarding would otherwise cover the header in this fixture.
     await suppressAiOnboarding(context);
