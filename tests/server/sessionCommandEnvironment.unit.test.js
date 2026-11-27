@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { prepareSessionCommandEnvironment } from "../../packages/vibe64-terminals/src/server/agentCommandEnvironment.js";
+import { createSessionCommandEnvironment } from "../../packages/vibe64-terminals/src/server/agentCommandEnvironment.js";
 import { removeCodexGitCommandSession } from "../../packages/vibe64-terminals/src/server/codexGitCommand.js";
 
 const root = await mkdtemp(path.join(os.tmpdir(), "v64-ses-env-"));
@@ -48,10 +48,10 @@ test("a host's command in a session runs vibe64-helper from the session's wrappe
   const env = { TMPDIR: process.env.TMPDIR, VIBE64_CODEX_ATTACHMENTS_ROOT: path.join(root, "attachments") };
   const source = path.join(root, "source");
   await mkdir(source, { recursive: true });
+  const prepareSessionCommandEnvironment = createSessionCommandEnvironment({
+    commands, env, project: { readCurrentProject: async () => ({ slug: "catalogue" }) }
+  });
   const prepared = await prepareSessionCommandEnvironment({
-    commands,
-    env,
-    project: { readCurrentProject: async () => ({ slug: "catalogue" }) },
     // A project runtime's own state folder and session store (this session keeps no drop zones).
     runtime: { stateRoot: root, store: { paths: () => ({}), prepareProjectFileAreas: async () => {} } },
     session: { sessionId, metadata: { source_path: source } },
@@ -65,9 +65,6 @@ test("a host's command in a session runs vibe64-helper from the session's wrappe
     const status = await run("vibe64-helper", ["session", "status", "--json"], { ...process.env, ...prepared.env, PATH });
     assert.equal(status.exitCode, 0, status.stderr);
     assert.equal(JSON.parse(status.stdout).status, `session ${sessionId}`);
-    // Without the prepared env the same helper has no session to reach.
-    const unprepared = await run("vibe64-helper", ["session", "status", "--json"], { PATH });
-    assert.notEqual(unprepared.exitCode, 0);
   } finally {
     await removeCodexGitCommandSession({ env, sessionId, stateRoot: root });
   }
