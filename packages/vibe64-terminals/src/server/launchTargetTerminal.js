@@ -252,6 +252,12 @@ function httpReadinessProbeCommand({
   ].join(" ");
 }
 
+// A host stops the launch by hanging its terminal up (SIGHUP) and then signalling
+// its process group. The wrapper traps the hang-up too, stops the launch and
+// waits up to 10 seconds while it finishes its own cleanup (a browser-test
+// server dropping its database copies), so the terminal stays up meanwhile and
+// the launch's writes still land, then kills what is left.
+//
 // The launch runs in a login shell, which reads ~/.bash_logout when `exit`
 // ends it. Under `set -e` a command failing there (Ubuntu's runs
 // clear_console, which fails without a console) would end the shell with its
@@ -279,13 +285,20 @@ function commandWithHttpReadiness({
     "  vibe64_readiness_pid=",
     "  vibe64_readiness_status_file=\"$(mktemp \"${TMPDIR:-/tmp}/vibe64-readiness.XXXXXX\")\"",
     "  cleanup_vibe64_launch() {",
-    "    kill \"$vibe64_launch_pid\" 2>/dev/null || true",
     "    if [ -n \"$vibe64_readiness_pid\" ]; then",
     "      kill \"$vibe64_readiness_pid\" 2>/dev/null || true",
     "    fi",
+    "    if kill \"$vibe64_launch_pid\" 2>/dev/null; then",
+    "      vibe64_launch_waits=0",
+    "      while kill -0 \"$vibe64_launch_pid\" 2>/dev/null && [ \"$vibe64_launch_waits\" -lt 100 ]; do",
+    "        sleep 0.1",
+    "        vibe64_launch_waits=$((vibe64_launch_waits + 1))",
+    "      done",
+    "      kill -KILL \"$vibe64_launch_pid\" 2>/dev/null || true",
+    "    fi",
     "    rm -f \"$vibe64_readiness_status_file\"",
     "  }",
-    "  trap cleanup_vibe64_launch EXIT INT TERM",
+    "  trap cleanup_vibe64_launch EXIT HUP INT TERM",
     `  ( exec env VIBE64_READINESS_STATUS_FILE="$vibe64_readiness_status_file" VIBE64_READINESS_LAUNCH_PID="$vibe64_launch_pid" ${httpReadinessProbeCommand({
       expectedStatus,
       href,

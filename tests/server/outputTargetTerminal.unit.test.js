@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import http from "node:http";
 import crypto from "node:crypto";
 import { existsSync } from "node:fs";
@@ -428,6 +428,41 @@ test("HTTP launch readiness stops immediately when the server exits, with its st
     }
   );
   assert.ok(Date.now() - startedAt < 2_000);
+});
+
+// A host stops a target terminal by hanging it up: SIGHUP to the wrapper, then SIGTERM to its process group, SIGKILL
+// 3 s later. A wrapper that died on the hang-up hung the terminal up under the launch, whose writes then failed (EIO), and
+// a JSKIT browser-test-server stopped that way never dropped its database copies. The wrapper stops the launch and waits
+// for it to finish its own cleanup, so its terminal stays up meanwhile.
+test("HTTP launch readiness wrapper, hung up, stops the launch and waits while it cleans up before it exits", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-launch-hangup-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const launch = path.join(root, "launch.mjs");
+  await writeFile(launch, `import { writeFileSync } from "node:fs";
+process.once("SIGTERM", () => setTimeout(() => { writeFileSync("cleaned", String(Date.now())); process.exit(0); }, 600));
+writeFileSync("started", "");
+setInterval(() => {}, 1000);
+`);
+  const command = commandWithHttpReadiness({
+    command: `exec ${JSON.stringify(process.execPath)} ${JSON.stringify(launch)}`,
+    expectedStatus: 200,
+    href: "http://127.0.0.1:9/api/health",
+    marker: "[[NEVER-READY]]",
+    method: "GET",
+    timeoutSeconds: 30
+  });
+  const wrapper = spawn("bash", ["-c", command], { cwd: root, detached: true, stdio: "ignore" });
+  t.after(() => { try { process.kill(-wrapper.pid, "SIGKILL"); } catch { /* the group has ended */ } });
+  for (let tries = 0; !existsSync(path.join(root, "started")); tries++) {
+    assert.ok(tries < 200, "the launch started");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  const exited = new Promise((resolve) => wrapper.once("exit", () => resolve(Date.now())));
+  wrapper.kill("SIGHUP");
+  const exitedAt = await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5_000, 0))]);
+  assert.ok(exitedAt > 0, "the wrapper exits once the launch has cleaned up");
+  assert.ok(existsSync(path.join(root, "cleaned")), "the launch was stopped and cleaned up before the wrapper exited");
+  assert.ok(Number(await readFile(path.join(root, "cleaned"), "utf8")) <= exitedAt);
 });
 
 async function runGit(cwd, args) {
