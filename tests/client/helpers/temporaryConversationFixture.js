@@ -45,9 +45,12 @@ export function createTemporaryConversationFixture({ request, created = () => {}
     // As on the server, a stopped request is not offered for recovery.
     const pendingRequest = route?.status === "uncertain" && !route.stopped ? { messageId: route.messageId,
       text: route.input?.displayMessage || route.input?.message || "", error: route.error || "" } : null;
+    const turnActive = ["starting", "inProgress", "routing", "sending"].includes(record.status);
+    // As on the server, a request routing still holds is working, before its AI's turn starts.
     return { id, segmentId: record.runId ? `fixture:${id}` : null,
       status: record.readError ? "unavailable" : pendingRequest ? "unconfirmed"
-        : ["starting", "inProgress", "routing", "sending"].includes(record.status) ? "working" : "ready",
+        : turnActive || record.routingPending === true ? "working" : "ready",
+      phase: turnActive ? "working" : record.routingPending === true ? "preparing" : "",
       capabilities: { attachments: true, steering: true, goals: false },
       // Saved turns carry ordered ids, as the server's do; transcript patches
       // sort by turn id, and random message ids would reorder requests.
