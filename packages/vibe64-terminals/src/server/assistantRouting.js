@@ -180,6 +180,7 @@ function createAssistantRouting({
     applyGoalSelection: goals.applyGoalSelection,
     reconcile: outcomes.reconcile,
     stopUnrecovered: outcomes.stopUnrecovered,
+    resumeAfterPlannedRestart: outcomes.resumeAfterPlannedRestart,
     close: admission.close
   });
 }

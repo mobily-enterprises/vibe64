@@ -869,7 +869,8 @@ suggestions are not told and end with the restart. Once the editor is back, the
 chats that were working continue on their own with what the restart stopped,
 and each open editor shows one calm green message, **Restarted for an update at
 HH:MM. Nothing was lost.**, with **Reload** only when the editor's page itself
-changed. A notice withdrawn before its time tells the chats the restart didn't
+changed. A told chat whose AI wound down and ended its turn before the restart
+continues too, once, unless the person stopped it. A notice withdrawn before its time tells the chats the restart didn't
 happen.
 Custom AI controls open from Chat mode. Failed saves remain visible in that
 dialog and can be retried. Model changes wait for the active turn to

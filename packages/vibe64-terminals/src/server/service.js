@@ -662,9 +662,9 @@ function createService({
       assistantContext,
       serverRun,
       ensureAgentSession: assistant.ensureAgentSession,
-      reconcileTemporaryConversation: (sessionId, options) => sessionConversations.reconcileTemporaryConversation(sessionId, options),
-      stopUnrecoveredTurn: (sessionId, conversationId, input) => (conversationId ? sessionConversations.stopUnrecoveredTemporaryTurn
-        : assistantRouting.stopUnrecovered)(sessionId, conversationId ? { conversationId } : {}, input)
+      mainChatRouting: assistantRouting,
+      sessionConversations,
+      plannedRestart: plannedRestart.reader
     })),
     openBrowserConversation: assistant.openBrowserConversation,
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,

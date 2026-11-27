@@ -1,6 +1,8 @@
 /** @typedef {import("./types.js").ServiceState} ServiceState */
 /** @typedef {import("./types.js").ServiceSessionAccess} ServiceSessionAccess */
 /** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
+/** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
+/** @typedef {import("./types.js").SessionConversations} SessionConversations */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
@@ -25,7 +27,8 @@ function logRecoveryPass(logger, component, event, fields, message) {
 }
 
 /**
- * A pass's outcome for each session that had something to recover, then its totals.
+ * A pass's outcome for each session that had something to recover, then its totals and each session it skipped, with
+ * why, so an operator reads why a session was not resumed.
  * @param {RuntimeLogger} logger
  * @param {string} component
  * @param {Array<Record<string, any>>} results
@@ -45,7 +48,12 @@ function logRecoveryResults(logger, component, results, nothingToDo) {
     logger,
     component,
     "recovery_finished",
-    { sessions: results.length, totals },
+    {
+      sessions: results.length,
+      totals,
+      skipped: results.filter(result => result.skipped === true).map(({ projectSlug, sessionId, chat, reason }) =>
+        ({ projectSlug, sessionId, ...(chat ? { chat } : {}), reason }))
+    },
     "Vibe64 finished checking for work the previous server was running."
   );
 }
@@ -81,10 +89,13 @@ function sessionWasWorking(session) {
  * the previous server ended is reconciled now, instead of when someone next opens it, as the person it ran for (the
  * request's sender). Reconciliation stops what is left of the old turn and ends it; routing then writes the red entry
  * and resumes the turn once, or says why not (assistantRoutingOutcomes.js). Its stale "working" state, which Save,
- * Update and the session list read, ends with it. A temporary chat that holds an AI task is its task's to continue
- * (vibe64-ai-tasks), and a goal's turn its goal recovery's. The last pass stops a turn it could not settle, such as
- * one whose sender the project no longer authorizes: it waits for Continue with its red entry saying why, once, so no
- * later restart tries it again unseen. A turn the server before still runs is left to it.
+ * Update and the session list read, ends with it. After a planned restart (@local/vibe64-core/server/plannedRestart),
+ * a chat its notice told whose turn ended before the restart, as an AI does once it has written where it is, goes on
+ * too, once, with the restart's note, unless the person stopped it; a chat that was at work is resumed as an
+ * interrupted turn alone. A temporary chat that holds an AI task is its task's to continue (vibe64-ai-tasks), and a
+ * goal's turn its goal recovery's. The last pass stops a turn it could not settle, such as one whose sender the
+ * project no longer authorizes: it waits for Continue with its red entry saying why, once, so no later restart tries
+ * it again unseen. A turn the server before still runs is left to it.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
  * @param {RuntimeLogger} dependencies.logger
@@ -92,9 +103,12 @@ function sessionWasWorking(session) {
  * @param {ServiceSessionAccess} dependencies.sessionAccess
  * @param {ServiceAssistantContext} dependencies.assistantContext
  * @param {(sessionId: string, options: object) => Promise<object>} dependencies.ensureAgentSession
- * @param {(sessionId: string, options: object) => Promise<unknown>} dependencies.reconcileTemporaryConversation
- * @param {(sessionId: string, conversationId: string, input: { messageId: string, error: string }) => Promise<boolean>}
- *   dependencies.stopUnrecoveredTurn Stops a chat's turn the last pass could not settle ("" is Main chat).
+ * @param {AssistantRouting} dependencies.mainChatRouting Main chat's routing: it stops a turn the last pass could not
+ *   settle, and resumes a chat after a planned restart
+ * @param {SessionConversations} dependencies.sessionConversations the temporary chats: their reconciliation, and the
+ *   same two operations
+ * @param {{ toldBeforeRestart: (chat: { sessionId: string, conversationId: string }) => Promise<boolean> }}
+ *   dependencies.plannedRestart the planned restart reader: the chats the notice this server restarted for told
  * @param {import("./types.js").ServerRun} dependencies.serverRun
  */
 function createServiceTurnRecovery({
@@ -104,10 +118,20 @@ function createServiceTurnRecovery({
   sessionAccess,
   assistantContext,
   ensureAgentSession,
-  reconcileTemporaryConversation,
-  stopUnrecoveredTurn,
+  mainChatRouting,
+  sessionConversations,
+  plannedRestart,
   serverRun
 }) {
+  /** Stops a chat's turn the last pass could not settle ("" is Main chat). */
+  const stopUnrecoveredTurn = (sessionId, conversationId, input) => (conversationId
+    ? sessionConversations.stopUnrecoveredTemporaryTurn(sessionId, { conversationId }, input)
+    : mainChatRouting.stopUnrecovered(sessionId, {}, input));
+  /** Resumes a chat the planned restart's notice told whose turn ended before it, and says what it did. */
+  const resumeAfterPlannedRestart = (sessionId, conversationId, options) => (conversationId
+    ? sessionConversations.resumeTemporaryTurnAfterPlannedRestart(sessionId, { ...options, conversationId })
+    : mainChatRouting.resumeAfterPlannedRestart(sessionId, options));
+
   async function actorFor(request) {
     const sender = request?.submittedBy || null;
     return sender
@@ -139,11 +163,11 @@ function createServiceTurnRecovery({
       return [{ sessionId, skipped: true, reason: "session-not-open" }];
     }
     const results = [];
+    // reconcile's result is what it did, or nothing when it reconciled the chat.
     const recover = async (chat, request, reconcile) => {
       try {
         await stillRunning(request);
-        await reconcile(await actorFor(request));
-        results.push({ sessionId, chat, reconciled: true });
+        results.push({ sessionId, chat, ...(await reconcile(await actorFor(request)) || { reconciled: true }) });
       } catch (error) {
         const stops = last && error?.code !== "vibe64_turn_previous_server_running";
         const stopped = stops && await stopUnrecoveredTurn(sessionId, chat === "main" ? "" : chat, {
@@ -153,19 +177,33 @@ function createServiceTurnRecovery({
         results.push({ sessionId, chat, ok: false, code: error?.code, error: error?.message, ...(stopped ? { stopped: true } : {}) });
       }
     };
-    if (sessionWasWorking(session)) {
-      await recover("main", assistantRoutingRequestForDisplay(session.metadata), async actor => {
-        const result = await ensureAgentSession(sessionId, actor ? { vibe64User: actor } : {});
-        if (result?.ok === false) {
-          throw Object.assign(new Error(result.error || "The session's AI could not be reconciled."), { code: result.code });
-        }
+    /**
+     * One chat: at work, it is reconciled, which is also its resume after a planned restart; otherwise a chat the
+     * planned restart's notice told goes on, unless the person stopped it. Routing resumes it once: a request this
+     * server has sent since is not resumed again.
+     */
+    const settle = async (chat, conversationId, request, working, reconcile) => {
+      if (working) return recover(chat, request, reconcile);
+      if (!await plannedRestart.toldBeforeRestart({ sessionId, conversationId })) return undefined;
+      if (request?.stopped === true) {
+        results.push({ sessionId, chat, skipped: true, reason: "stopped-by-person" });
+        return undefined;
+      }
+      return recover(chat, request, actor => resumeAfterPlannedRestart(sessionId, conversationId, actor ? { vibe64User: actor } : {}));
+    };
+    await settle("main", "", assistantRoutingRequestForDisplay(session.metadata), sessionWasWorking(session), async actor => {
+      const result = await ensureAgentSession(sessionId, actor ? { vibe64User: actor } : {});
+      if (result?.ok === false) {
+        throw Object.assign(new Error(result.error || "The session's AI could not be reconciled."), { code: result.code });
+      }
+    });
+    for (const record of await context.runtime.store.listSessionConversations(sessionId)) {
+      if (record.state === "closing" || record.task) continue;
+      const { conversationId, routingMetadata } = record;
+      const request = assistantRoutingRequestForDisplay(routingMetadata);
+      await settle(conversationId, conversationId, request, requestWasWorking(routingMetadata), async actor => {
+        await sessionConversations.reconcileTemporaryConversation(sessionId, { conversationId, ...(actor ? { vibe64User: actor } : {}) });
       });
-    }
-    const conversations = await context.runtime.store.listSessionConversations(sessionId);
-    for (const record of conversations) {
-      if (record.state === "closing" || record.task || !requestWasWorking(record.routingMetadata)) continue;
-      await recover(record.conversationId, assistantRoutingRequestForDisplay(record.routingMetadata), actor =>
-        reconcileTemporaryConversation(sessionId, { conversationId: record.conversationId, ...(actor ? { vibe64User: actor } : {}) }));
     }
     return results.length ? results : [{ sessionId, skipped: true, reason: "nothing-working" }];
   }

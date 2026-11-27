@@ -234,6 +234,10 @@ test("after the restart, the session that was working resumes with what the rest
       "Vibe64: Restarted at 07:39 UTC. This was stopped: your turn; the command `npm test -- tests/server/a.test.js`. Continue from your notes.");
     assert.equal(await after.resumeNote({ sessionId: "s-quiet" }),
       "Vibe64: Restarted at 07:39 UTC. This was stopped: your turn. Continue from your notes.");
+    // Recovery resumes a told chat even when its turn ended before the restart; a chat never told only when it worked.
+    assert.equal(await after.toldBeforeRestart({ sessionId: "s-working", conversationId: "" }), true);
+    assert.equal(await after.toldBeforeRestart({ sessionId: "s-working", conversationId: "side-1" }), false);
+    assert.equal(await after.toldBeforeRestart({ sessionId: "s-quiet" }), false);
     assert.equal(after.refusal({ operation: "save" }), null);
     const shown = after.status().restarted;
     assert.equal(shown.id, NOTICE.id);
@@ -263,6 +267,7 @@ test("an editor that starts again well before the restart time, the notice gone,
     await after.start();
     assert.equal(after.restartedRecord(), null);
     assert.equal(await after.resumeNote({ sessionId: "s-working" }), "");
+    assert.equal(await after.toldBeforeRestart({ sessionId: "s-working" }), false, "a restart that didn't happen resumes nothing");
     assert.deepEqual(ended.map(event => [event.type, event.cause, event.record.chats.length]), [["ended", "cancelled", 1]]);
     await after.stop();
   });

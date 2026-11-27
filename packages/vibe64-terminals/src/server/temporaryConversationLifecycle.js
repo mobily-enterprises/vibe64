@@ -211,6 +211,16 @@ function createTemporaryConversationLifecycle({
     return routing.stopUnrecovered(sessionId, options, input);
   }
 
+  /**
+   * Restart recovery's resume of a temporary chat the planned restart's notice told, whose turn ended before the
+   * restart (serviceTurnRecovery.js).
+   * @param {string} sessionId
+   * @param {{ conversationId: string }} options
+   */
+  function resumeTemporaryTurnAfterPlannedRestart(sessionId, options) {
+    return routing.resumeAfterPlannedRestart(sessionId, options);
+  }
+
   async function stopTemporaryConversation(sessionId, input, options = {}) {
     await routing.cancel(sessionId, { ...options, conversationId: input.conversationId });
     const stopped = await chatTurns.write(sessionId, options, async (ctx) => {
@@ -405,6 +415,7 @@ function createTemporaryConversationLifecycle({
     readTemporaryConversation,
     reconcileTemporaryConversation,
     stopUnrecoveredTemporaryTurn,
+    resumeTemporaryTurnAfterPlannedRestart,
     stopTemporaryConversation,
     readConversationTurn,
     deleteTemporaryConversation,

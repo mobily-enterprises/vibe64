@@ -14,6 +14,7 @@ but the minutes it takes.
 - `packages/vibe64-terminals/src/server/servicePlannedRestart.js`
 - `packages/vibe64-terminals/src/server/plannedRestartSteering.js`
 - `packages/vibe64-terminals/src/server/serviceShutdown.js`
+- `packages/vibe64-terminals/src/server/serviceTurnRecovery.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingDelivery.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingInterruptions.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingOwedSteps.js`
@@ -24,6 +25,7 @@ but the minutes it takes.
 - `src/lib/vibe64PlannedRestartPresentation.js`
 - `src/components/studio/Vibe64PlannedRestartBanner.vue`
 - `tests/server/plannedRestart.unit.test.js`
+- `tests/server/plannedRestartResume.unit.test.js`
 - `tests/client/vibe64PlannedRestartPresentation.vitest.js`
 - `docs/colleague-usage/planned-restarts.md`
 
@@ -62,7 +64,17 @@ editor's stop (written synchronously as shutdown begins), and how it ended.
 An editor that starts at or after a minute before `restartAt`, finding a
 record still in force and no notice file, restarted: the turns it recovers
 resume with "Vibe64: Restarted at HH:MM UTC. This was stopped: …. Continue from
-your notes." and `GET /api/studio/health/planned-restart` reports the restart
+your notes.", and so does each chat the record says was told whose turn ended
+before the restart (its request no longer working, sent by an earlier run, not
+stopped by the person, not a goal's or an AI task's), in the same conversation
+as its sender, its entry the planned "carried on" line (`toldBeforeRestart`,
+routing's `resumeAfterPlannedRestart`). A told chat at work is resumed as an
+interrupted turn alone, and a request this server has sent since is never
+resumed again (`sent-since-restart`), so no chat is resumed twice however often
+recovery checks again; a chat the person stopped is skipped as
+`stopped-by-person`, and `recovery_finished` names each skipped session and
+why. `GET
+/api/studio/health/planned-restart` reports the restart
 for 30 minutes (`restarted: { id, restartedAt, reason, sessions, stopped }`,
 with `active` and the served `clientBuildId`). Otherwise the restart did not
 happen: every told chat hears "Vibe64: the planned restart didn't happen; carry

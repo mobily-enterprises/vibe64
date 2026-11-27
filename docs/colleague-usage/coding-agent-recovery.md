@@ -57,9 +57,11 @@ entry reads **Not resumed: stopped: Vibe64 stopped unexpectedly three times in a
 row while it ran.** (or names the engine, the connection or the overloaded
 service) and **Continue** tries again. Only a turn that Vibe64 is stopped and
 started again 10 times in a row, each within 10 minutes, stops too. A turn you
-stopped, or one that had finished, is never resumed. When the AI account needs
-signing in again, the entry says so: sign in in **AI Accounts**, then choose
-**Continue**. When Vibe64 cannot resume a chat's turn at all after a restart
+stopped, or one that had finished, is never resumed, except a turn a host's
+planned restart notice told that ended before the restart: it goes on after the
+restart, once (see [Planned restarts](planned-restarts.md)). When the AI
+account needs signing in again, the entry says so: sign in in **AI Accounts**,
+then choose **Continue**. When Vibe64 cannot resume a chat's turn at all after a restart
 (for example because the person who sent it can no longer use the project), it
 tries again a few times over about 12 minutes and then stops: the entry reads
 **Not resumed:** with the reason, then **Choose Continue to try again.**, and
@@ -79,7 +81,10 @@ warnings, which production keeps: `vibe64.turn_resume.recovery_started` and
 `recovery_outcome` line per turn or goal (resumed, stopped by the loop rule,
 stopped because no attempt could continue it, or skipped and why), `vibe64.turn_resume.resumed`,
 `vibe64.turn_resume.stopped_by_loop_rule` or `vibe64.turn_resume.skipped` for
-each Main and temporary chat turn, and `recovery_finished` with the totals. A
+each Main and temporary chat turn, and `recovery_finished` with the totals and
+each session it skipped with why (`skipped`: its project, session, chat when it
+names one, and `reason`, such as `nothing-working`, `session-not-open`,
+`stopped-by-person` or, for goals, `no-active-goal`). A
 crash's record counts the turns it interrupted that Vibe64 resumed. A chat turn
 or a goal that no attempt after a restart could continue logs
 `vibe64.turn_resume.recovery_stopped` or `vibe64.agent_goal.recovery_stopped`

@@ -5543,7 +5543,12 @@ After every feature has booted, `recoverInterruptedTurns`
 reconciles each open project's Main chat and temporary chat whose request was
 at work (or owed a step another turn came before), as its sender, without waiting for anyone to open it, and retries after
 30 s, 2 min and 10 min while one could not be checked. Each chat is settled on
-its own. The last pass stops a chat's turn it still could not settle (its
+its own. After a planned restart
+([planned restarts](../operations/planned-restarts.md)), a chat the notice told
+whose turn ended before the restart goes on too, once, through routing's
+`resumeAfterPlannedRestart`: the restart's note leads its follow-up, under the
+loop rule, unless the person stopped it. The last pass stops a chat's turn it
+still could not settle (its
 sender no longer authorized, its AI not reconciled), unless the run before
 still runs it: routing's `stopUnrecovered` leaves the request waiting with its
 resume prepared and "Vibe64 could not resume this turn after the restart:
@@ -5593,7 +5598,7 @@ A crash's record counts the turns it interrupted that were resumed
 applies the same rule to a goal's intents: it writes the entry and continues the
 goal, carrying the interruptions into the new intent, or pauses it when the rule
 stops it. Both recoveries log, at warn so production keeps them, their start, each
-session's outcome and their totals.
+session's outcome and their totals with each skipped session and why.
 
 ## Recovery snapshot notice
 

@@ -1,7 +1,7 @@
 import { assistantGoalIsActive } from "@local/vibe64-runtime/shared/assistantRouting";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
-import { read, activeMessage } from "./assistantRoutingRequests.js";
+import { read, activeMessage, owesStep } from "./assistantRoutingRequests.js";
 import {
   INTERRUPTION_CAUSE,
   TURN_RESUME_BACKOFF_MS,
@@ -274,6 +274,55 @@ function createAssistantRoutingInterruptions({
     return stopped;
   }
 
+  /**
+   * Why a chat the planned restart's notice told is not resumed after it, or "" when it is: the person stopped it, it
+   * is at work or owes a step (its own recovery has it), this server has sent it since (resumed already, or a new
+   * message), or it is a temporary chat's AI task or a Main chat goal's turn.
+   */
+  async function notResumedAfterPlannedRestart(sessionId, context, state) {
+    if (!state) return "no-request";
+    if (context.routingConversationTask) return "ai-task";
+    if (state.stopped) return "stopped-by-person";
+    if (state.status === "working" || owesStep(state)) return "working";
+    if ((state.serverRunId || "") === serverRun.id) return "sent-since-restart";
+    const goal = context.routingConversationId ? null : (await records.currentGoal(sessionId, context))?.goal;
+    return assistantGoalIsActive(goal) ? "goal" : "";
+  }
+
+  /**
+   * A chat the planned restart's notice told, whose turn ended before the restart, as an AI does once it has written
+   * where it is (serviceTurnRecovery.js): its request goes on once now, in the same conversation and as the person it
+   * ran for, with the restart's note leading its resume, under the loop rule (decideResume), and its entry says the
+   * work carried on.
+   * @returns {Promise<{ resumed: true } | { waiting: true } | { skipped: true, reason: string }>} what it did
+   */
+  async function resumeAfterPlannedRestart(sessionId, options) {
+    let result;
+    await exclusiveAfterWrites(sessionId, options, async context => {
+      const state = await read(context.runtime.store, sessionId);
+      const note = await plannedRestart().resumeNote({ sessionId });
+      const reason = note ? await notResumedAfterPlannedRestart(sessionId, context, state) : "not-restarted";
+      if (reason) {
+        result = { skipped: true, reason };
+        return;
+      }
+      const ended = await serverRun.endOf(state.serverRunId || "");
+      const interruption = {
+        key: `${activeMessage(state).messageId || state.messageId}:${state.turnId || ""}`,
+        ...(ended || { cause: INTERRUPTION_CAUSE.RESTART, at: new Date().toISOString() })
+      };
+      // The same turn, its interruption decided already, is not resumed again.
+      if (nextTurnInterruptions(state.interruptions, interruption, Date.now()).repeated) {
+        result = { skipped: true, reason: "already-resumed" };
+        return;
+      }
+      await records.prepareFollowup(context, state, state.stage ?? null, { resumeNote: `[${note}]` });
+      await decideResume(sessionId, context, state, interruption, options);
+      result = state.status === "working" ? { resumed: true } : { waiting: true };
+    });
+    return result;
+  }
+
   async function stopRequest(sessionId, context, state, error) {
     const ended = await serverRun.endOf(state.serverRunId || "");
     const interruption = {
@@ -301,7 +350,8 @@ function createAssistantRoutingInterruptions({
     afterInterruption,
     resumeUnsent,
     scheduleResume,
-    stopUnrecovered
+    stopUnrecovered,
+    resumeAfterPlannedRestart
   });
 }
 

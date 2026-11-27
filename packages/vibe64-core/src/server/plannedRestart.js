@@ -6,8 +6,9 @@
 //
 // How a notice ends:
 // - The editor stops while it is in force and starts again at or after a minute before its restart time, finding no
-//   notice file: it restarted. The chats that were working resume (their resume names what was stopped), and the
-//   editor's banner says so once.
+//   notice file: it restarted. The chats that were working resume (their resume names what was stopped), and so does
+//   each chat it told whose turn ended before the restart, as an AI does once it has written where it is
+//   (toldBeforeRestart). The editor's banner says so once.
 // - It expires, or the host removes it, while the editor runs, or the editor starts again earlier than that: it did
 //   not happen. The chats told about it hear so; nothing needs clearing.
 //
@@ -46,6 +47,7 @@ const RESTARTED_SHOWN_MS = 30 * 60_000;
 
 const component = "vibe64.planned_restart";
 const commandText = command => String(command || "").replace(/\s+/gu, " ").trim().slice(0, COMMAND_TEXT_MAX);
+const chatKey = chat => `${chat.sessionId}\n${chat.conversationId || ""}`;
 
 /**
  * @param {object} [options]
@@ -393,8 +395,8 @@ function createPlannedRestart({
    */
   function noteTold({ sessionId, conversationId = "", sessionName = "", steered = false }) {
     if (!current() || !record) return;
-    const key = `${sessionId}\n${conversationId}`;
-    if (record.chats.some(chat => `${chat.sessionId}\n${chat.conversationId}` === key) || record.chats.length >= LISTED_MAX) return;
+    const key = chatKey({ sessionId, conversationId });
+    if (record.chats.some(chat => chatKey(chat) === key) || record.chats.length >= LISTED_MAX) return;
     record = { ...record, chats: [...record.chats, { sessionId, conversationId, sessionName: String(sessionName || ""), steered }] };
     void save(record);
   }
@@ -430,6 +432,17 @@ function createPlannedRestart({
     if (!restarted) return "";
     const at = Date.parse(restarted.stoppedAt || restarted.restartAt);
     return plannedRestartResumeMessage(at, stoppedIn(restarted, String(sessionId || "")));
+  }
+
+  /**
+   * Whether the notice this process restarted for told the chat (steered it, or led a turn of it with the note), so
+   * restart recovery resumes it even when its turn ended before the restart (serviceTurnRecovery.js).
+   * @param {{ sessionId: string, conversationId?: string }} chat
+   */
+  async function toldBeforeRestart(chat) {
+    await (ready || Promise.resolve());
+    const key = chatKey(chat);
+    return Boolean(restarted?.chats.some(told => chatKey(told) === key));
   }
 
   /** What the editor's banner shows: the notice in force, and for a while after the restart what it stopped. */
@@ -482,6 +495,7 @@ function createPlannedRestart({
     start,
     status,
     stop,
+    toldBeforeRestart,
     trackCommand,
     warning
   });

@@ -69,8 +69,13 @@ Once the workspace is back, every page shows a green message, once:
 
 The AI in each session that was working resumes by itself, told what was
 stopped ("Restarted at 07:40. This was stopped: your turn; the command
-`npm test`. Continue from your notes."). Commands that were stopped are not
-rerun for you; the AI reruns what it needs. **Dismiss** hides the message.
+`npm test`. Continue from your notes."). So does an AI that was told about the
+restart and ended its turn before it, as an AI does once it has written where
+it is: its chat goes on once, with the same note, as the person who sent the
+request. A turn you stopped yourself during the five minutes stays stopped;
+choose **Continue** or send a message when you want it to go on. Each chat is
+resumed once, never twice. Commands that were stopped are not rerun for you;
+the AI reruns what it needs. **Dismiss** hides the message.
 **Reload** appears only when the editor itself changed in the update; reload
 then to use the new version. The red crash banner is for real crashes only: a
 planned restart stops the editor cleanly and doesn't show it (see the Crashes
