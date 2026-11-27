@@ -1,7 +1,7 @@
 import path from "node:path";
 
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { connectedSyncRunning } from "@local/vibe64-project/server/connectedSync";
+import { connectedSyncRunning, stopConnectedSync } from "@local/vibe64-project/server/connectedSync";
 import { executionCleanupRequired } from "@local/vibe64-execution/server";
 import { logOperationalEvent, sanitizeOperationText } from "@local/vibe64-core/server/logging";
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
@@ -133,7 +133,9 @@ function createWorkspaceSetupExecution({
   }
 
   async function ensureConnectedSync({ runtime, session, setup, runtimes, sourcePath, restart = false }) {
-    if (!setup?.connectedDevelopment?.adapters || (!restart && connectedSyncRunning(session.sessionId))) return;
+    // With no typed dependency left, the sync a removed one started has nothing to keep in step.
+    if (!setup?.connectedDevelopment?.adapters) return stopConnectedSync(session.sessionId);
+    if (!restart && connectedSyncRunning(session.sessionId)) return;
     await project.syncConnectedRepositories({
       session,
       runCommand: await connectedCommand({ runtime, session, setup, runtimes, sourcePath, label: "Syncing connected packages" })

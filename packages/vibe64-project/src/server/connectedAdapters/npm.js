@@ -472,7 +472,10 @@ async function restoreNpm({ keep, trees }) {
     if (!gone.length) continue;
     for (const record of gone) {
       const restored = await restoreCopy(tree, record);
-      lines.push(`[Connected] ${record.name} at ${path.join(tree, record.path)} ${restored ? "is the published copy again" : "was removed; install the project's dependencies again"}.`);
+      const at = path.join(tree, record.path);
+      lines.push(restored
+        ? `[Connected] Put back the published ${record.name} at ${at} in place of the removed connection's copy.`
+        : `[Connected] Removed the connected copy of ${record.name} at ${at}: npm's published copy was not kept, so install the project's dependencies again.`);
     }
     await writeState(tree, { ...state, copies: state.copies.filter(record => keep.includes(record.repository)) });
     await forgetViteDependencies(tree);
