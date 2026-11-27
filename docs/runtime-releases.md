@@ -35,7 +35,8 @@ they differ, it bumps the patch version, commits `Release vibe64@<version>`,
 pushes to `main`, rebuilds and retests the artifact, and publishes that exact
 tarball. `npm run npm-publish -- --dry-run` builds and compares without
 writing, pushing or publishing. A release workflow that consumes this package
-runs this command after pinning released JSKIT and Genesis versions. That pin
+runs this command on the JSKIT and Genesis versions that the lockstep pin run
+after their release pinned. That pin
 (`jskit-release pin`) runs the package's `jskitRelease.afterPin` after its
 install: the newly pinned genesis-compiler's `genesis skills sync`, so a
 Genesis bump brings Vibe64's own Genesis agent skill copies (`.agents/skills`)
