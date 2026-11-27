@@ -510,7 +510,7 @@ JSKIT's `browserTestConfig()` gives each worker its own server's environment,
 its copy of the test database, from `@jskit-ai/jskit-catalog` 0.2.113; with an
 older one every worker would get the first server's, so the wrapper refuses a
 run of several app servers through that harness before any test starts, naming
-`npm run jskit:update` and `--workers 1` (`agentPlaywrightCommandSource.js`).
+`npm run jskit:update` and `--workers 1` (`agentPlaywrightConfigWarningsSource.js`).
 A run with several servers restores the previous Preview as it ends, as a
 refused or cancelled run does, instead of waiting as `restore_pending`: its
 target holds a server and a database copy per worker. A run with one is
