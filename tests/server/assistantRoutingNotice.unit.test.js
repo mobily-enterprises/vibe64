@@ -60,12 +60,13 @@ test("every waiting state's plan line agrees with the notice: the same label, an
           const notice = assistantRoutingNotice(state, { mode, busy, pendingAction });
           const line = workPlanStatusLine(implementing, { request: state, busy, action: notice.action });
           const where = JSON.stringify({ state, busy, pendingAction, mode, line });
-          assert.match(line, /^(?:Paused: (?:item 2 of 3, Replies join their thread|changing the plan)\. |Plan: ready)/u, where);
+          assert.match(line, /^(?:(?:Paused|Waiting): (?:item 2 of 3, Replies join their thread|changing the plan)\. |Plan: ready)/u, where);
           assert.doesNotMatch(line, /Continue to resume/u, where);
-          // A paused plan says the person's request runs while the assistant's turn holds the chat, and only then.
-          if (line.startsWith("Paused: ")) assert.equal(line.includes(". Your request is running now. "), busy === "turn", where);
+          // Only the person's Stop pauses a plan; one that waits otherwise says so, and no line says whose turn runs.
+          if (!line.startsWith("Plan: ")) assert.equal(line.startsWith("Paused: "), state.stopped === true, where);
+          assert.doesNotMatch(line, /Your request/u, where);
           if (!notice.action) {
-            assert.match(line, /^Paused: .*\. Send a message to go on$/u, where);
+            assert.match(line, /^(?:Paused|Waiting): .*\. Send a message to go on$/u, where);
             continue;
           }
           // The line's instruction is the button's exact label, and only while the button can be pressed.

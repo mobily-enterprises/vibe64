@@ -114,6 +114,48 @@ test("a paused plan's line never tells the person to press an action they can't 
     "2 files changed since the plan's last update");
 });
 
+test("only the person's Stop pauses a plan: one that waits for Continue otherwise says Waiting, and never says whose turn runs", () => {
+  // Seen on 28 Nov 2026 in a Senior chat: "Paused: item 6 of 14, … on the test machine.. Your request is running now.
+  // Continue implementation is available when this answer ends" while the assistant's turn was still open, waiting on
+  // its background commands, and nobody had stopped the plan. The request waited for Continue (not stopped, its reason
+  // in the notice's Details); a message the person sends replaces a waiting request or joins the running turn, so the
+  // turn running beside it was never a request of theirs.
+  const title = "Referee green; statement sizes and memory measured before and after; browser part timed once on the test machine.";
+  const step = { step: "implementation", item: 6, items: 14, title };
+  const named = "item 6 of 14, Referee green; statement sizes and memory measured before and after; browser part timed once on the test machine";
+  const waiting = { status: "waiting", stage: "implementation", delivery: "pending", followup: { messageId: "followup" },
+    error: "The turn ended without a confirmed workflow outcome. Resume the retained stage to finish it." };
+  const held = action("Continue implementation", { enabled: false, waits: "available when this answer ends" });
+  assert.equal(workPlanStatusLine(step, { request: waiting, busy: "turn", action: held }),
+    `Waiting: ${named}. Continue implementation is available when this answer ends`);
+  assert.equal(workPlanStatusLine(step, { request: waiting, action: action("Continue implementation") }),
+    `Waiting: ${named}. Continue implementation to resume`);
+  // The person's Stop pauses it, whatever is still ending.
+  assert.equal(workPlanStatusLine(step, { request: { ...waiting, stopped: true }, busy: "turn", action: held }),
+    `Paused: ${named}. Continue implementation is available when this answer ends`);
+  assert.equal(workPlanStatusLine(step, { request: { ...waiting, stopped: true, followup: null } }), `Paused: ${named}. Send a message to go on`);
+});
+
+test("a title its author ended with a full stop keeps one stop in every line that goes on after it", () => {
+  const item = { step: "implementation", item: 2, items: 3, title: "Replies join their thread. " };
+  const owed = { status: "waiting", stage: "implementation", delivery: "pending", followup: { messageId: "followup", owed: true } };
+  assert.equal(workPlanStatusLine(item), "Plan: implementing item 2 of 3, Replies join their thread");
+  assert.equal(workPlanStatusLine(item, { freshness: { behind: true, changed: "2 files changed since" } }),
+    "Plan: implementing item 2 of 3, Replies join their thread · 2 files changed since the plan's last update");
+  assert.equal(workPlanStatusLine(item, { request: owed }), "Plan: item 2 of 3, Replies join their thread, starts when this answer ends");
+  const stopped = { status: "waiting", stage: "pass", delivery: "pending", followup: { messageId: "followup" }, stopped: true };
+  const pass = { step: "pass", item: 2, items: 3, title: "Security pass.", scope: "the billing screens." };
+  assert.equal(workPlanStatusLine(pass), "Plan: pass Security (2 of 3)");
+  assert.equal(workPlanStatusLine(pass, { request: { ...owed, stage: "pass" } }), "Plan: pass Security (2 of 3) starts when this answer ends");
+  assert.equal(workPlanStatusLine(pass, { request: stopped, action: action("Continue the passes") }),
+    "Paused: Security pass (the billing screens). Continue the passes to resume");
+  assert.equal(workPlanStatusLine({ ...pass, title: "Deslop.", scope: "" }, { request: stopped, action: action("Continue the passes") }),
+    "Paused: Deslop. Continue the passes to resume");
+  // A title that ends with its own question or exclamation mark is a sentence already.
+  assert.equal(workPlanStatusLine({ ...item, title: "Why does sign-in fail?" }, { request: { ...owed, followup: { messageId: "followup" } },
+    action: action("Continue implementation") }), "Waiting: item 2 of 3, Why does sign-in fail? Continue implementation to resume");
+});
+
 test("a paused plan names what is paused: the pass and its scope, while the person's own request runs", () => {
   // Seen on 26 Nov 2026: "Plan: paused" while the person's request ran, with nothing saying it was the UI pass over
   // the whole app that waited.

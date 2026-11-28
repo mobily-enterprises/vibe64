@@ -65,8 +65,8 @@ async function toReview(t, preferences, plan = PLAN) {
 }
 
 /** Senior's review proves the item and completes the plan: the plan is finished. */
-async function finishedPlan(t, preferences = { mode: "auto" }) {
-  const { f, saves } = await toReview(t, preferences);
+async function finishedPlan(t, preferences = { mode: "auto" }, plan = PLAN) {
+  const { f, saves } = await toReview(t, preferences, plan);
   await writePlan(f, (text) => text.replace("- [~] Required-name", "- [x] Required-name"), "review");
   await change(f, "complete", "review");
   await finish(f, "complete");
@@ -93,6 +93,13 @@ test("a finished plan is completed, archived and saved as before, and then Vibe6
     { kind: "checks", label: "Yes", enabled: false, waits: "available when this answer ends", progress: "" });
   assert.deepEqual(assistantRoutingNotice(f.state(), { pendingAction: "run-checks" }).action,
     { kind: "checks", label: "Yes", enabled: false, waits: "", progress: "Starting…" });
+});
+
+test("a finished plan whose title ends with a full stop is archived with one stop, not two", async (t) => {
+  const { f } = await finishedPlan(t, { mode: "auto" }, PLAN.replace("# Required-field validation", "# Required-field validation."));
+  const notices = noticeTexts(f);
+  assert.ok(notices.includes("Completed plan archived: Required-field validation.\n\n[View plan history](#vibe64-plan-history)"),
+    notices.join("\n"));
 });
 
 test("with Automatically save changes off, the finished plan is not saved and Vibe64 still asks once", async (t) => {
