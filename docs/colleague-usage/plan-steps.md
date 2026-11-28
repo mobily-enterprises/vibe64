@@ -65,6 +65,12 @@ from the plan itself each time it changes:
 | **Plan: ready, Implement plan to start** | Senior made the plan; it waits for your go-ahead (during an answer: **Plan: ready · Implement plan is available when this answer ends**) |
 | **Plan: completed** | The plan is completed and not yet archived |
 
+A message you send while the plan's turn runs joins that turn. If the AI
+service ends the turn just as your message reaches it (for example because the
+signed-in AI account changed) and your message starts a turn of its own, that
+turn carries on the plan's step: the plan stays where it was, and moves on by
+itself when that turn ends. Only **Stop** pauses it.
+
 The line updates as items are ticked. While files changed since the AI last
 brought the plan up to date, the line ends with that count, such as **Plan:
 implementing item 1 of 10, Store threads · 12 files changed since the plan's

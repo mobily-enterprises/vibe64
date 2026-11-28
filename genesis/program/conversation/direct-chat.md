@@ -123,6 +123,15 @@ cancelled is not sent, and its turn is stopped if a Cancel arrives during the
 send. Its entry in a workflow's steering list joins the request's latest record
 in one session mutation, unless the request was stopped or replaced. A message
 for no running turn, a cancelled or repeated one, and new requests still wait.
+Either way the steer joins through `joinSteering`: one its engine started as a
+turn of its own (`deliveryMode: "new_turn"`) because the request's turn it was
+sent into ended as it went (the engine stopped that turn to change the
+signed-in account, say) is the request's turn from then on. The request takes
+the new turn's id and goes on working, without the follow-up, error or timed
+resume the replaced turn's end prepared, so its agent can report the step's
+outcome and the step is decided when that turn ends. The replaced turn's end
+then matches no request. A request the person stopped, one that finished, and
+one whose next step is being sent or was sent stay as they are.
 Claude reads a steer only when its running tool call returns, and the steer's
 label asks it to answer there and carry on. JSKIT's native Claude turn owes
 such a message a reply: when its replay arrives while an earlier input of the

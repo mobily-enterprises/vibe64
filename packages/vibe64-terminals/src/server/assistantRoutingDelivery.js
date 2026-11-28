@@ -36,6 +36,7 @@ import {
   activeMessage,
   withSelection,
   usesWorkPlan,
+  receiptTurnId,
   recentVisibleMessages,
   savesAutomatically
 } from "./assistantRoutingRequests.js";
@@ -400,7 +401,7 @@ function createAssistantRoutingDelivery({
     state.status = "working";
     state.delivery = "accepted";
     state.serverRunId = serverRun.id;
-    state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";
+    state.turnId = receiptTurnId(result);
     rememberPlanCheckStart(routingState, records.keyFor(sessionId, context), messageId, planCheckFrom);
     if (state.workflow === true || state.mode === "auto" && state.stage === "planning") {
       routingState.liveFollowupRequests.set(records.keyFor(sessionId, context), state.messageId);

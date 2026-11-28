@@ -21,6 +21,8 @@ const CANCELLED_KEY = "assistant_cancelled_messages";
 const MAX_CANCELLED_MESSAGES = 50;
 
 const activeMessage = state => state.followup || state.input;
+// The turn an engine's receipt for a message names: the turn it started, or the running turn it joined.
+const receiptTurnId = result => result?.turnId || result?.turn?.id || result?.codexAgentTurn?.turnId || "";
 /**
  * The role the plan command acts as for the request's running turn: "" (read only) for a task or no working request;
  * "pass" for a plan's pass, which ticks only its own Passes item; "review" for Auto's Senior check in a review
@@ -265,6 +267,7 @@ export {
   prepareCopiedAssistantRouting,
   read,
   readCancelled,
+  receiptTurnId,
   recentVisibleMessages,
   turnLastUserMessageId,
   savesAutomatically,
