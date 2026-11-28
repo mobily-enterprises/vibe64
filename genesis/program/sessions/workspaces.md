@@ -305,13 +305,15 @@ session, and no runtime mounts before the list names the selected session.
 The session collection's existing completed-renewal reconciliation selects the
 exact unique `renewed_from` successor. A renewal goes on with the same work in
 its successor, so an address naming the renewed session, gone from the list,
-hands over to the successor with its `?chat=` and `?conversation=` once the
-renewal confirms it (`selectionRenewalConfirmed` in
+hands over to the successor with its `?chat=` and `?conversation=` only once
+the renewal confirms it (`selectionRenewalConfirmed` in
 `useVibe64SelectedSessionRenewal.js`: completed, from the session the shown one
 was renewed from, naming exactly the shown one, the list's only successor);
-only a switch the person makes drops the chat. While the renewal is running, failed or unconfirmed, the
-selection, and so the address, keeps the predecessor. The original runtime-host
-renewal selection callback and controller fences are unchanged.
+only a switch the person makes drops the chat. While the renewal is running or
+failed, the selection, and so the address, keeps the predecessor; while it is
+unconfirmed (none known, or naming another successor) the address keeps it even
+when the collection's fallback selects the listed successor. The original
+runtime-host renewal selection callback and controller fences are unchanged.
 
 The mounted runtime respects an explicitly empty navigation projection in both
 the session toolbar and dashboard. Only an omitted projection uses the full

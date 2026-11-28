@@ -10,8 +10,8 @@ import { selectedSessionIdFromRoute } from "@/composables/useVibe64SessionSelect
  * without a session keeps none: the project then opens the person's last opened session, which the selection
  * publishes. A shown session the list does not name yet (a new session, a link still checking its renewal)
  * waits for the list, and a route that already shows another project keeps its address. A renewal goes on with
- * the same work in its successor: an address naming the renewed session, gone from the list, moves to the successor
- * its renewal confirms with the same chat.
+ * the same work in its successor: an address naming the renewed session, gone from the list, moves only to the
+ * successor its renewal confirms, and with the same chat.
  * @param {{
  *   route?: { params?: Record<string, unknown>, query?: Record<string, unknown> },
  *   projectSlug?: string,
@@ -29,7 +29,7 @@ function sessionAddressQuery({ route = {}, projectSlug = "", renewal = {}, shown
   if (shownId && !sessionIdExistsInList(shownId, sessions)) return null;
   const renewedAddress = Boolean(renewal.fromId) && renewal.fromId === addressSessionId &&
     !sessionIdExistsInList(addressSessionId, sessions);
-  if (renewedAddress && renewal.confirmed === true) return { ...route.query, session: shownId };
+  if (renewedAddress) return renewal.confirmed === true ? { ...route.query, session: shownId } : null;
   const { session: _session, conversation: _conversation, chat: _chat, ...query } = route.query || {};
   return shownId ? { ...query, session: shownId } : query;
 }
