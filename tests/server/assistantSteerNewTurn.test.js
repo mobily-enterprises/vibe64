@@ -12,6 +12,7 @@ import { fixture, reportOutcome } from "../fixtures/assistantRouting.js";
 const request = { messageId: "request-1", message: "Execute the plan", submissionKind: "send" };
 const steer = { messageId: "steer-1", message: "How much work is left on item 6?", submissionKind: "steer" };
 const ACCOUNT_CHANGED = "The signed-in Claude account changed.";
+const RESUME = "Continue after the interruption.";
 const end = (turnId, state = "completed", error = "") =>
   ({ payload: { agentRun: { active: false, state, error, providerTurnId: turnId } } });
 const running = (turnId) => async () => ({ turn: { active: true, id: turnId } });
@@ -39,6 +40,7 @@ async function assertPlanGoesOn(f) {
   await f.service.afterTurn("session-1", end("turn-2"), f.context);
   assert.equal(f.sends.length, 3, "the plan's next turn");
   assert.equal(f.sends[2].input.displayMessage, "Continue implementation.");
+  assert.ok(!f.sends.some(({ input }) => input.displayMessage === RESUME), "no resume on top of the steer's turn");
   assert.deepEqual([f.state().status, f.state().turnId], ["working", "turn-3"]);
   // The stopped turn's end, and the steered turn's, published again: nothing continues twice.
   await f.service.afterTurn("session-1", end("turn-1", "interrupted", ACCOUNT_CHANGED), f.context);
@@ -144,4 +146,28 @@ test("a plan turn the person stopped stays paused whatever else ended it", async
   await f.service.afterTurn("session-1", end("turn-1", "interrupted", ACCOUNT_CHANGED), f.context);
   assert.equal(f.sends.length, 1);
   assert.deepEqual([f.state().status, f.state().error], ["waiting", "Paused at your request."]);
+});
+
+test("the stopped turn's end decided before the steer is sent resumes the step once, and the steer joins that resumed turn", async (t) => {
+  const f = await implementing(t);
+  // turn-1's end is decided between the steer's admission, which saw turn-1 running, and its dispatch: the resume
+  // goes first, and the steer reaches the engine while the resumed turn runs, so it joins that turn.
+  f.agent.sessionState = idle;
+  await f.service.afterTurn("session-1", end("turn-1", "interrupted", ACCOUNT_CHANGED), f.context);
+  assert.deepEqual([f.sends.length, f.sends[1].input.displayMessage, f.state().turnId], [2, RESUME, "turn-2"]);
+  f.agent.sessionState = running("turn-1");
+  f.deliverNextAs({ deliveryMode: "steer", turnId: "turn-2" });
+  await f.service.send("session-1", steer, f.context);
+  assert.deepEqual([f.state().status, f.state().delivery, f.state().turnId], ["working", "accepted", "turn-2"]);
+  assert.deepEqual(f.state().steering.map(({ messageId }) => messageId), ["steer-1"]);
+  f.agent.sessionState = running("turn-2");
+  await reportOutcome(f, "continue", { involved: true });
+  f.agent.sessionState = idle;
+  await f.service.afterTurn("session-1", end("turn-2"), f.context);
+  assert.equal(f.sends.length, 4, "the plan's next turn, once");
+  assert.equal(f.sends[3].input.displayMessage, "Continue implementation.");
+  assert.equal(f.sends.filter(({ input }) => input.displayMessage === RESUME).length, 1);
+  await f.service.afterTurn("session-1", end("turn-1", "interrupted", ACCOUNT_CHANGED), f.context);
+  await f.service.afterTurn("session-1", end("turn-2"), f.context);
+  assert.equal(f.sends.length, 4);
 });
