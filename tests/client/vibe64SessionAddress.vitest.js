@@ -1,4 +1,4 @@
-import { computed, createRenderer, defineComponent, reactive, ref, watch } from "vue";
+import { computed, createRenderer, defineComponent, effectScope, reactive, ref, watch } from "vue";
 import { createMemoryHistory, createRouter, useRoute, useRouter } from "vue-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { projectSlugFromRoute } from "../../src/lib/vibe64ProjectScope.js";
@@ -47,7 +47,7 @@ function sessionView(sessionId) {
  * The project page's session selection and its address, as the session collection wires them, with a host's
  * Colleague navigation and each session's view when conversationQuery is set.
  */
-async function mountPage(start, { before = "", sessions = ["s1", "s2"], conversationQuery = false } = {}) {
+async function mountPage(start, { before = "", sessions = ["s1", "s2"], conversationQuery = false, project = null } = {}) {
   const router = createRouter({
     history: browserLikeHistory(),
     routes: [
@@ -59,14 +59,22 @@ async function mountPage(start, { before = "", sessions = ["s1", "s2"], conversa
   await router.push(start);
   const list = ref(sessions.map(sessionId => ({ sessionId })));
   const views = Object.fromEntries(["s1", "s2", "s3"].map(id => [id, sessionView(id)]));
-  const page = { list, router, route: router.currentRoute, views };
+  const page = { list, renewal: { fromId: ref(""), confirmed: ref(false) }, router, route: router.currentRoute, views };
   let slots = null;
   const Root = defineComponent({
     setup() {
       const route = useRoute();
-      const projectSlug = computed(() => projectSlugFromRoute(route));
-      const selection = useVibe64SessionSelection({ projectSlug, rememberedId: () => "", route });
-      useVibe64SessionAddress({ projectSlug, route, router: useRouter(), selectedSessionId: selection.selectedId, sessions: list });
+      const projectSlug = project || computed(() => projectSlugFromRoute(route));
+      // The project page's own scope: the page closes, while the app and its router stay.
+      const pageScope = effectScope();
+      const selection = pageScope.run(() => {
+        const pageSelection = useVibe64SessionSelection({ projectSlug, rememberedId: () => "", route });
+        useVibe64SessionAddress({
+          projectSlug, renewal: page.renewal, route, router: useRouter(), selectedSessionId: pageSelection.selectedId, sessions: list
+        });
+        return pageSelection;
+      });
+      page.close = () => pageScope.stop();
       page.selection = selection;
       if (conversationQuery) {
         useVibe64ColleagueNavigation({ conversationQuery: true });
@@ -105,6 +113,29 @@ describe("the session the address names", () => {
     // An address without a session keeps none: the project opens the last opened one.
     expect(sessionAddressQuery({ ...shown, route: route({ pane: "dashboard" }), shownSessionId: "s2" })).toBe(null);
     expect(sessionAddressQuery({ ...shown, route: route({ session: ["s1", "s2"] }), shownSessionId: "s1" })).toBe(null);
+  });
+
+  it("is a renewal's successor, once its renewal confirms it, with the same chat: the work goes on there", () => {
+    const sessions = [{ sessionId: "s1" }, { sessionId: "s2" }];
+    const route = (session) => ({ params: { slug: "demo" }, query: { session, chat: "main", conversation: "c1", pane: "dashboard" } });
+    const handover = { projectSlug: "demo", sessions, shownSessionId: "s2" };
+
+    expect(sessionAddressQuery({ ...handover, route: route("renewed"), renewal: { fromId: "renewed", confirmed: true } }))
+      .toEqual({ session: "s2", chat: "main", conversation: "c1", pane: "dashboard" });
+    // A switch the person makes, from a session still listed to one renewed from it, drops the chat.
+    expect(sessionAddressQuery({ ...handover, route: route("s1"), renewal: { fromId: "s1", confirmed: true } }))
+      .toEqual({ session: "s2", pane: "dashboard" });
+  });
+
+  it("stays the renewed session while its renewal does not confirm the successor shown", () => {
+    const sessions = [{ sessionId: "s1" }, { sessionId: "s2" }];
+    const route = { params: { slug: "demo" }, query: { session: "renewed", chat: "main" } };
+    const shown = { route, projectSlug: "demo", sessions, shownSessionId: "s2" };
+
+    // No renewal known for it, or one naming another successor: the selection may fall back to s2, the address waits.
+    expect(sessionAddressQuery({ ...shown, renewal: { fromId: "renewed", confirmed: false } })).toBe(null);
+    // A session that has gone with no renewal behind the one shown gives way to it.
+    expect(sessionAddressQuery({ ...shown, renewal: { fromId: "", confirmed: false } })).toEqual({ session: "s2" });
   });
 });
 
@@ -172,6 +203,31 @@ describe("the project page's address", () => {
     await settle();
     expect(page.selection.selectedId.value).toBe("s2");
     expect(page.route.value.query).toEqual({ session: "s2" });
+  });
+
+  it.each(["the page closes", "the project changes"])("cancels a change still pending when %s", async (change) => {
+    const project = ref("demo");
+    const page = await mountPage("/app/project/demo?session=s1", { project });
+    let started = () => {};
+    let release = () => {};
+    const pending = new Promise(resolve => { started = resolve; });
+    const held = new Promise(resolve => { release = resolve; });
+    const failures = [];
+    page.router.beforeEach(async (to) => {
+      if (to.query.session === "s2") { started(); await held; }
+    });
+    page.router.afterEach((to, _from, failure) => {
+      if (to.query.session === "s2") failures.push(failure);
+    });
+    page.selection.select("s2");
+    await pending;
+    if (change === "the page closes") page.close();
+    else project.value = "shop";
+    release();
+    await settle();
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toBeTruthy();
+    expect(page.route.value.query).toEqual({ session: "s1" });
   });
 
   it("keeps an address without a session without one", async () => {
