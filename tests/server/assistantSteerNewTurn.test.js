@@ -171,3 +171,40 @@ test("the stopped turn's end decided before the steer is sent resumes the step o
   await f.service.afterTurn("session-1", end("turn-2"), f.context);
   assert.equal(f.sends.length, 4);
 });
+
+// 28 Nov, 12:05: the person switched the workspace's Claude account while the plan's implementation turn ran. The
+// engine stopped the turn for it, and every resume of the plan's request, Vibe64's own and the person's Continue, was
+// refused: "The selected AI connection changed. Cancel this request and send it again." The request kept the
+// connection it was admitted on, though Main chat and a goal follow the account connected now.
+const switchAccount = (f, change) => {
+  const { engineId, modelProviderId } = f.assignments.senior;
+  f.connections.set(`${engineId}:${modelProviderId}`, { connectionIdentity: "replacement-account", ...change });
+};
+const seniorConnection = (f) => (f.state().decision.seniorJuniorPair?.senior ?? f.state().decision).connectionIdentity;
+
+test("a plan turn the engine stopped because the signed-in account changed resumes on the account connected now", async (t) => {
+  const f = await implementing(t);
+  switchAccount(f);
+  f.agent.sessionState = idle;
+  await f.service.afterTurn("session-1", end("turn-1", "interrupted", ACCOUNT_CHANGED), f.context);
+  assert.equal(f.sends.length, 2, f.state().error);
+  assert.equal(f.sends[1].input.displayMessage, RESUME);
+  assert.deepEqual([f.state().status, f.state().delivery, f.state().turnId], ["working", "accepted", "turn-2"]);
+  assert.equal(seniorConnection(f), "replacement-account", "the request now holds to the account connected now");
+});
+
+test("a plan's request whose new account cannot be used waits, and Continue resumes it once the account can be", async (t) => {
+  const f = await implementing(t);
+  switchAccount(f, { available: false });
+  f.agent.sessionState = idle;
+  await f.service.afterTurn("session-1", end("turn-1", "interrupted", ACCOUNT_CHANGED), f.context);
+  assert.equal(f.sends.length, 1, "an account the request's person cannot use sends nothing");
+  assert.equal(f.state().status, "waiting");
+  assert.ok(f.state().followup?.messageId, "Continue has the prepared resume to send");
+  switchAccount(f);
+  await f.service.send("session-1", { ...request, reviewAction: "retry" }, f.context);
+  assert.equal(f.sends.length, 2, f.state().error);
+  assert.equal(f.sends[1].input.displayMessage, RESUME);
+  assert.equal(f.state().status, "working");
+  assert.equal(seniorConnection(f), "replacement-account");
+});
