@@ -1,48 +1,8 @@
-import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { runCaptureCommand } from "@local/vibe64-execution/server/capture";
 import { configureVibe64Host } from "@local/vibe64-execution/server/hostProfile";
-import {
-  applySessionWorkUpdateDirect,
-  captureSessionWorkUpdateCheckpointDirect,
-  checkSessionUpdatesDirect,
-  prepareSessionWorkUpdateDirect,
-  regenerateSessionWorkUpdateDirect
-} from "./sessionWorkUpdate.js";
-import { inspectSessionUpdateFailureDirect } from "./sessionWorkUpdateRecovery.js";
-import {
-  inspectSessionChangeDiffDirect,
-  inspectSessionChangesDirect,
-  inspectSessionWorkDirect,
-  prepareSessionWorkSaveMessageDirect,
-  refreshSessionWorkSaveCacheDirect,
-  saveSessionWorkDirect
-} from "./sessionWorkSave.js";
+import { performSessionWorkOperation, sessionWorkOperationFailure } from "./sessionWorkOperations.js";
 
 const MAX_INPUT_BYTES = 1024 * 1024;
-const OPERATION_IMPLEMENTATIONS = {
-  "change-diff": inspectSessionChangeDiffDirect,
-  "changes": inspectSessionChangesDirect,
-  "check-updates": checkSessionUpdatesDirect,
-  "save": async (input) => {
-    const { refreshGenesisCities } = await import("@local/vibe64-genesis/server");
-    return saveSessionWorkDirect({
-      ...input,
-      deferCacheMaintenance: true,
-      refreshDerivedArtifacts: refreshGenesisCities
-    });
-  },
-  "save-maintenance": refreshSessionWorkSaveCacheDirect,
-  "save-message": prepareSessionWorkSaveMessageDirect,
-  "work": inspectSessionWorkDirect,
-  "update-failure": inspectSessionUpdateFailureDirect,
-  "update-checkpoint": captureSessionWorkUpdateCheckpointDirect,
-  "update-prepare": prepareSessionWorkUpdateDirect,
-  "update-derived": async (input) => {
-    const { refreshGenesisCities } = await import("@local/vibe64-genesis/server");
-    return regenerateSessionWorkUpdateDirect({ ...input, refreshDerivedArtifacts: refreshGenesisCities });
-  },
-  "update-apply": applySessionWorkUpdateDirect
-};
 
 // Each Git command runs in its own process group, which a stop of this process does not reach. A stage
 // Cancel can stop (`stoppable`) stops them itself when it is stopped, and then answers as they fail.
@@ -75,41 +35,14 @@ async function readInput() {
   return JSON.parse(serialized || "{}");
 }
 
-/**
- * The failure the parent rethrows: a refusal keeps its status, code and message code; any other failure is a 500.
- * @param {unknown} error
- */
-function errorResponse(error) {
-  return {
-    error: {
-      code: String(error?.code || "vibe64_session_work_operation_failed"),
-      details: error?.details && typeof error.details === "object" && !Array.isArray(error.details)
-        ? error.details
-        : {},
-      message: String(error?.message || "Session repository operation failed."),
-      ...(error?.messageCode ? { messageCode: error.messageCode, messageParams: error.messageParams } : {}),
-      status: error instanceof AppError ? error.status : 500
-    },
-    ok: false
-  };
-}
-
 try {
   const payload = await readInput();
   if (payload?.stoppable === true) process.once("SIGTERM", () => stopping.abort());
   configureVibe64Host(payload?.hostProfile || null);
-  const implementation = OPERATION_IMPLEMENTATIONS[String(payload?.operation || "")];
-  if (!implementation) {
-    const error = new Error("Unsupported session repository operation.");
-    error.code = "vibe64_session_work_operation_unsupported";
-    throw error;
-  }
-  const value = await implementation({
-    ...(payload.input && typeof payload.input === "object" ? payload.input : {}),
-    runCommand: runLocalCommand
-  });
-  process.stdout.write(JSON.stringify({ ok: true, value }));
+  const response = await performSessionWorkOperation(payload, { runCommand: runLocalCommand });
+  process.stdout.write(JSON.stringify(response));
+  if (!response.ok) process.exitCode = 1;
 } catch (error) {
-  process.stdout.write(JSON.stringify(errorResponse(error)));
+  process.stdout.write(JSON.stringify(sessionWorkOperationFailure(error)));
   process.exitCode = 1;
 }

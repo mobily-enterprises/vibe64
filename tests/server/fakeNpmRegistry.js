@@ -1,12 +1,44 @@
 // A registry on localhost holding the packages a test packs, so real npm installs them offline.
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, readlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
+
+// What npm pack makes of a folder depends only on the files in it, and a test file's fixtures publish
+// the same folders test after test (npm pack is most of a fixture's time): each folder content is
+// packed once per process, and a later publish of the same content takes those bytes.
+const packedByContent = new Map();
+
+async function folderContent(dir, relative = "", hash = createHash("sha256")) {
+  const entries = await readdir(path.join(dir, relative), { withFileTypes: true });
+  for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+    const child = path.join(relative, entry.name);
+    if (entry.isDirectory()) {
+      hash.update(`dir ${child}\0`);
+      await folderContent(dir, child, hash);
+    } else if (entry.isSymbolicLink()) {
+      hash.update(`link ${child} ${await readlink(path.join(dir, child))}\0`);
+    } else {
+      const { mode } = await lstat(path.join(dir, child));
+      hash.update(`file ${child} ${mode}\0`).update(await readFile(path.join(dir, child))).update("\0");
+    }
+  }
+  return relative ? hash : hash.digest("hex");
+}
+
+async function pack(dir, destination, env) {
+  const key = await folderContent(dir);
+  if (!packedByContent.has(key)) {
+    const { stdout } = await exec("npm", ["pack", "--json", "--pack-destination", destination], { cwd: dir, env });
+    const [{ name, version, filename }] = JSON.parse(stdout);
+    packedByContent.set(key, { name, version, filename, bytes: await readFile(path.join(destination, filename)) });
+  }
+  return packedByContent.get(key);
+}
 
 /**
  * Writes a package folder: its package.json and files ({ "index.js": "..." }).
@@ -61,9 +93,7 @@ async function startFakeNpmRegistry(root) {
   const packed = path.join(root, "packed");
   await mkdir(packed, { recursive: true });
   async function publish(dir) {
-    const { stdout } = await exec("npm", ["pack", "--json", "--pack-destination", packed], { cwd: dir, env });
-    const [{ name, version, filename }] = JSON.parse(stdout);
-    const bytes = await readFile(path.join(packed, filename));
+    const { name, version, filename, bytes } = await pack(dir, packed, env);
     const tarball = `-/${filename}`;
     tarballs.set(tarball, bytes);
     const manifest = JSON.parse(await readFile(path.join(dir, "package.json"), "utf8"));

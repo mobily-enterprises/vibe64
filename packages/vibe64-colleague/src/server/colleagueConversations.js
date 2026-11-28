@@ -25,6 +25,7 @@ import { ACTION_COLLEAGUE_CONTEXT_READ } from "./colleagueActions.js";
  * @param {ColleagueServiceState} dependencies.serviceState
  * @param {ColleagueRecords} dependencies.records
  * @param {ColleagueThreads} dependencies.threads
+ * @param {number} dependencies.nativeSeedMessages
  */
 function createColleagueConversations({
   actions,
@@ -32,7 +33,8 @@ function createColleagueConversations({
   terminals,
   serviceState,
   records,
-  threads
+  threads,
+  nativeSeedMessages
 }) {
   const runtimeOptions = {
     storage: records.storage,
@@ -44,7 +46,7 @@ function createColleagueConversations({
       maxInputCharacters: COLLEAGUE_TOOL_PAYLOAD_LIMIT,
       maxFinalReplyCharacters: 16_000,
       maxApiToolProgressCharacters: 280,
-      maxInitialNativeHistoryMessages: 24,
+      maxInitialNativeHistoryMessages: nativeSeedMessages,
       maxInitialNativeHistoryMessageCharacters: 2_000,
       codexFinalizingGraceMs: 500,
       codexFinalizingGraceAfterHistoryRead: true,

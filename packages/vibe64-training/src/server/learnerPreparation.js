@@ -23,6 +23,7 @@ import {
  * @param {(actor: object) => object} dependencies.userPaths
  * @param {(progress: object, options?: object) => Promise<object>} dependencies.verifyActiveLesson
  * @param {(paths: object, progress: object, message: string) => Promise<void>} dependencies.writeProgress
+ * @param {number} [dependencies.busyWaitMs] how long a preparation waits for another to finish before it refuses
  */
 function createLearnerPreparation({
   acquire,
@@ -30,7 +31,8 @@ function createLearnerPreparation({
   saveActive,
   userPaths,
   verifyActiveLesson,
-  writeProgress
+  writeProgress,
+  busyWaitMs = PREPARATION_BUSY_WAIT_MS
 }) {
   /**
    * The admitted server owner holds this across effects. Typed state writes
@@ -69,7 +71,7 @@ function createLearnerPreparation({
     }
     await verifyActiveLesson(before.progress, verification);
     let release = await tryAcquireExclusiveFileLock(paths.preparationLock);
-    for (const deadline = Date.now() + PREPARATION_BUSY_WAIT_MS; !release && Date.now() < deadline;) {
+    for (const deadline = Date.now() + busyWaitMs; !release && Date.now() < deadline;) {
       await new Promise(resolve => setTimeout(resolve, 100));
       release = await tryAcquireExclusiveFileLock(paths.preparationLock);
     }

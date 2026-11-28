@@ -115,6 +115,7 @@ function githubSession(root = "", sessionId = "github-session") {
 
 function serviceForSession(session = {}, {
   authorizeActorAccess = null,
+  commandBudgetMs,
   env = process.env,
   logger = silentLogger,
   metadataReads = null,
@@ -126,6 +127,7 @@ function serviceForSession(session = {}, {
 } = {}) {
   return createCodexGitCommandService({
     authorizeActorAccess,
+    commandBudgetMs,
     env,
     logger,
     now,
@@ -436,7 +438,10 @@ test("Codex Git wrapper transports the complete command request", async () => {
   });
 });
 
-test("managed Git waits past five seconds and the executor stops work at its 30-second budget", { timeout: 60_000 }, async () => {
+// The wrapper and the executor follow the service's budget, which is 30 seconds (the credential lookup test below
+// checks that, on the clock it controls); here the waits run at a 10-second budget, still past the socket's five.
+test("managed Git waits past five seconds and the executor stops work at its budget", { timeout: 60_000 }, async () => {
+  const budgetMs = 10_000;
   await withTemporaryRoot(async (root) => {
     const session = sessionSource(root, "command-deadline");
     const cwd = session.metadata.source_path;
@@ -445,6 +450,7 @@ test("managed Git waits past five seconds and the executor stops work at its 30-
     const events = [];
     let script = "setTimeout(() => process.stdout.write('slow success'), 6000)";
     const service = serviceForSession(session, {
+      commandBudgetMs: budgetMs,
       logger: { info: (fields) => events.push(fields), warn: (fields) => events.push(fields) },
       runGatewayCommand(request) {
         calls.push(request);
@@ -465,12 +471,12 @@ test("managed Git waits past five seconds and the executor stops work at its 30-
     assert.equal(slow.stdout, "slow success");
     assert.equal(slow.stderr, "", "Successful output must not gain diagnostics");
     assert.equal(calls.length, 1);
-    assert.ok(calls[0].timeout > 29_000 && calls[0].timeout <= 30_000);
+    assert.ok(calls[0].timeout > budgetMs - 1_000 && calls[0].timeout <= budgetMs);
 
     script = "process.stdout.write(String(process.pid)); process.stderr.write('partial stderr'); setInterval(() => {}, 1000)";
     const started = performance.now();
     const timedOut = await runProcessWithInput(command, ["status"], options);
-    assert.ok(performance.now() - started >= 29_000, "The command gets the requested budget, not a five-second socket cutoff");
+    assert.ok(performance.now() - started >= budgetMs - 1_000, "The command gets the requested budget, not a five-second socket cutoff");
     assert.equal(timedOut.exitCode, 1);
     assert.match(timedOut.stderr, /partial stderr/u);
     assert.match(timedOut.stderr, /vibe64_command_capture_timed_out: Managed Git command timed out/u);
@@ -485,10 +491,10 @@ test("managed Git waits past five seconds and the executor stops work at its 30-
     assert.ok(events.at(-1).executionId);
     const diagnostic = JSON.parse(timedOut.stderr.match(/Managed Git diagnostic: (.+)\n/u)[1]);
     assert.equal(diagnostic.stage, "command");
-    assert.equal(diagnostic.budgetMs, 30_000);
+    assert.equal(diagnostic.budgetMs, budgetMs);
     assert.equal(diagnostic.commandSubmitted, true);
     assert.equal(diagnostic.executionId, events.at(-1).executionId);
-    assert.ok(diagnostic.elapsedMs >= 29_000);
+    assert.ok(diagnostic.elapsedMs >= budgetMs - 1_000);
     assert.match(timedOut.stderr, /effects are unconfirmed/u);
 
     script = "process.stdout.write('still connected')";

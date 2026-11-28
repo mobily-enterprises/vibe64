@@ -55,7 +55,7 @@ async function bounded(work, waitingFor) {
  * @param {import("node:test").TestContext} t
  */
 async function updatableSession(t) {
-  const f = await fixture(t);
+  const f = await fixture(t, { sessionWorkChild: true });
   const library = await githubRepository(f, "library");
   await prepare(f, ["library"]);
   const records = createVibe64SessionStore({

@@ -59,6 +59,7 @@ workspace.
 - `packages/vibe64-training/src/server/learnerState.js`
 - `tests/server/studioProjectContext.unit.test.js`
 - `tests/server/vibe64TrainingLearnerState.unit.test.js`
+- `tests/server/vibe64TrainingLearnerAttempts.unit.test.js`
 - `tests/server/assistantRoutingStateInventory.unit.test.js`
 - `src/composables/useVibe64ProjectsResource.js`
 - `src/composables/useProjectSelectionGate.js`

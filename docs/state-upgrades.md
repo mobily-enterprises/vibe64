@@ -1588,7 +1588,7 @@ backfill is needed; the `20261022-learning-space-reset` retires any earlier
 Learning-mode file. Readers validate the file and refuse an invalid, oversized
 or another learner's record without repair, and project admission treats a
 failed read as Develop (fail open), so a damaged record never locks a learner
-out of their projects. Focused evidence: `vibe64TrainingLearnerState.unit.test.js`
+out of their projects. Focused evidence: `vibe64TrainingLearnerAttempts.unit.test.js`
 and `vibe64TrainingLearningMode.unit.test.js`.
 
 ## Shared database session override

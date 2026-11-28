@@ -63,6 +63,7 @@ infrastructure or prove a delivered lesson.
 - `tests/server/vibe64TrainingCourseInstaller.unit.test.js`
 - `tests/client/trainingCourseCatalogue.vitest.js`
 - `tests/server/vibe64TrainingLearnerState.unit.test.js`
+- `tests/server/vibe64TrainingInstalledCatalogue.unit.test.js`
 - `tests/server/vibe64TrainingPracticeHistoryReader.unit.test.js`
 - `tests/server/vibe64TrainingStepProgress.unit.test.js`
 - `tests/server/vibe64TrainingLearnerNotes.unit.test.js`

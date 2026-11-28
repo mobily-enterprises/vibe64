@@ -76,6 +76,7 @@ from saved project work, and inspect one exact file change at a time.
 - `packages/vibe64-terminals/src/server/repositoryHistory.js`
 - `packages/vibe64-terminals/src/server/gitRecords.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
+- `packages/vibe64-terminals/src/server/sessionWorkOperations.js`
 - `packages/vibe64-terminals/src/server/sessionWorkSave.js`
 - `packages/vibe64-terminals/src/server/sessionWorkInspection.js`
 - `src/composables/useVibe64SourceEditor.js`
@@ -1027,7 +1028,8 @@ Interface/Code, whose presentation their host records.
   publish-and-reconcile transaction under the project source lock.
   `sessionWorkOperationCommand.js` performs each operation's exact Git work
   inside its admitted child instead of paying managed-host admission cost for
-  every individual Git command. It loads the Genesis compiler only for Save,
+  every individual Git command; `sessionWorkOperations.js` holds the operations
+  it runs and the answer it writes. It loads the Genesis compiler only for Save,
   so update checks and other inspections avoid that compiler startup cost.
 - `refreshWorkState(observedWork)` accepts the complete work-state snapshot
   already returned by Current Changes. The runtime host also projects Save and

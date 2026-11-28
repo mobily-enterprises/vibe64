@@ -201,11 +201,15 @@ test("OpenCode changeover delivers one combined prompt, retains authored text, a
   await harness.controller.waitForTurn("session-1");
 });
 
+// The event connection takes 5.1 seconds on the clock the test controls.
 test("OpenCode waits for a cold event connection before submitting a prompt", { timeout: 10_000 }, async (t) => {
   let ready = false;
+  const connecting = Promise.withResolvers();
   const harness = await controllerHarness({
     async *events(_id, { onReady, signal }) {
-      await new Promise((resolve) => setTimeout(resolve, 5_100));
+      const connected = new Promise((resolve) => setTimeout(resolve, 5_100));
+      connecting.resolve();
+      await connected;
       signal.throwIfAborted();
       ready = true;
       onReady();
@@ -214,8 +218,12 @@ test("OpenCode waits for a cold event connection before submitting a prompt", { 
     }
   });
   t.after(async () => { await harness.controller.closeAllForProject(); await rm(harness.root, { force: true, recursive: true }); });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const pending = harness.controller.sendMessage("session-1", { message: "Hello", messageId: "cold-events" });
   assert.equal(harness.promptCalls.length, 0);
+  await connecting.promise;
+  t.mock.timers.tick(5_100);
+  t.mock.timers.reset();
   const result = await pending;
   assert.equal(ready, true);
   assert.equal(result.delivered, true, JSON.stringify(result));

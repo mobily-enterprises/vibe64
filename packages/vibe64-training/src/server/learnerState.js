@@ -63,12 +63,15 @@ import { createLearnerPreparation } from "./learnerPreparation.js";
  * staged state against the live installation
  * @param {InstalledTrainingContent} [dependencies.content] an isolated author-preview store's own exact reader
  * @param {RuntimeLogger} dependencies.logger
+ * @param {number} [dependencies.preparationBusyWaitMs] how long a preparation waits for another to finish before it
+ * refuses (five seconds unless given)
  */
 function createTrainingLearnerState({
   systemRoot,
   contentSystemRoot = systemRoot,
   content,
-  logger
+  logger,
+  preparationBusyWaitMs
 }) {
   assertLearningSystemRoot(systemRoot);
   const installed = content ?? createInstalledTrainingContent({ systemRoot: contentSystemRoot });
@@ -105,7 +108,8 @@ function createTrainingLearnerState({
     saveActive,
     userPaths,
     verifyActiveLesson,
-    writeProgress
+    writeProgress,
+    busyWaitMs: preparationBusyWaitMs
   });
 
   function userPaths(actor) {
