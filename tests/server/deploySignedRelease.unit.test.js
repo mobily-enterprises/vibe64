@@ -263,3 +263,44 @@ test("a signed release starts only for the Stack's line, one of the project's re
   assert.deepEqual([lost.outcome, lost.message], ["failed", "The release's files are gone from the machine that built it: build it again."]);
   assert.deepEqual(writes(gone.standIn), []);
 });
+
+test("a release is followed as its machine says: a restart it waits for is said once, a read that fails is made again, and an app that failed or is gone ends it failed", async (t) => {
+  const { adapter, vps, key, releases, kept, events, parts } = signedWorld(t);
+  assert.equal(await manifestOf(null), null, "no record, no manifest");
+  await signedRelease({ ...parts, record: null, start: { commit: COMMIT, target: { vps, app: "shop" }, key: key.fingerprint } });
+  await signedRelease({ ...parts, record: kept.record, signature: key.sign(releases[0].manifest), maxReads: 1 });
+  assert.equal(await manifestOf(kept.record), null, "none waits for its signature once it is handed over");
+  const following = structuredClone(kept.record);
+  const { version } = following.releases.at(-1);
+  // The app as its machine answers, read after read (an Error a read that fails), the last answer kept.
+  const answering = (answers) => {
+    let read = 0;
+    return Object.freeze({
+      ...adapter,
+      readVpsApp: async () => {
+        const answer = answers[Math.min(read, answers.length - 1)];
+        read += 1;
+        if (answer instanceof Error) throw answer;
+        return answer;
+      }
+    });
+  };
+  const moving = { name: "shop", package: null, version: OLD_VERSION, wantedVersion: version, previousVersion: null, state: "running", lastFailure: null, changedAt: null };
+  const restart = { ...moving, lastFailure: { code: "reboot_needed", message: "The machine's kernel was updated: restart it to go on." } };
+
+  const waiting = await signedRelease({ ...parts, adapter: answering([restart]), record: structuredClone(following), maxReads: 3 });
+  assert.equal(waiting.outcome, "following");
+  assert.deepEqual(events.filter((one) => one.kind === "wait" && one.for === "restart").map((one) => one.words),
+    ["shop's machine needs a restart before it runs the release: The machine's kernel was updated: restart it to go on."]);
+
+  const unread = new Error("mobilynet did not answer: fetch failed");
+  const live = await signedRelease({ ...parts, adapter: answering([unread, { ...moving, version, wantedVersion: null }]), record: structuredClone(following) });
+  assert.equal(live.outcome, "live");
+
+  const failedApp = { ...moving, state: "failed", lastFailure: { code: "start_failed", message: "bin/web exited with status 1." } };
+  const failed = await signedRelease({ ...parts, adapter: answering([failedApp]), record: structuredClone(following) });
+  assert.deepEqual([failed.outcome, failed.message], ["failed", "shop failed on its machine: bin/web exited with status 1."]);
+  const gone = await signedRelease({ ...parts, adapter: answering([null]), record: structuredClone(following) });
+  assert.deepEqual([gone.outcome, gone.message], ["failed", "The app shop is gone from its machine."]);
+  assert.equal(await manifestOf(gone.record), null);
+});
