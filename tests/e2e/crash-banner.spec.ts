@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { expectReadableButton } from "./support/readable-button";
 import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 
 // The red crash banner on every page after a real crash of the editor server, until the workspace owner acknowledges
@@ -112,6 +113,11 @@ test("a crash shows the red banner on every page until the owner acknowledges it
     await expect(banner).toBeVisible();
     await expect(banner).toContainText(new RegExp(`Vibe64 crashed at ${WHEN}: read ECONNRESET\\. No AI work was running\\.`, "u"));
     await expectAtTheTop(page, banner);
+    // Its buttons read as the controls they are on its red.
+    await expectReadableButton(banner.getByRole("link", { name: "See crashes" }));
+    for (const name of ["Copy for a bug report", "Acknowledge"]) {
+      await expectReadableButton(banner.getByRole("button", { name }));
+    }
     await reloadAndReadCrashes(page);
     await expect(banner).toBeVisible();
     await page.goto(`${server.origin}/app/learning`);
