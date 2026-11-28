@@ -75,6 +75,60 @@ test("a prebuilt release is one plain tar of manifest.json, manifest.sig and out
   assert.deepEqual(body, plainTarOf({ "manifest.json": release.manifest, "manifest.sig": `${signature}\n`, "output.tar": release.output }));
 });
 
+test("a prebuilt release sent again after a token refresh is the whole tar again, made anew, and an output that changes while it is sent ends the upload", async (t) => {
+  const folder = folderFor(t);
+  const key = releaseKey();
+  const release = prebuiltRelease({ key: key.fingerprint });
+  const signature = key.sign(release.manifest);
+  const whole = plainTarOf({ "manifest.json": release.manifest, "manifest.sig": `${signature}\n`, "output.tar": release.output });
+  const accepted = () => new Response(JSON.stringify({
+    release: { version: "20261120-1234567", state: "active" },
+    build: null,
+    app: { name: "shop", version: OLD_VERSION, wantedVersion: "20261120-1234567", state: "running" }
+  }), { status: 202 });
+
+  // A token source mobilynet refuses once: the same request again, with the new token and the whole body again (a
+  // streamed body is read once, so it is made anew for each send).
+  let token = "mna_old";
+  const credential = { token: () => token, refresh: () => { token = "mna_new"; } };
+  const sends = [];
+  const refreshing = createMobilynetClient({
+    baseUrl: "https://api.mobilynet.test",
+    credential,
+    fetch: async (url, init) => {
+      const parts = [];
+      for await (const chunk of init.body) parts.push(Buffer.from(chunk));
+      sends.push({ authorization: init.headers.authorization, body: Buffer.concat(parts) });
+      if (sends.length > 1) return accepted();
+      return new Response(JSON.stringify({ error: { code: "key_expired", message: "The access token expired." } }), { status: 401 });
+    }
+  });
+  const answer = await refreshing.releasePrebuilt("vps_1", "shop", { manifest: release.manifest, signature, output: outputFile(folder, release) });
+  assert.equal(answer.release.version, "20261120-1234567");
+  assert.deepEqual(sends.map((one) => one.authorization), ["Bearer mna_old", "Bearer mna_new"]);
+  assert.deepEqual(sends.map((one) => one.body), [whole, whole]);
+
+  // An output file that grows or shrinks between its size being read and its bytes being sent: the upload ends with an
+  // error naming the file and the size it had, rather than sending an archive whose header names another size.
+  for (const changed of [Buffer.concat([release.output, Buffer.alloc(512)]), release.output.subarray(0, 512)]) {
+    const output = outputFile(folder, release);
+    const changing = createMobilynetClient({
+      baseUrl: "https://api.mobilynet.test",
+      credential: "mnk_test",
+      fetch: async (url, init) => {
+        writeFileSync(output.path, changed);
+        const parts = [];
+        for await (const chunk of init.body) parts.push(chunk);
+        return accepted();
+      }
+    });
+    await assert.rejects(changing.releasePrebuilt("vps_1", "shop", { manifest: release.manifest, signature, output }), (error) => {
+      assert.ok(error.message.includes(`${output.path} changed while it was sent: it was ${release.output.length} bytes.`), error.message);
+      return true;
+    }, `${changed.length} bytes`);
+  }
+});
+
 test("the mobilynet project's machines' apps of releases, one app and the project's release keys are read as mobilynet answers them", async () => {
   const { standIn, adapter, vps, key, projectId } = machineWorld();
   const db = standIn.machines.add(projectId, { name: "db1" });
