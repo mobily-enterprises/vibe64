@@ -9,6 +9,7 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 import { workPlanStep } from "../shared/assistantWorkPlan.js";
+import { awaitsAccount } from "./turnInterruptions.js";
 
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -248,9 +249,9 @@ const owesStep = (state) => Boolean(state?.followup?.owed) && state.status === "
  * Stop leaves nothing marked.
  * @param {object | null} state the saved routing request
  */
-const waitsForAccount = (state) => Boolean(state?.followup?.messageId) &&
-  state.interruptions?.at(-1)?.awaitsAccount === state.followup.messageId && state.status === "waiting" &&
-  state.delivery === "pending" && !state.attemptedMessageId && !state.stopped && !state.cancelled && !state.followup.owed;
+const waitsForAccount = (state) => awaitsAccount(state?.interruptions, state?.followup?.messageId) &&
+  state.status === "waiting" && state.delivery === "pending" && !state.attemptedMessageId && !state.stopped &&
+  !state.cancelled && !state.followup.owed;
 
 /**
  * Whether `input` is another session's message while the request owes its step: not the person's word, it never

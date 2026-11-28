@@ -235,7 +235,9 @@ const NO_SERVER_RUN = Object.freeze({
 
 // What an engine adds to its own failure message, which the red entry replaces with what Vibe64 did.
 const SEND_A_MESSAGE_HINT = /\s*(The conversation so far is saved|Saved file changes remain)[;,.]?\s*(send a message to continue)?\.?\s*$/iu;
-const SIGN_IN = /not (signed|logged) in|sign in again|log in again|please (log|sign) in|authentication (failed|error)|invalid (api key|credentials|token)|unauthori[sz]ed|\b401\b|oauth token (has )?expired/iu;
+// A sign-in refused: also Claude Code's "· Please run /login" on each such refusal, and JSKIT's answer for a
+// conversation whose account signed out under it ("Claude isn't connected. Sign in to Claude, ...").
+const SIGN_IN = /not (signed|logged) in|sign in again|log in again|please (log|sign) in|please run \/login|isn't connected\. sign in|authentication (failed|error)|invalid (api key|credentials|token)|unauthori[sz]ed|\b401\b|oauth token (has )?expired/iu;
 const USAGE_LIMIT = /usage limit|limit reached|limit (was )?exceeded|out of credit|credit balance|insufficient (credit|quota|funds)|quota exceeded|hit your limit/iu;
 const OVERLOADED = /overloaded|\b529\b|\b503\b|temporarily unavailable|service unavailable|rate.?limit|too many requests|\b429\b/iu;
 const CONNECTION = /connection (to|with) .* (was )?lost|observation was lost|econnreset|econnrefused|etimedout|socket hang up|network error|fetch failed|connection (closed|reset|error)/iu;
@@ -348,6 +350,18 @@ function interruptionsInARow(previous, nowMs, planned) {
 }
 
 /**
+ * The account-wait mark on an interruptions record, a Main or temporary chat's request's or a goal's: its latest
+ * interruption awaits an AI account its person can use, naming what continues it once one is set (the request's
+ * prepared resume, the goal's intent), as waitForAccount in assistantRoutingInterruptions.js and serviceGoalAccountWait.js
+ * write it. Setting an account clears it as it continues that work, once.
+ * @param {Array<{ awaitsAccount?: string }> | undefined} history
+ * @param {string | undefined} id
+ */
+function awaitsAccount(history, id) {
+  return Boolean(id) && Array.isArray(history) && history.at(-1)?.awaitsAccount === id;
+}
+
+/**
  * The loop rule. A planned stop (a release, a rollback, a restart, recorded as the server stopped in order) never
  * counts toward an unplanned loop: what ran carries on. An unplanned end (a crash, a kill, an engine or a connection
  * lost) stops what ran the third time in a row (TURN_RESUME_LOOP_LIMIT), for Continue or Resume goal. The one backstop
@@ -380,6 +394,7 @@ function nextTurnInterruptions(history, interruption, nowMs, { resumes = true } 
 export {
   INTERRUPTION_CAUSE,
   NO_SERVER_RUN,
+  awaitsAccount,
   TURN_RESUME_BACKOFF_MS,
   TURN_RESUME_LOOP_LIMIT,
   TURN_RESUME_LOOP_WINDOW_MS,

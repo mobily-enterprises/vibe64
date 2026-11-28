@@ -25,8 +25,9 @@ test("a Claude goal whose turn a sign-out ended continues once, by itself, when 
     assert.match(waiting.system.text, /^The AI account needs signing in again at \d\d:\d\d UTC: Invalid API key · Please run \/login\.\n/u);
     assert.match(waiting.system.text, /\nNot resumed yet: sign in to the AI account again in AI Accounts, and Vibe64 continues it\.$/u);
     assert.equal(waiting.metadata.vibe64TurnInterruption.outcome, "account");
-    assert.equal((await h.intent()).active, true, "the goal still waits to continue");
-    assert.match((await h.service.readCanonicalAgentGoal("test", h.options)).error, /Vibe64 continues the goal\.$/u,
+    const intent = await h.intent();
+    assert.equal(intent.active, true, "the goal still waits to continue");
+    assert.equal(intent.error, "Sign in to the AI account again in AI Accounts, and Vibe64 continues the goal.",
       "the goal control says it waits for the sign-in");
     // Another account set while Claude is still signed out (another AI's, say) leaves it waiting.
     await h.service.continueTurnsAfterAccountSet();
@@ -75,11 +76,12 @@ test("a Claude goal its person paused while it waited for an account stays pause
     const commandsBefore = await h.goalCommands();
     await h.setAccount({ loggedIn: false });
     await h.waitFor(async () => (await goalNotices(h)).length === 1, "the goal waits for an account");
+    // Claude's goal reads again once Claude is signed in; the person pauses it before the account set reaches it.
+    await h.setAccount(OWNER);
     const read = await h.service.readCanonicalAgentGoal("test", h.options);
     const paused = await h.service.updateCanonicalAgentGoal("test", { ...h.options, action: "pause",
       expectedSegmentId: read.target.segmentId, expectedGoalId: read.goal.id });
     assert.equal(paused.status, "paused", JSON.stringify(paused));
-    await h.setAccount(OWNER);
     await h.service.continueTurnsAfterAccountSet();
     await delay(300);
     assert.equal(await h.goalCommands(), commandsBefore, "nothing is sent");
@@ -113,8 +115,8 @@ test("a Claude goal a restart found signed out waits for an account, through lat
     await h.service.continueTurnsAfterAccountSet();
     await h.waitFor(async () => await h.goalCommands() === commandsBefore + 1, async () => `the goal continues: ${JSON.stringify({
       intent: await h.intent(), warnings: h.warnings })}`);
-    assert.match((await goalNotices(h)).at(-1).system.text,
-      /^Vibe64 was restarted at \d\d:\d\d UTC; the goal carried on with the AI account connected now\.$/u);
+    // It continues as the restart's continuation would have, the earlier server's run verified stopped first.
+    assert.match((await goalNotices(h)).at(-1).system.text, /^Vibe64 was restarted at \d\d:\d\d UTC; the goal carried on\.$/u);
     await h.service.continueTurnsAfterAccountSet();
     await delay(300);
     assert.equal(await h.goalCommands(), commandsBefore + 1, "it continues once");

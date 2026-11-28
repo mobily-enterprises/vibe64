@@ -66,8 +66,10 @@ you can't use yet), the entry reads **Not resumed yet:** and says what to do in
 **AI Accounts**: once an account you can use is set there, Vibe64 continues the
 turn by itself, once, whatever it was doing (a plan's step, a request or a
 temporary chat), and the entry after it reads **Resumed after …, with the AI
-account connected now.** A chat that was idle when the account changed is not
-continued, even with a plan waiting, and neither is a turn you stopped.
+account connected now.** A Main chat goal the account stopped continues the same
+way (see [Coding agent goals](coding-agent-goals.md)). A chat that was idle when
+the account changed is not continued, even with a plan waiting, and neither is a
+turn you stopped or a goal you paused, stopped or cancelled.
 When Vibe64 cannot resume a chat's turn at all after a restart
 (for example because the person who sent it can no longer use the project), it
 tries again a few times over about 12 minutes and then stops: the entry reads
@@ -89,11 +91,12 @@ warnings, which production keeps: `vibe64.turn_resume.recovery_started` and
 stopped because no attempt could continue it, or skipped and why), `vibe64.turn_resume.resumed`,
 `vibe64.turn_resume.stopped_by_loop_rule` or `vibe64.turn_resume.skipped` for
 each Main and temporary chat turn (`vibe64.turn_resume.waiting_for_account` for
-one its AI account stopped, and `vibe64.turn_resume.account_set` when an account
-set continues it), and `recovery_finished` with the totals and
+one its AI account stopped, `vibe64.agent_goal.waiting_for_account` for such a
+goal, and `vibe64.turn_resume.account_set` when an account set continues either),
+and `recovery_finished` with the totals and
 each session it skipped with why (`skipped`: its project, session, chat when it
 names one, and `reason`, such as `nothing-working`, `session-not-open`,
-`stopped-by-person` or, for goals, `no-active-goal`). A
+`stopped-by-person` or, for goals, `no-active-goal` or `waiting-for-account`). A
 crash's record counts the turns it interrupted that Vibe64 resumed. A chat turn
 or a goal that no attempt after a restart could continue logs
 `vibe64.turn_resume.recovery_stopped` or `vibe64.agent_goal.recovery_stopped`

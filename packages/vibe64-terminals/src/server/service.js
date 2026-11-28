@@ -208,6 +208,7 @@ function createService({
     cancelGoalIfMainAiChanged: (sessionId, vibe64User, options) => goals.cancelGoalIfMainAiChanged(sessionId, vibe64User, options),
     continueGoalWhenLimitResets: (sessionId) => goals.continueGoalWhenLimitResets(sessionId),
     resumeGoalAfterTurn: (sessionId) => goals.resumeGoalAfterTurn(sessionId),
+    waitGoalForAccountAfterTurn: (sessionId, payload) => goals.waitGoalForAccountAfterTurn(sessionId, payload),
     restorePreviewAfterTurn: (sessionId) => commands.outputTarget.restorePreviewAfterTurn(sessionId),
     summarizeTurnCommands: (sessionId) => commands.agentSessionCommand.summarizeTurnCommands(sessionId),
     logger,
@@ -664,7 +665,7 @@ function createService({
       plannedRestart: plannedRestart.reader
     })),
     // A turn its AI account stopped continues once an AI account is set (vibe64-accounts tells it).
-    continueTurnsAfterAccountSet: createServiceTurnsAfterAccountSet(openChats),
+    continueTurnsAfterAccountSet: createServiceTurnsAfterAccountSet({ ...openChats, goals }),
     openBrowserConversation: assistant.openBrowserConversation,
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,

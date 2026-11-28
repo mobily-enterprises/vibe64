@@ -3,6 +3,7 @@
 /** @typedef {import("./types.js").ServiceAssistantContext} ServiceAssistantContext */
 /** @typedef {import("./types.js").AssistantRouting} AssistantRouting */
 /** @typedef {import("./types.js").SessionConversations} SessionConversations */
+/** @typedef {import("./types.js").ServiceGoals} ServiceGoals */
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeLogger} RuntimeLogger */
 /** @typedef {import("@local/vibe64-project/server/types").ProjectService} ProjectService */
 
@@ -10,15 +11,17 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 import { waitsForAccount } from "./assistantRoutingRequests.js";
+import { goalWaitsForAccount } from "./serviceGoalAccountWait.js";
 
 /**
  * The turns an AI account stopped while they ran (signed out, or switched to an account their person couldn't use),
  * continued once an AI account is set: every Main chat and temporary chat of every open session whose request waits
  * for an account (waitsForAccount) is told to continue, as the person it ran for, through the resume every interrupted
- * turn takes (assistantRoutingInterruptions.js continueAfterAccountSet), whatever it was doing. The saved records rule
- * out every other chat without taking its lock; under the lock routing checks again, so a chat continues once however
- * many events, passes or servers reach it. A temporary chat that holds an AI task is its task's, and a goal's turn is
- * its goal's: neither is ever marked.
+ * turn takes (assistantRoutingInterruptions.js continueAfterAccountSet), whatever it was doing, and so is a Main chat
+ * goal that waits (goalWaitsForAccount), through the goal's own resume as the person who set it
+ * (serviceGoalAccountWait.js). The saved records rule out every other chat and goal without taking a lock; under the
+ * lock each checks again, so each continues once however many events, passes or servers reach it. A temporary chat
+ * that holds an AI task is its task's, and is never marked.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
  * @param {RuntimeLogger} dependencies.logger
@@ -27,6 +30,7 @@ import { waitsForAccount } from "./assistantRoutingRequests.js";
  * @param {ServiceAssistantContext} dependencies.assistantContext
  * @param {AssistantRouting} dependencies.mainChatRouting
  * @param {SessionConversations} dependencies.sessionConversations
+ * @param {ServiceGoals} dependencies.goals
  */
 function createServiceTurnsAfterAccountSet({
   state,
@@ -35,7 +39,8 @@ function createServiceTurnsAfterAccountSet({
   sessionAccess,
   assistantContext,
   mainChatRouting,
-  sessionConversations
+  sessionConversations,
+  goals
 }) {
   const warn = (error, fields, message) => logOperationalEvent(logger, "warn", {
     component: "vibe64.turn_resume",
@@ -54,7 +59,18 @@ function createServiceTurnsAfterAccountSet({
     return actor ? { vibe64User: actor } : {};
   }
 
-  /** Continues each chat of a session that waits for an account; one that fails is reported, and the others go on. */
+  /** One continuation's outcome in the operational log. */
+  const logContinued = (fields, result) => logOperationalEvent(logger, "warn", {
+    component: "vibe64.turn_resume",
+    event: "vibe64.turn_resume.account_set",
+    ...fields,
+    ...result
+  }, "A turn its AI account stopped, after an AI account was set.");
+
+  /**
+   * Continues each chat of a session that waits for an account, and its goal; one that fails is reported, and the
+   * others go on.
+   */
   async function continueSession(projectSlug, sessionId) {
     const context = await assistantContext.assistantSessionOptions(sessionId);
     const chats = [{ conversationId: "", request: assistantRoutingRequestForDisplay(context.session.metadata) }];
@@ -70,15 +86,17 @@ function createServiceTurnsAfterAccountSet({
         const result = conversationId
           ? await sessionConversations.continueTemporaryTurnAfterAccountSet(sessionId, { ...options, conversationId })
           : await mainChatRouting.continueAfterAccountSet(sessionId, options);
-        logOperationalEvent(logger, "warn", {
-          component: "vibe64.turn_resume",
-          event: "vibe64.turn_resume.account_set",
-          ...fields,
-          ...result
-        }, "A turn its AI account stopped, after an AI account was set.");
+        logContinued(fields, result);
       } catch (error) {
         warn(error, fields, "A turn its AI account stopped could not be continued; Continue resumes it.");
       }
+    }
+    if (!goalWaitsForAccount(goals.readGoalIntent(context.session))) return;
+    const fields = { projectSlug, sessionId, goal: true };
+    try {
+      logContinued(fields, await goals.continueGoalAfterAccountSet(sessionId));
+    } catch (error) {
+      warn(error, fields, "A goal its AI account stopped could not be continued; Resume goal continues it.");
     }
   }
 

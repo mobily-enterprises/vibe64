@@ -1452,8 +1452,11 @@ connected account, and after a sign-out its next request ends at once with a
 clear not-connected message instead of hanging. A chat turn the account stops
 anyway, signed out while it runs or switched to an account its person can't use
 yet, waits and says so; once an account they can use is set, it continues by
-itself, once, whatever it was doing. A chat that was idle at the change, or a
-turn the person stopped, is not continued.
+itself, once, whatever it was doing. A goal the account stopped (its turn signed
+out, a restart finding its account unusable, or a Codex account change it can't
+run on) waits and continues the same way. A chat that was idle at the change, a
+turn the person stopped, or a goal they paused, stopped or cancelled, is not
+continued.
 AI choices load while the session is open and remain visible during refresh,
 so opening the model menu does not restart its loading screen each time.
 Codex helper tasks accept the installed stable Codex version when it meets the

@@ -1723,6 +1723,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/serviceGoals.js`
 - `packages/vibe64-terminals/src/server/serviceGoalRecovery.js`
 - `packages/vibe64-terminals/src/server/serviceGoalInterruptions.js`
+- `packages/vibe64-terminals/src/server/serviceGoalAccountWait.js`
 - `packages/vibe64-terminals/src/server/serviceTurnRecovery.js`
 - `packages/vibe64-terminals/src/server/serviceTurnsAfterAccountSet.js`
 - `tests/server/assistantTurnAccountSet.test.js`
@@ -1737,6 +1738,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `tests/server/claudeGoalRestart.unit.test.js`
 - `tests/server/claudeGoalRestartControls.unit.test.js`
 - `tests/server/claudeGoalUsageLimit.unit.test.js`
+- `tests/server/claudeGoalAccountSet.unit.test.js`
 - `packages/vibe64-terminals/src/server/codexSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/openCodeSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/mainConversationBinding.js`
@@ -5668,9 +5670,10 @@ through `resumeNow` with the entry "Resumed after …, with the AI account
 connected now.", the same resume whatever the request was doing, a plan's step
 or a plain request; one whose account its person still can't use is marked
 again, its entry unchanged. A second event, a second pass or another server
-finds the request sent and does nothing. A goal's turn is not marked (its goal's
-own account change continues a Codex goal); a sign-out that ends a turn after its
-account was already set again waits for the next account set or Continue.
+finds the request sent and does nothing. A Main chat goal is marked on its own
+interruption record instead (`goalWaitsForAccount`, below); a sign-out that ends a
+turn after its account was already set again waits for the next account set or
+Continue.
 
 Each decision writes one system message in the chat's history, its id
 `vibe64-turn-interrupted:<interruption>:<outcome>` so a second writer adds
@@ -5800,11 +5803,34 @@ cleanup, and invokes the ordinary canonical Resume owner. Unknown receipt or
 identity evidence blocks continuation. This does not replay ordinary messages,
 repair historical state, or enroll older goals. Development copies drop intent.
 Temporary-chat restart continuation remains separate unfinished work.
-A Codex account change pauses a running goal natively on the runtime that keeps
-its turn; once that runtime stopped, JSKIT calls the Terminals
-`continueGoalAfterAccountChange(sessionId, { threadId })`, which re-authorizes
-the intent's actor and sends the same canonical Resume only for active intent on
-that thread whose native goal is paused. A refusal is logged and leaves it paused.
+A goal whose turn its AI account stopped waits for an account the same way
+([serviceGoalAccountWait.js](../../../packages/vibe64-terminals/src/server/serviceGoalAccountWait.js)):
+a sign-out that ends a Main turn while the goal's intent still continues
+(`waitGoalForAccountAfterTurn`, after each Main turn; Claude's goal can't be read
+while it is signed out, so the intent decides), the last restart pass whose
+continuation the account refused (none connected, or another person's) instead of
+stopping it, and a Codex account change, which pauses a running goal natively on
+the runtime that keeps its turn; once that runtime stopped, JSKIT calls the
+Terminals `continueGoalAfterAccountChange(sessionId, { threadId })`, which marks
+that thread's goal and continues it at once through the same continuation. The
+mark is the goal intent's latest `interruptions` entry carrying `awaitsAccount`
+set to the intent's id (`awaitsAccount` in turnInterruptions.js reads both kinds),
+with the goal's error saying why ("Sign in to the AI account again in AI Accounts,
+and Vibe64 continues the goal." or "<refusal>. Vibe64 continues the goal once an
+AI account you can use is set in AI Accounts.") and its red `account` entry
+written once. `continueTurnsAfterAccountSet` visits a waiting goal after the
+session's chats and calls `continueGoalAfterAccountSet`: under the goal settings
+lock the mark is cleared and `resumedAt` set, so a second event, pass or server
+finds nothing. A goal an earlier server ran (a restart found it waiting, or left
+it so) then goes through that restart's own continuation (`recoverSessionGoal`),
+which verifies the earlier run stopped first. Otherwise, as the person who set it,
+an account they still can't use marks it again, a Claude goal a turn already
+carries on needs nothing, and an active or paused goal goes through `resumeGoal`
+([serviceGoalInterruptions.js](../../../packages/vibe64-terminals/src/server/serviceGoalInterruptions.js)),
+the resume a restart's continuation takes, with "Resumed after …, with the AI
+account connected now." and its history kept for the loop rule. Restart recovery
+leaves a waiting goal alone (`waiting-for-account`), and the person's Pause, Stop
+or Cancel ends its intent and with it the wait.
 The shared native reader also preserves Claude's structured impossible-goal
 evaluation and explicit repeated-stop-hook termination as `blocked`. Main restart recovery retains the goal and its intent
 without sending Resume for that native state. The existing goal controls show

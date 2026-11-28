@@ -27,6 +27,9 @@ const GOAL_RECOVERY_RETRY_DELAYS_MS = Object.freeze([30_000, 2 * 60_000, 10 * 60
  * @param {(sessionId: string, context: object, change: (latest: any) => any) => Promise<unknown>} dependencies.changeGoalIntent
  * @param {(sessionId: string, context: object, intent: object, error: string) => Promise<void>} dependencies.stopUnrecoverableGoal
  *   Writes the red entry of a goal the last pass stopped.
+ * @param {(sessionId: string, context: object, intent: object, error: Error) => Promise<boolean>} dependencies.waitForAccountAfterRestart
+ *   Leaves a goal its AI account refused waiting for an account its person can use (serviceGoalAccountWait.js), saying
+ *   whether it was that.
  */
 function createServiceGoalRecovery({
   state,
@@ -37,14 +40,17 @@ function createServiceGoalRecovery({
   recoverSessionGoal,
   readGoalIntent,
   changeGoalIntent,
-  stopUnrecoverableGoal
+  stopUnrecoverableGoal,
+  waitForAccountAfterRestart
 }) {
   /**
    * One pass over the open projects' goals. This is continuation of saved
    * intent, never history repair; a goal this server already continued is skipped.
    * The last pass stops a goal it could not continue: its intent ends, so no
    * later restart tries it again unseen, and its error and red entry say why and
-   * that Resume goal continues it. A goal the server before still runs is left to it.
+   * that Resume goal continues it. One its AI account refused instead waits for an
+   * account its person can use, which continues it once it is set. A goal the server
+   * before still runs is left to it.
    * @param {boolean} retrying Whether another pass follows a failure.
    */
   async function recoverGoalsPass(retrying) {
@@ -75,22 +81,30 @@ function createServiceGoalRecovery({
           const stops = !retrying && error.code !== "vibe64_goal_previous_server_running";
           const reason = String(error.message || "Recovery could not be verified.").slice(0, 500);
           let stopped = null;
+          let waiting = false;
           try {
             const context = await assistantContext.assistantSessionOptions(session.sessionId);
             const expected = readGoalIntent(session);
-            await changeGoalIntent(session.sessionId, context, latest => {
-              if (!latest?.active || (latest.id !== expected?.id && latest.restartOf !== expected?.id)) return null;
-              stopped = stops ? latest : null;
-              return {
-                ...latest,
-                ...(stops ? { active: false } : {}),
-                error: `Goal continuation after restart failed: ${reason}` +
-                  (stops ? " Choose Resume goal to try again." : retrying ? " Vibe64 tries again shortly." : "")
-              };
-            });
+            waiting = stops && await waitForAccountAfterRestart(session.sessionId, context, expected, error);
+            if (!waiting) {
+              await changeGoalIntent(session.sessionId, context, latest => {
+                if (!latest?.active || (latest.id !== expected?.id && latest.restartOf !== expected?.id)) return null;
+                stopped = stops ? latest : null;
+                return {
+                  ...latest,
+                  ...(stops ? { active: false } : {}),
+                  error: `Goal continuation after restart failed: ${reason}` +
+                    (stops ? " Choose Resume goal to try again." : retrying ? " Vibe64 tries again shortly." : "")
+                };
+              });
+            }
             if (stopped) await stopUnrecoverableGoal(session.sessionId, context, stopped, reason);
           } catch { /* The original recovery failure remains visible in the operational log. */ }
           const target = { projectSlug, sessionId: session.sessionId, ...(actor ? { actor } : {}) };
+          if (waiting) {
+            results.push({ ...target, waiting: true });
+            continue;
+          }
           reportFailure(error, { ...target, ...(stopped ? { stopped: true } : {}) });
           if (stopped) {
             logOperationalEvent(logger, "warn", {

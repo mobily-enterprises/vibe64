@@ -180,10 +180,14 @@ test("a turn the loop rule stopped, or one whose resume may have reached the AI,
   assert.equal(unsure.sends.length, sent);
 });
 
-test("an AI account set reaches every open session's chats whose turn waits for an account, and no other, as the person it ran for", async (t) => {
+test("an AI account set reaches every open session's chats whose turn waits for an account, as the person it ran for, and every goal that waits, and no other", async (t) => {
   const f = await working(t);
   await stopByTheAccount(f, "switch");
   const marked = { assistant_routing_request: JSON.stringify({ ...f.state(), submittedBy: { id: "7", username: "member" } }) };
+  // A goal whose turn its account stopped, its intent marked; one its person paused or stopped; one never stopped by it.
+  const goal = (id, { active = true, mark = true } = {}) => JSON.stringify({ version: 1, id, active, pending: null,
+    interruptions: [{ key: `goal:${id}:sign-in`, at: "2026-11-28T12:05:00.000Z", cause: "sign-in", resumedAt: null,
+      ...(mark ? { awaitsAccount: id } : {}) }] });
   // Waiting for Continue, as a chat idle when the account changed is: nothing marked.
   const unmarked = { assistant_routing_request: JSON.stringify({ ...f.state(), interruptions: [] }) };
   const sessions = {
@@ -193,10 +197,10 @@ test("an AI account set reaches every open session's chats whose turn waits for 
       { conversationId: "chat-ai-task", task: { id: "task-1" }, routingMetadata: marked },
       { conversationId: "chat-closing", state: "closing", routingMetadata: marked }
     ] },
-    "session-2": { metadata: unmarked, chats: [] },
+    "session-2": { metadata: { ...unmarked, assistant_goal_intent: goal("goal-2") }, chats: [] },
     // Its Main chat fails to continue; the next session still goes on.
-    "session-3": { metadata: marked, chats: [] },
-    "session-4": { metadata: marked, chats: [] }
+    "session-3": { metadata: { ...marked, assistant_goal_intent: goal("goal-3", { active: false }) }, chats: [] },
+    "session-4": { metadata: { ...marked, assistant_goal_intent: goal("goal-4", { mark: false }) }, chats: [] }
   };
   const calls = [];
   const continued = (chat) => async (sessionId, options) => {
@@ -219,13 +223,20 @@ test("an AI account set reaches every open session's chats whose turn waits for 
     assistantContext: { assistantSessionOptions: async (sessionId) => ({ session: { metadata: sessions[sessionId].metadata },
       runtime: { store: { listSessionConversations: async () => sessions[sessionId].chats } } }) },
     mainChatRouting: { continueAfterAccountSet: continued("main") },
-    sessionConversations: { continueTemporaryTurnAfterAccountSet: continued("") }
+    sessionConversations: { continueTemporaryTurnAfterAccountSet: continued("") },
+    // A goal continues as the person who set it, whom its own continuation authorizes.
+    goals: { readGoalIntent: (session) => JSON.parse(session.metadata.assistant_goal_intent || "null"),
+      continueGoalAfterAccountSet: async (sessionId) => {
+        calls.push([sessionId, "goal"]);
+        return { sessionId, resumed: true };
+      } }
   });
   await continueTurnsAfterAccountSet();
   const member = { id: "7", username: "member", projectSlug: "open" };
   assert.deepEqual(calls, [
     ["session-1", "main", member],
     ["session-1", "chat-marked", member],
+    ["session-2", "goal"],
     ["session-3", "main", member],
     ["session-4", "main", member]
   ]);

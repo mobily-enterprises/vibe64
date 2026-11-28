@@ -26,6 +26,7 @@ import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shar
 import { GOAL_RECOVERY_RETRY_DELAYS_MS, createServiceGoalRecovery } from "./serviceGoalRecovery.js";
 import { createServiceGoalLimitReset } from "./serviceGoalLimitReset.js";
 import { createServiceGoalChatContinuation } from "./serviceGoalChatContinuation.js";
+import { createServiceGoalAccountWait, goalWaitsForAccount } from "./serviceGoalAccountWait.js";
 import { AGENT_WRITE_WAIT_MS } from "./serviceSessionAccess.js";
 import { issueMainTurnAuthority } from "./mainTurnAuthority.js";
 import { NO_SERVER_RUN } from "./turnInterruptions.js";
@@ -238,6 +239,7 @@ function createServiceGoals({
     let context = await assistantContext.assistantSessionOptions(sessionId);
     let intent = readGoalIntent(context.session);
     if (!intent?.active) return { sessionId, skipped: true, reason: "no-active-goal" };
+    if (goalWaitsForAccount(intent)) return { sessionId, skipped: true, reason: "waiting-for-account" };
     if (intent.daemonId === goalRuntimeId) return { sessionId, skipped: true, reason: "continued-by-this-server" };
     if (sessionIsClosing(context.session)) return { sessionId, skipped: true, reason: "session-closing" };
     if (context.session.status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED) return { sessionId, skipped: true, reason: "session-renewing" };
@@ -351,6 +353,20 @@ function createServiceGoals({
     changeGoalIntent,
     readCanonicalAgentGoal,
     writeAgentGoal
+  });
+  // A goal whose turn its AI account stopped continues once an account its person can use is set.
+  const accountWait = createServiceGoalAccountWait({
+    state,
+    logger,
+    sessionAccess,
+    assistantContext,
+    sessionAgent,
+    readGoalIntent,
+    changeGoalIntent,
+    readCanonicalAgentGoal,
+    goalInterruptions,
+    goalRuntimeId,
+    recoverSessionGoal
   });
 
   async function applyAgentGoalReadResult(sessionId, context, result) {
@@ -643,52 +659,18 @@ function createServiceGoals({
     return canonical ? result : completeResult(result);
   }
 
-  /**
-   * A Codex account change pauses a goal whose turn is still running on the
-   * previous account, so that runtime starts no further turn. Once it has
-   * stopped, the goal resumes on the current account as the person who set it.
-   */
-  async function continueGoalAfterAccountChange(sessionId, options = {}) {
-    const { threadId = "" } = options;
-    const context = await assistantContext.assistantSessionOptions(sessionId);
-    const intent = readGoalIntent(context.session);
-    if (!intent?.active || !threadId || intent.native?.threadId !== threadId || state.lifecycle.closing ||
-        sessionIsClosing(context.session)) return { sessionId, skipped: true };
-    try {
-      const actor = await state.assistantRuntime.authorizeProjectMessage(intent.actor, sessionAccess.projectRuntimeContext().projectSlug);
-      const observed = await readCanonicalAgentGoal(sessionId, { vibe64User: actor });
-      if (observed.goal?.status !== "paused") return { sessionId, skipped: true };
-      const result = await updateCanonicalAgentGoal(sessionId, {
-        action: "resume",
-        vibe64User: actor,
-        expectedSegmentId: observed.target.segmentId,
-        expectedGoalId: observed.goal.id,
-        messageId: `goal-account-change-${randomUUID()}`
-      });
-      if (result?.ok === false) throw Object.assign(new Error(result.error || "Goal continuation failed."), result);
-      return { sessionId, resumed: true };
-    } catch (error) {
-      logOperationalEvent(
-        logger,
-        "warn",
-        {
-          event: "vibe64.agent_goal.account_change_continue_failed",
-          component: "vibe64.agent_goal",
-          projectSlug: sessionAccess.projectRuntimeContext().projectSlug,
-          sessionId,
-          actor: String(intent.actor?.username || ""),
-          code: error.code,
-          error: error.message
-        },
-        "A goal paused by an account change could not resume; it stays paused."
-      );
-      return { sessionId, ok: false, code: error.code, error: error.message };
-    }
-  }
-
   const { stopUnrecoverableGoal } = goalInterruptions;
   const recoverActiveGoals = createServiceGoalRecovery({
-    state, logger, project, sessionAccess, assistantContext, recoverSessionGoal, readGoalIntent, changeGoalIntent, stopUnrecoverableGoal
+    state,
+    logger,
+    project,
+    sessionAccess,
+    assistantContext,
+    recoverSessionGoal,
+    readGoalIntent,
+    changeGoalIntent,
+    stopUnrecoverableGoal,
+    waitForAccountAfterRestart: accountWait.waitAfterRestart
   });
 
   async function applyGoalSelection(sessionId, selection, preferences, context) {
@@ -708,7 +690,8 @@ function createServiceGoals({
   return Object.freeze({
     applyGoalSelection,
     cancelGoalIfMainAiChanged,
-    continueGoalAfterAccountChange,
+    continueGoalAfterAccountChange: accountWait.continueAfterAccountChange,
+    continueGoalAfterAccountSet: accountWait.continueAfterAccountSet,
     continueGoalIntentAfterMessage: chatContinuation.continueAfterMessage,
     continueGoalWhenLimitResets: limitReset.continueWhenLimitResets,
     readAgentGoal,
@@ -720,7 +703,8 @@ function createServiceGoals({
     resumeGoalAfterTurn: chatContinuation.resumeAfterTurn,
     stopGoalIntent,
     updateAgentGoal,
-    updateCanonicalAgentGoal
+    updateCanonicalAgentGoal,
+    waitGoalForAccountAfterTurn: accountWait.afterTurn
   });
 }
 

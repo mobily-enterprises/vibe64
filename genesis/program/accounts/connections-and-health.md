@@ -885,9 +885,10 @@ and provider identity (`currentCodexLoginGeneration`, read from the marker below
 and cached by its file identity), so a session's next message starts a runtime on
 the current account beside the finishing one, and a session saved on the previous
 sign-in moves to the new directory. Once the previous runtime stopped, the
-terminals service's `continueGoalAfterAccountChange` resumes a goal the change
-paused, through the ordinary goal resume; without a Codex sign-in that resume is
-refused and the goal stays paused. Recording the session's runtime for the new
+terminals service's `continueGoalAfterAccountChange` marks a goal the change
+paused as stopped by its account and continues it through the goal's resume;
+without a Codex sign-in the goal stays paused, waiting for an account its person
+can use, and the next AI account set continues it (serviceGoalAccountWait.js). Recording the session's runtime for the new
 sign-in reports the directory it recorded before (`supersededRuntimeDir` from
 `writeCodexAppServerIdentityMetadata`), and JSKIT removes that directory once its
 runtime has verifiably stopped. A running Codex process keeps its own sign-in in

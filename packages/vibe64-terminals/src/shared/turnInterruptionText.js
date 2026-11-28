@@ -177,14 +177,16 @@ function utcClock(at) {
 
 /**
  * The error of a request whose turn its AI account stopped, which its Continue control shows while it waits for an
- * account: signed out, or refused with `error`.
+ * account, or of such a goal, which its Resume goal control shows: signed out, or refused with `error`.
  * @param {string} cause
  * @param {string} [error]
+ * @param {{ goal?: boolean }} [options]
  */
-function turnInterruptionAccountWait(cause, error = "") {
+function turnInterruptionAccountWait(cause, error = "", { goal = false } = {}) {
+  const work = goal ? "the goal" : "this turn";
   return cause === TURN_INTERRUPTION_CAUSES.SIGN_IN && !error
-    ? "Sign in to the AI account again in AI Accounts, and Vibe64 continues this turn."
-    : `${trimEnd(error)}. Vibe64 continues this turn once an AI account you can use is set in AI Accounts.`;
+    ? `Sign in to the AI account again in AI Accounts, and Vibe64 continues ${work}.`
+    : `${trimEnd(error)}. Vibe64 continues ${work} once an AI account you can use is set in AI Accounts.`;
 }
 
 /** A Stopped request's error after the loop rule stopped resuming it, which its Continue control shows. */

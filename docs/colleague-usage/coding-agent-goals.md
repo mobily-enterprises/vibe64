@@ -51,8 +51,10 @@ goal keeps its model, role and conversation. Once the connection is ready, send
 your next message or choose **Goal** → **Resume goal** using the current account.
 A Codex goal running when you switch Codex accounts needs neither: its current
 answer finishes on the previous account, then the goal continues on the new
-account by itself. If Codex is no longer connected, it stays paused until you
-sign in and resume it. A failed message that was never delivered can use **Retry**. You do not need to
+account by itself. A goal whose turn a sign-out ended, or that the new account
+can't run (Codex no longer connected, say), says **Not resumed yet:** in Main
+chat and continues by itself, once, when an account you can use is set in **AI
+Accounts**; a goal you paused, stopped or cancelled stays as it is. A failed message that was never delivered can use **Retry**. You do not need to
 cancel the goal. Access to its selected model is still required; an account change
 during a pending delivery may require cancelling that request and sending it again.
 These steps apply on desktop and mobile. Account sign-in and credential entry
@@ -197,11 +199,14 @@ yet), Vibe64 tries again about 30 seconds, 2 minutes and 10 minutes later. Until
 then the goal control shows the error ending in **Vibe64 tries again shortly.**;
 it disappears once the goal continues. A goal is never sent twice: an attempt
 that may have reached the AI is checked, not repeated. When the last attempt
-fails too, Vibe64 stops trying: Main chat's history says why in red, for
-example **Not resumed: Sign in to Claude Code with your Claude account before
-continuing. Choose Resume goal to try again.**, the goal control keeps that
-error, and no later restart tries it again until you choose **Resume goal** or
-send your next message.
+fails too (for example the person who set the goal can no longer use the
+project), Vibe64 stops trying: Main chat's history says why in red, **Not
+resumed:** with the reason, then **Choose Resume goal to try again.**, the goal
+control keeps that error, and no later restart
+tries it again until you choose **Resume goal** or send your next message. When
+the last attempt fails because the AI account can't be used (signed out, say),
+the goal waits instead: **Not resumed yet:**, and it continues once an account
+you can use is set.
 If the AI account was changed or reconnected in **AI Accounts** while the goal
 ran, the goal continues on the account connected now, as **Resume goal** would.
 Main chat's history says each time on your own clock. An update or an orderly
