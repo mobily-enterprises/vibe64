@@ -80,10 +80,11 @@ test("a steer sent while a Save holds the lock, which the engine started as its 
   await assertPlanGoesOn(f);
 });
 
-test("a request its stopped turn's end already settled takes the steer's own turn as well", async (t) => {
+test("a request its replaced turn's end already settled takes the steer's own turn as well", async (t) => {
   const f = await implementing(t);
-  // turn-1's end is decided between the steer's admission, which saw turn-1 running, and its dispatch.
-  await f.service.afterTurn("session-1", end("turn-1", "interrupted", ACCOUNT_CHANGED), f.context);
+  // turn-1's end, interrupted with nothing to say, is decided between the steer's admission, which saw turn-1
+  // running, and its dispatch.
+  await f.service.afterTurn("session-1", end("turn-1", "interrupted"), f.context);
   assert.deepEqual([f.state().status, f.state().delivery, f.state().error],
     ["waiting", "pending", "The implementation turn interrupted. Resume when ready."]);
   f.deliverNextAs({ deliveryMode: "new_turn" });
@@ -117,4 +118,30 @@ test("a steer that joins the running turn leaves the request's turn as it is", a
   await f.service.send("session-1", steer, f.context);
   assert.deepEqual([f.state().status, f.state().turnId], ["working", "turn-1"]);
   assert.deepEqual(f.state().steering.map(({ messageId }) => messageId), ["steer-1"]);
+});
+
+const noticeTexts = (f) => [...f.notices.values()].map((turn) => turn.system.text);
+
+test("a plan turn its engine stopped with a reason of its own resumes at once, as after a restart, instead of waiting for Resume", async (t) => {
+  const f = await implementing(t);
+  f.agent.sessionState = idle;
+  await f.service.afterTurn("session-1", end("turn-1", "interrupted", ACCOUNT_CHANGED), f.context);
+  assert.equal(f.sends.length, 2, f.state().error);
+  assert.equal(f.sends[1].input.displayMessage, "Continue after the interruption.");
+  assert.deepEqual([f.state().status, f.state().delivery, f.state().turnId], ["working", "accepted", "turn-2"]);
+  assert.equal(f.state().interruptions.at(-1).cause, "engine");
+  const notice = noticeTexts(f).find((text) => text.includes(ACCOUNT_CHANGED));
+  assert.match(notice, /^The AI engine stopped at \d\d:\d\d UTC: The signed-in Claude account changed\.\nResumed/u);
+  // The same end published again resumes nothing twice.
+  await f.service.afterTurn("session-1", end("turn-1", "interrupted", ACCOUNT_CHANGED), f.context);
+  assert.equal(f.sends.length, 2);
+});
+
+test("a plan turn the person stopped stays paused whatever else ended it", async (t) => {
+  const f = await implementing(t);
+  f.metadata.assistant_routing_request = JSON.stringify({ ...f.state(), stopped: true });
+  f.agent.sessionState = idle;
+  await f.service.afterTurn("session-1", end("turn-1", "interrupted", ACCOUNT_CHANGED), f.context);
+  assert.equal(f.sends.length, 1);
+  assert.deepEqual([f.state().status, f.state().error], ["waiting", "Paused at your request."]);
 });
