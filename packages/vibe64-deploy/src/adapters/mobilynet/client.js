@@ -36,12 +36,14 @@ import { prebuiltTar } from "./prebuilt.js";
 // service's own name and goes with it.
 
 // mobilynet's refusals that a retry of the same request would only repeat: the step waits for a person (a new key, a
-// raised quota, more capacity, a choice) rather than for time.
+// raised quota, more capacity, a choice) rather than for time, or (`host_not_updated`) for mobilynet to update a
+// machine's server, which sending the request again, a prebuilt release's whole output with it, doesn't hasten.
 const REFUSALS = new Set([
   "unauthenticated", "key_expired", "key_revoked", "address_not_allowed", "payment_required", "organisation_suspended",
   "scope_missing", "no_capacity", "quota_exceeded", "name_taken", "size_unknown", "size_not_offered", "validation_failed",
   "invalid_request", "idempotency_key_reused", "settings_missing", "invalid_state", "need_linked", "hosted_service_linked",
-  "no_previous_version", "domain_in_use", "no_backup_store", "lease_held", "spending_cap_reached", "refresh_not_running"
+  "no_previous_version", "domain_in_use", "no_backup_store", "lease_held", "spending_cap_reached", "refresh_not_running",
+  "host_not_updated"
 ]);
 // The refusals a token source may answer by refreshing its access token, once.
 const TOKEN_REFUSALS = new Set(["unauthenticated", "key_expired"]);

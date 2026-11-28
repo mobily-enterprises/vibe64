@@ -1072,7 +1072,9 @@ manifest's key, the header's SHA-256, the output's size and SHA-256, its
 declaration and its build), and moves the app to it over two steps, or, with
 its `switchBack` fault, switches the app back to the version it ran with the
 check's failure as its `lastFailure`; `hostNotUpdated` answers `409
-host_not_updated`.
+host_not_updated` in mobilynet's words, a refusal the client never tries again:
+the machine's server takes a prebuilt release once mobilynet updates it, which
+sending the output again doesn't hasten.
 
 ## The Google Cloud adapter
 
@@ -1279,8 +1281,8 @@ characters), else refused before anything is sent (`_signature_invalid`, `422`);
 with no release waiting for one, `_nothing` (`409`). Files gone or changed since
 the build fail the release. Then the adapter's `releasePrebuilt` hands the
 target that one release, the only write a signed release makes at the provider:
-a refusal (mobilynet's `422`, or any answer not worth repeating) fails it in the
-provider's words; no answer is sent again after backoff pauses, five times in a
+a refusal (mobilynet's `422`, its `409 host_not_updated`, or any answer not
+worth repeating) fails it in the provider's words, sent once; no answer is sent again after backoff pauses, five times in a
 call, then the call ends still releasing, to send it again at the next (the same
 output answers the release it made). Following reads the app at each pause (a
 read that fails is made again) until it runs the release (`live`), or isn't

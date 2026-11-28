@@ -61,7 +61,8 @@ function createStandInMachines(world, { releases }) {
     if (kind !== "prebuilt" || !Buffer.isBuffer(body)) {
       return failure(422, "validation_failed", "Check release.", { fieldErrors: { release: "The stand-in takes a machine's app's release as a prebuilt one only: MobilyNet-Release: prebuilt." } });
     }
-    if (faults.hostNotUpdated) return failure(409, "host_not_updated", "The machine's server runs an older host agent, which takes no prebuilt release: try again once it is updated.");
+    // mobilynet's words (its machinesErrors.js hostNotUpdated).
+    if (faults.hostNotUpdated) return failure(409, "host_not_updated", "Its server runs an older host agent, which does this once MobilyNet updates it.");
     const made = releases.prebuilt(machine.projectId, app.name, body, contentSha256, releaseKeys.get(machine.projectId) ?? []);
     if (made.refusal) return made.refusal;
     const { version } = made.release;

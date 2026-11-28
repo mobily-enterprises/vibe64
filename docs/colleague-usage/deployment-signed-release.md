@@ -81,6 +81,10 @@ release is being handed over or followed, a new one waits until it ends.
 - "mobilynet refused the release: The release isn't signed by any of the
   project's release keys …": sign this release's manifest with the key it
   names, one of the project's release keys.
+- "mobilynet refused the release: Its server runs an older host agent, which
+  does this once MobilyNet updates it.": the machine's server can't take a
+  prebuilt release yet. Nothing changed on the machine. Build again once the
+  provider has updated it.
 - "Switched back to …: …": the release's check failed on the machine; the app
   runs the version before. Fix the cause, then build again.
 - "The release's files are gone from the machine that built it": build again.
