@@ -25,6 +25,7 @@ function publication({ closing = false, restorePreviewAfterTurn } = {}) {
     providerUsage: { observe() {} },
     publishSessionChanged: { agentTerminal: async () => {} },
     resumeGoalAfterTurn: async () => false,
+    waitGoalForAccountAfterTurn: async () => false,
     state: { lifecycle: { closing }, trackShutdownWork: (promise) => { work.push(promise); return promise; } },
     workspacePreparation: { ensureWorkspacePrepared: async () => {} }
   });

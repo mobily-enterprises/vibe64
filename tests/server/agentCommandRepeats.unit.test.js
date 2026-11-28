@@ -146,6 +146,7 @@ test("Main turn ends ask for the turn's command summary; a temporary chat's turn
     providerUsage: { observe() {} },
     publishSessionChanged: { agentTerminal: async () => {} },
     resumeGoalAfterTurn: async () => false,
+    waitGoalForAccountAfterTurn: async () => false,
     state: { lifecycle: { closing: false }, trackShutdownWork: (promise) => { work.push(promise); return promise; } },
     workspacePreparation: { ensureWorkspacePrepared: async () => {} }
   });

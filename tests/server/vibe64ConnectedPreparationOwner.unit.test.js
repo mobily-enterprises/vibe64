@@ -244,6 +244,7 @@ const UNATTENDED_STARTS = Object.freeze([
       providerUsage: { observe() {} },
       publishSessionChanged: { agentTerminal: async () => {} },
       resumeGoalAfterTurn: async () => false,
+      waitGoalForAccountAfterTurn: async () => false,
       state: { lifecycle: { closing: false }, trackShutdownWork: (promise) => { work.push(promise); } },
       workspacePreparation: hosted.workspacePreparation
     });

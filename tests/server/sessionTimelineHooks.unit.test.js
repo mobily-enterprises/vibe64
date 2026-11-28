@@ -103,6 +103,7 @@ function turnPublication({ afterRoutedTurn = async () => {} } = {}) {
     cancelGoalIfMainAiChanged: async () => false,
     continueGoalWhenLimitResets: async () => {},
     resumeGoalAfterTurn: async () => false,
+    waitGoalForAccountAfterTurn: async () => false,
     restorePreviewAfterTurn: () => null,
     summarizeTurnCommands: () => null,
     logger: silentLogger,
