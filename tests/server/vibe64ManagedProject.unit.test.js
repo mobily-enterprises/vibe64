@@ -541,7 +541,7 @@ test("an empty canonical repository is created bare on the requested branch for 
 
 // A host's login profile may give Git command-scope config of its own: mobilynet's /etc/profile.d/90-mobilynet.sh
 // exports GIT_CONFIG_COUNT=2 with core.hooksPath and core.fsmonitor, replacing a caller's entries, so a login shell
-// loses every one Vibe64 gave its command (27 Nov: Online's GitHub open lost its token transport's credential
+// loses every one Vibe64 gave its command (27 Nov: opening a GitHub project lost its token transport's credential
 // helper so). The canonical repository's scripts keep their safe directories whatever such a profile sets: this
 // test's profile replaces the entries the same way, from the home, and a git shim records what each git sees.
 test("the canonical repository's scripts keep their safe directories whatever a login profile sets", async (t) => {
