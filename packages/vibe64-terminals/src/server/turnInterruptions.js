@@ -241,9 +241,9 @@ const OVERLOADED = /overloaded|\b529\b|\b503\b|temporarily unavailable|service u
 const CONNECTION = /connection (to|with) .* (was )?lost|observation was lost|econnreset|econnrefused|etimedout|socket hang up|network error|fetch failed|connection (closed|reset|error)/iu;
 
 /**
- * How a turn that ended while this run sent it ended, when it did not complete and was not cancelled: its engine died,
- * its connection was lost, the AI service was overloaded, the account needs signing in or reached its limit, or the AI
- * reported another error. null for a turn that completed, was cancelled, or left nothing to say.
+ * How a turn that ended while this run sent it ended, when it did not complete and was not cancelled: its engine died
+ * or stopped it, its connection was lost, the AI service was overloaded, the account needs signing in or reached its
+ * limit, or the AI reported another error. null for a turn that completed, was cancelled, or left nothing to say.
  * @param {{ state?: string, error?: string, observationError?: string }} run the ended agent run
  * @returns {{ cause: string, detail: string } | null}
  */
@@ -258,6 +258,9 @@ function turnEnding(run = {}) {
   if (SIGN_IN.test(error)) return { cause: INTERRUPTION_CAUSE.SIGN_IN, detail };
   if (observation || CONNECTION.test(error)) return { cause: INTERRUPTION_CAUSE.CONNECTION, detail: observation || detail };
   if (OVERLOADED.test(error)) return { cause: INTERRUPTION_CAUSE.OVERLOADED, detail };
+  // Interrupted with a reason of its own, the turn was stopped by its engine (to change the signed-in account, say),
+  // not by the AI's failure, nor by the person, whose Stop interrupts with nothing to say and marks the request stopped.
+  if (state === "interrupted" && error) return { cause: INTERRUPTION_CAUSE.ENGINE, detail };
   if (state === "failed" || state === "timed_out" || error) return { cause: INTERRUPTION_CAUSE.FAILED, detail };
   return null;
 }

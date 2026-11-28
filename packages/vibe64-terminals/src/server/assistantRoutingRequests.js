@@ -21,7 +21,15 @@ const CANCELLED_KEY = "assistant_cancelled_messages";
 const MAX_CANCELLED_MESSAGES = 50;
 
 const activeMessage = state => state.followup || state.input;
-// The turn an engine's receipt for a message names: the turn it started, or the running turn it joined.
+/**
+ * The turn an engine's receipt for a message names: the turn it started, or the running turn it joined. A request's
+ * turn (`turnId`) is the turn the receipt of the latest message routing delivered under it names: its own message, a
+ * follow-up or resume, or a steer its engine started as a turn of its own (`joinSteering`). Whether a turn is the
+ * request's (its end, its reported outcome, its plan handoff and check, its interruption) is always a comparison with
+ * that one id, so a turn that replaced another is the request's from its receipt on, and the replaced turn's end is no
+ * longer the request's to decide.
+ * @param {{ turnId?: string, turn?: { id?: string }, codexAgentTurn?: { turnId?: string } } | null} result
+ */
 const receiptTurnId = result => result?.turnId || result?.turn?.id || result?.codexAgentTurn?.turnId || "";
 /**
  * The role the plan command acts as for the request's running turn: "" (read only) for a task or no working request;

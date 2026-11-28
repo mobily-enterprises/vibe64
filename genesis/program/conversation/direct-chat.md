@@ -123,10 +123,14 @@ cancelled is not sent, and its turn is stopped if a Cancel arrives during the
 send. Its entry in a workflow's steering list joins the request's latest record
 in one session mutation, unless the request was stopped or replaced. A message
 for no running turn, a cancelled or repeated one, and new requests still wait.
-Either way the steer joins through `joinSteering`: one its engine started as a
-turn of its own (`deliveryMode: "new_turn"`) because the request's turn it was
-sent into ended as it went (the engine stopped that turn to change the
-signed-in account, say) is the request's turn from then on. The request takes
+A request's turn is the turn the receipt of the latest message routing
+delivered under it names (`receiptTurnId`): its own message, a follow-up or
+resume, or a steer, and every check of whether a turn is the request's (its
+end, its outcome, its plan handoff and check, its interruption) compares with
+that one id. Either way the steer joins through `joinSteering`: one its engine
+started as a turn of its own (`deliveryMode: "new_turn"`) because the request's
+turn it was sent into ended as it went (the engine stopped that turn to change
+the signed-in account, say) is the request's turn from then on. The request takes
 the new turn's id and goes on working, without the follow-up, error or timed
 resume the replaced turn's end prepared, so its agent can report the step's
 outcome and the step is decided when that turn ends. The replaced turn's end
@@ -5575,7 +5579,10 @@ then decide through its interruptions
 ([assistantRoutingInterruptions.js](../../../packages/vibe64-terminals/src/server/assistantRoutingInterruptions.js)), once per interruption (its request's message and turn), from what
 ended it: an earlier run's end, or a turn of this run that failed
 (`turnEnding`: the engine stopping, a lost connection, an overloaded service, a
-sign-in, a usage limit, any other error). The AI is told nothing when the turn
+sign-in, a usage limit, any other error). A turn interrupted with a reason of
+its own (the engine stopped it to change the signed-in account, say) is the
+engine stopping, never an AI error: the person's Stop interrupts with nothing to
+say and marks the request stopped. The AI is told nothing when the turn
 completed, was cancelled or was a plain Stop. A crash, restart, update or
 engine stop resumes at once; a lost connection or overloaded service after
 `TURN_RESUME_BACKOFF_MS` (30 s, Continue resumes sooner); a sign-in, usage limit

@@ -10,7 +10,7 @@ const TURN_INTERRUPTION_CAUSES = Object.freeze({
   RESTART: "restart",
   // Vibe64's previous process shut down in order and a different version started.
   UPDATE: "update",
-  // The AI engine's process ended while Vibe64 ran.
+  // The AI engine's process ended while Vibe64 ran, or the engine stopped the turn itself with a reason of its own.
   ENGINE: "engine",
   // Vibe64 lost its connection to the AI, or the AI service was unreachable.
   CONNECTION: "connection",

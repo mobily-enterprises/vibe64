@@ -12,7 +12,7 @@ import {
   assistantReplyAsksPerson,
   latestAssistantQuestionsAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
-import { read, failure, activeMessage, assistantPlanHandsOff, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
+import { read, failure, activeMessage, assistantPlanHandsOff, receiptTurnId, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
 import { askWholeChecks, writeWholeChecksQuestion } from "./assistantWholeChecks.js";
 import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffNotice } from "./assistantPlanHandoff.js";
 import { createAssistantRoutingInterruptions } from "./assistantRoutingInterruptions.js";
@@ -425,7 +425,7 @@ function createAssistantRoutingOutcomes({
           messageId: activeMessage(state).messageId || state.messageId,
           threadId: state.threadId
         }, context).catch(() => null);
-        if (receipt?.admission === "accepted") state.turnId = receipt.turnId || "";
+        if (receipt?.admission === "accepted") state.turnId = receiptTurnId(receipt);
       }
       if (!state.turnId) {
         state.status = "waiting";

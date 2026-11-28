@@ -202,7 +202,7 @@ function createAssistantRoutingDelivery({
         state.status = "working";
         state.delivery = "accepted";
         // The attempt's own run (saved with it) sent this turn, which may have been an earlier one.
-        state.turnId = receipt.turnId || "";
+        state.turnId = receiptTurnId(receipt);
         delete state.error;
         await records.save(context, state);
         return { ok: true, delivered: true, messageId, threadId: state.threadId };

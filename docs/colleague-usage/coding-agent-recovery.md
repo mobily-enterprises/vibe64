@@ -28,7 +28,8 @@ sent twice.
 
 When Vibe64 is updated, restarted in order (a release, a rollback, a server
 restart or a move) or crashes while the AI is working (even while your message
-is still being sent to it), or the AI's engine stops or its connection is lost,
+is still being sent to it), or the AI's engine stops (or stops the turn itself,
+for example because the signed-in AI account changed) or its connection is lost,
 Vibe64 resumes the turn by itself in the same conversation with the same AI
 session, in Main chat, temporary chats and AI tasks, as the person who sent it.
 It does not wait for anyone to open the chat. Its message to the AI starts with
