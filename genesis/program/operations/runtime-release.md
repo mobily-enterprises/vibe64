@@ -125,14 +125,18 @@ build in `index.html` (its `jskit-client-build` meta tag), and the realtime
 reconnection after a restart announces the build the server now serves. When
 they differ, the JSKIT shell offers **Vibe64 was updated. Reload to get the
 latest version.** with **Reload**, naming the app from `index.html`'s `<title>`.
-`src/error.js`'s policy hands that offer to `src/lib/vibe64ClientUpdateOffer.js`
-while the editor's top banner (`Vibe64PlannedRestartBanner.vue`, in every
-`StudioAppShellLayout`) is on the page, which shows it as the update's one
-notice: inside the green message after a planned restart, and on its own,
-blue, otherwise, with **Reload** (JSKIT's action) and **Dismiss**. An offer
-the shell's banner showed before the top banner came moves into it, keeping
-its id, so JSKIT's withdrawal still reaches it; a page without the top banner
-keeps the shell's banner (`ShellErrorHost` in `src/App.vue`). Nothing polls,
+`src/error.js`'s policy hands that offer to `src/lib/vibe64ClientUpdateOffer.js`,
+which holds it under the id JSKIT withdraws it by. While the editor's top
+banner (`Vibe64PlannedRestartBanner.vue`, in every `StudioAppShellLayout`) is
+on the page it shows the offer as the update's one notice: inside the green
+message after a planned restart, and on its own, blue, otherwise, with
+**Reload** (JSKIT's action) and **Dismiss**. Once the page has settled without
+a top banner (before the first one comes, while Learning holds the route, on a
+host's own page) the offer is reported again for the shell's banner
+(`ShellErrorHost` in `src/App.vue`), and the next top banner takes it back; one
+closed there stays closed. One page's top banner giving way to the next page's
+in one update keeps it in the top banner. JSKIT's withdrawal removes it
+wherever it shows. Nothing polls,
 the page never reloads by itself, and a development (`npm run dev`) page has no
 build to compare. See `docs/colleague-usage/vibe64-updates.md`.
 The build id follows the source alone, never the directory a build runs in:
