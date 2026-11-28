@@ -156,7 +156,9 @@ function useVibe64TemporaryAi({
             if (superseded && observed.messageId) update.messageId = observed.messageId;
             if (!observed.readError) {
               update.status = normalizeText(observed.status) || task.status;
-              update.busy = temporaryAiTurnIsActive(update.status);
+              // The server's report alone says whether the AI is working: its turn has started, or routing still
+              // holds the request, whose chat keeps its last turn's status until then.
+              update.busy = snapshot.status === "working";
               update.phase = update.busy ? normalizeText(snapshot.phase) : "";
               update.runId = observed.runId || task.runId;
               update.outcomeKind = normalizeText(observed.outcome?.kind);

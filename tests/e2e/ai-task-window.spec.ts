@@ -591,6 +591,17 @@ test.describe("what the rest of the page does", () => {
     await expect(page.locator("[data-vibe64-ai-task-button]").first()).toContainText("Fix it with AI");
   });
 
+  test("the task is working once its AI takes the turn, while Vibe64 is still recording the send", async ({ page }) => {
+    const { captured } = shared.server.temporary!;
+    let recorded = () => {};
+    captured.afterTurnStart = () => new Promise<void>((resolve) => { recorded = resolve; });
+    await aiTaskWorld(page, shared.server);
+    await openFix(page, shared.server);
+    await expect.poll(() => captured.startedTurns).toBe(1);
+    await expectPhase(page, "working");
+    recorded();
+  });
+
   test("Review resolved conflicts runs the task's own check", async ({ page }) => {
     await aiTaskWorld(page, shared.server);
     const taskId = await openFix(page, shared.server);

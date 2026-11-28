@@ -143,8 +143,11 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   const temporary = temporaryEngineId ? await temporaryConversationsFixture({
     engineId: temporaryEngineId, session, actions,
     publishSessionChanged: (sessionId, event) => publishSessionChanged(sessionId, event),
+    // Every turn event production's AI tasks follow (Vibe64AiTasksFeature): `admitted` moves a task to working when
+    // its AI takes the turn, before the send has recorded it.
     conversationTurns: {
       starting: (sessionId, turn) => aiTaskService.onTurnStarting({ sessionId, ...turn }),
+      admitted: (sessionId, turn) => aiTaskService.onTurnAdmitted({ sessionId, ...turn }),
       settled: (sessionId, conversationId, failure = null) => aiTaskService.onTurnSettled({ sessionId, conversationId, failure })
     },
     onSubscribe: conversationId => state.subscriptions.push(temporaryConversationId({
@@ -722,7 +725,10 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
     // Awaited before a native stop, so a scenario can hold a Stop or Cancel in flight.
     beforeNativeStop: async (): Promise<void> => {},
     // Replaces the completed native result, for example { status: "inProgress" }.
-    nativeTurn: (() => null) as (turn: number) => Record<string, unknown> | null };
+    nativeTurn: (() => null) as (turn: number) => Record<string, unknown> | null,
+    // Awaited after an AI task's send has started the AI's turn, before the send returns: a slow host still
+    // recording the send (its receipt, binding, transcript and delivery) holds it there for seconds.
+    afterTurnStart: async (): Promise<void> => {} };
   const sessionAgent = {
     async inspectAssistantPurposes() { return {}; },
     async assistantAccess() { return { canUse: true }; },
@@ -845,7 +851,9 @@ async function temporaryConversationsFixtureAt(root, { engineId, session, action
       },
       async startTemporaryConversationTurn(sessionId, input, ...options) {
         captured.temporaryTurns.push(commandInput(input));
-        return service.startTemporaryConversationTurn(sessionId, input, ...options);
+        const started = await service.startTemporaryConversationTurn(sessionId, input, ...options);
+        await captured.afterTurnStart();
+        return started;
       },
       async deleteTemporaryConversation(sessionId, input) {
         captured.temporaryDeletes += 1;

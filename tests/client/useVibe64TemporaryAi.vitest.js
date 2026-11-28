@@ -6,6 +6,7 @@ import { provideConversationFixture } from "./helpers/conversationRuntimeFixture
 import { createTemporaryConversationFixture, temporaryRequestBody } from "./helpers/temporaryConversationFixture.js";
 
 const mocks = vi.hoisted(() => ({
+  socket: null,
   transport: null,
   requests: [],
   responses: [],
@@ -32,7 +33,8 @@ async function mountTemporaryAi(options = {}) {
       sessionsApiPath: () => "/api/vibe64/sessions", ...options });
     return () => null;
   } });
-  provideConversationFixture(app, mocks.transport.attach(new EventEmitter()));
+  mocks.socket = mocks.transport.attach(new EventEmitter());
+  provideConversationFixture(app, mocks.socket);
   app.provide(routeLocationKey, { path: "/", params: { slug: "project-a" } });
   app.runWithContext(() => app.mount({}));
   mountedApps.add(app);
@@ -812,6 +814,25 @@ describe("useVibe64TemporaryAi", () => {
       status: "completed",
       title: "Check the schema"
     }));
+  });
+
+  it("keeps a chat working in another tab while routing holds its request, before the AI's turn starts", async () => {
+    // Another tab sent the chat's next message; this tab restored the chat after its last turn ended.
+    mocks.responses.push({ conversations: [{ conversationId: createdId, status: "completed", messages: [] }] });
+    const onTaskFinished = vi.fn();
+    const temporary = await mountTemporaryAi({ assistantReady: () => true, onTaskFinished });
+    await flushPromises();
+    expect(temporary.activeTask.value.busy).toBe(false);
+    // Routing has admitted the request; the saved chat still carries its last turn's status.
+    const route = { messageId: "message-2", status: "working", delivery: "sending", input: { message: "Next step." } };
+    mocks.transport.observe(createdId, { status: "ready", routingPending: true,
+      routingMetadata: { assistant_routing_request: JSON.stringify(route) } });
+    mocks.socket.emit("vibe64.session.changed", { projectSlug: "project-a", sessionId: "session-1",
+      reason: "assistant-routing-changed", conversationId: createdId, assistantRoutingRequest: route });
+    await vi.advanceTimersByTimeAsync(650);
+
+    expect(temporary.activeTask.value).toMatchObject({ busy: true, phase: "preparing" });
+    expect(onTaskFinished).not.toHaveBeenCalled();
   });
 
   it.each([
