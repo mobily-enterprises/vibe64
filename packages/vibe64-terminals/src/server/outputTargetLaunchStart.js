@@ -113,6 +113,8 @@ function previewStartedBefore(sessionId, time) {
  * @param {OutputTargetLaunchCoordination} dependencies.launchCoordination
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.ensureWorkspacePrepared
  * @param {ProjectServicesEnsure} dependencies.ensureProjectServices
+ * @param {() => Promise<object>} dependencies.openProjectForStart opens the session's project, as a visit does, for a
+ *   start someone asks for
  * @param {RuntimeEnv} dependencies.env
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -128,6 +130,7 @@ function createOutputTargetLaunchStart({
   launchCoordination,
   ensureWorkspacePrepared,
   ensureProjectServices,
+  openProjectForStart,
   env,
   project,
   publishSessionChanged,
@@ -154,11 +157,18 @@ function createOutputTargetLaunchStart({
   }
 
   /**
-   * The start takes its id and the time it was asked for before it waits for the launch lock (`launchRequest`).
+   * The start takes its id and the time it was asked for before it waits for the launch lock (`launchRequest`). One
+   * someone asks for first opens the session's project, as a visit does, outside every lock a project Close takes, so
+   * a project idle cleanup closed starts its services again; a refused open is its answer. An automatic start (the
+   * restart after a workspace preparation, the page's own start) leaves a closed project closed.
    * @param {{ stage?: (name: string) => void }} [controls]
    */
-  function startTerminal(sessionId, input = {}, { stage = doNothing } = {}) {
+  async function startTerminal(sessionId, input = {}, { stage = doNothing } = {}) {
     const request = { ...input, requestId: randomUUID(), requestedAt: new Date().toISOString() };
+    if (input.automatic !== true) {
+      const opened = await vibe64Result(() => openProjectForStart());
+      if (opened?.ok === false) return opened;
+    }
     return startWhenPrepared(launchCoordination, startOnce, sessionId, request, stage, prepareWaitMs);
   }
 

@@ -268,7 +268,8 @@ crash or a closed terminal, its shared services stop within a few seconds and do
 not keep running into its next start. Previews end with it too, unless their
 program keeps running after its terminal hangs up. Hiding Preview, navigating
 away or closing a browser tab does not perform project Close. Ordinary inactivity shutdown also
-stops them.
+stops them; the next Preview start, the coding agent's `vibe64-helper preview ensure` included,
+opens the project again and starts them.
 
 If another branch changes a running service declaration, startup asks you to Close
 and reopen the project. Save work as needed before doing so; this stops the other

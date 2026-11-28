@@ -20,6 +20,7 @@ import {
 } from "../../packages/vibe64-core/src/server/projectRuntimeOpenState.js";
 import { Vibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsFeature.js";
 import { createService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { createProjectServices } from "../../packages/vibe64-terminals/src/server/projectServices.js";
 import { terminalsServiceCollaborators } from "../fixtures/terminalsServiceCollaborators.js";
 import { codexAttachmentHostRoot } from "../../packages/vibe64-runtime/src/server/codexAttachmentPaths.js";
 import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js";
@@ -614,6 +615,146 @@ test("a partial project close restores Preview service admission after services 
     }
   });
 });
+
+/**
+ * A project nobody has open in a page, whose sessions `listSessions` lists, for the terminals service with the
+ * project services it is given, which declare none. Its runtime holds no session, so a start opens the project and
+ * then stops where it reads the session.
+ */
+function idleClosedProjectWorld(root, { listSessions = async () => [] } = {}) {
+  const runtimeRoot = path.join(root, "runtime");
+  const targetRoot = path.join(root, "project");
+  const projectServices = createProjectServices({ inspect: async () => ({ status: "ready", services: [] }) });
+  const runtime = {
+    adapter: {},
+    projectConfig: {},
+    stateRoot: runtimeRoot,
+    store: { withUnpinnedProject: operation => operation() },
+    async getSession() { throw new Error("This test's project has no session to start."); },
+    getSessionWithoutSource(sessionId) { return this.getSession(sessionId); },
+    listSessions
+  };
+  const project = {
+    createSessionStore() { return {}; },
+    async createRuntime() { return runtime; },
+    createRuntimeWithoutSource(options) { return this.createRuntime(options); },
+    currentProjectRuntimeRoot() { return runtimeRoot; },
+    currentTargetRoot() { return targetRoot; },
+    async readCurrentProject() { return { slug: "project" }; },
+    async readEnv() { return { env: { records: [] }, ok: true }; },
+    runInProjectContext(_slug, operation) { return operation(); },
+    async saveEnvUserValues() { return { ok: true }; }
+  };
+  const terminals = terminalsService({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project, projectServices });
+  return {
+    projectServices,
+    targetRoot,
+    terminals,
+    isOpen: async () => (await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open,
+    // What a session's Preview start gives the project's services: its project, source and environment.
+    servicesContext: {
+      projectContextRoot: targetRoot,
+      projectEnvironment: {},
+      runtime: { resolvePromptEnvironment: async () => ({}) },
+      sessionSourceRoot: targetRoot
+    }
+  };
+}
+
+const IDLE_CLEANUP_AFTER = () => Date.now() + 31 * 60 * 1000;
+
+async function eventually(check, message) {
+  const until = Date.now() + 5_000;
+  while (!check()) {
+    if (Date.now() > until) assert.fail(message);
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+}
+
+function within(promise, ms, message) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); })
+  ]).finally(() => clearTimeout(timer));
+}
+
+// A host's check ran `vibe64-helper preview ensure` in a session of a project that idle cleanup had closed hours
+// before and nobody had opened since: the editor refused it, "Project or session is closing; its services cannot
+// start.", until the editor restarted. Only a visit, or a chat message, reopened a project.
+test("a start in a project idle cleanup closed opens it again, as a visit does, before its services start; an automatic one does not",
+  async () => {
+    await withTemporaryRoot(async (root) => {
+      await mkdir(path.join(root, "project"), { recursive: true });
+      const world = idleClosedProjectWorld(root);
+      try {
+        await world.terminals.openProjectRuntime();
+        const idle = await world.terminals.closeDormantProjectRuntime({ nowMs: IDLE_CLEANUP_AFTER() });
+        assert.equal(idle.dormant, true, JSON.stringify(idle));
+        assert.equal(idle.ok, true, JSON.stringify(idle.closeResult?.failed));
+        assert.equal(await world.isOpen(), false);
+        await assert.rejects(world.projectServices.ensure(world.servicesContext), /cannot start/);
+
+        // A start nobody asked for, such as the restart after a workspace preparation, leaves a closed project closed.
+        await world.terminals.startOutputTargetTerminal("check", { outputTargetId: "app", automatic: true });
+        assert.equal(await world.isOpen(), false, "an automatic start reopened a project idle cleanup closed");
+
+        // A start someone asked for (a session command's preview ensure, Start) opens it as a visit does.
+        await world.terminals.startOutputTargetTerminal("check", { outputTargetId: "app" });
+        assert.equal(await world.isOpen(), true, "the start left the project closed");
+        await world.projectServices.ensure(world.servicesContext);
+      } finally {
+        await world.terminals.close();
+      }
+    });
+  });
+
+// A Close waits for the session's running commands to end, and a start such as `vibe64-helper preview ensure` runs in
+// one: a start that waited for the project's open behind a Close would wait for itself.
+test("a start waiting for its project's open when a Close begins, or asked for during one, is refused at once and opens nothing",
+  async () => {
+    await withTemporaryRoot(async (root) => {
+      await mkdir(path.join(root, "project"), { recursive: true });
+      // The idle check's session read, then the Close's, each held until the test lets it go.
+      const gates = [Promise.withResolvers(), Promise.withResolvers()];
+      let listings = 0;
+      const world = idleClosedProjectWorld(root, {
+        async listSessions() {
+          const gate = gates[listings];
+          listings += 1;
+          await gate?.promise;
+          return [];
+        }
+      });
+      try {
+        await world.terminals.openProjectRuntime();
+        const idle = world.terminals.closeDormantProjectRuntime({ nowMs: IDLE_CLEANUP_AFTER() });
+        await eventually(() => listings === 1, "idle cleanup never read the project's sessions");
+        // Its open waits behind idle cleanup's decision, which then closes the project.
+        const waiting = world.terminals.startOutputTargetTerminal("check", { outputTargetId: "app" });
+        await new Promise(resolve => setImmediate(resolve));
+        gates[0].resolve();
+        await eventually(() => listings === 2, "idle cleanup never started its Close");
+        const refused = await within(waiting, 2_000, "the waiting start was not refused when the Close began");
+        assert.equal(refused.ok, false, JSON.stringify(refused));
+        assert.equal(refused.code, "vibe64_project_closing", JSON.stringify(refused));
+        const during = await within(world.terminals.startOutputTargetTerminal("check", { outputTargetId: "app" }), 2_000,
+          "a start asked for during the Close waited for it");
+        assert.equal(during.code, "vibe64_project_closing", JSON.stringify(during));
+        gates[1].resolve();
+        const closed = await idle;
+        assert.equal(closed.dormant, true, JSON.stringify(closed));
+        assert.equal(closed.ok, true, JSON.stringify(closed.closeResult?.failed));
+        assert.equal(await world.isOpen(), false, "a refused start reopened the project behind its Close");
+        // After the Close, the same start opens the project again.
+        await world.terminals.startOutputTargetTerminal("check", { outputTargetId: "app" });
+        assert.equal(await world.isOpen(), true);
+      } finally {
+        for (const gate of gates) gate.resolve();
+        await world.terminals.close();
+      }
+    });
+  });
 
 const claudeSelection = JSON.stringify({ engineId: "claude", agentId: "claude", modelId: "sonnet", modelProviderId: "anthropic",
   variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` });

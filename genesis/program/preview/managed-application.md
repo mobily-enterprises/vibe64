@@ -1002,6 +1002,12 @@ merely opening a session.
 
 Preview Stop drains only the output. Project Close first stops session work, then
 all project-owned services, and clears its open state only after successful cleanup.
+A start refused by a closed project's services says the project is closed
+(`vibe64_project_services_closed`); one refused while the project, or the
+session, is closing says that (`vibe64_project_services_closing`). A start
+someone asks for opens a closed project first (`openProjectRuntimeForStart`,
+[Workspaces](../sessions/workspaces.md)), so only an automatic start meets a
+closed one.
 Dormant close and project deletion use that same owner. Managed exact-owner stop
 can clean a predecessor server’s service without its original source directory.
 A `per session` declaration uses the same service owner and serialized launch path,
@@ -1009,8 +1015,11 @@ with session identity in its execution selector and map key. It launches from th
 session's source using the session environment, reuses its live handle across
 output/test target changes, and does not attach to another session's instance.
 Session terminal cleanup calls the same owner's `closeSession`, selecting the
-project owner plus exact session ID; project-wide services remain running. Failed
-session cleanup prevents its relaunch until cleanup succeeds. Project shutdown
+project owner plus exact session ID; project-wide services remain running. The
+session's closing mark refuses its starts only while that cleanup runs: a failed
+cleanup is the error of its caller (archive, renewal, project Close), and the
+session's next start keeps a service still running or starts an exited one
+again, so no session stays refused after its close ends. Project shutdown
 drains both scopes. Endpoints/readiness remain application-owned; project Env is
 not a per-session value store.
 

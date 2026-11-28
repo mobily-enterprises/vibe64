@@ -32,6 +32,8 @@ const REPORTED_STARTS = 5;
  * @param {object} dependencies
  * @param {(sessionId: string, context: object) => Promise<object>} dependencies.ensureWorkspacePrepared
  * @param {ProjectServicesEnsure} dependencies.ensureProjectServices
+ * @param {() => Promise<object>} dependencies.openProjectForStart opens the session's project, as a visit does, for a
+ *   start someone asks for
  * @param {RuntimeEnv} dependencies.env
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -52,6 +54,7 @@ const REPORTED_STARTS = 5;
 function createOutputTargetTerminalController({
   ensureWorkspacePrepared,
   ensureProjectServices,
+  openProjectForStart,
   env,
   project,
   publishSessionChanged,
@@ -82,6 +85,7 @@ function createOutputTargetTerminalController({
     launchCoordination,
     ensureWorkspacePrepared,
     ensureProjectServices,
+    openProjectForStart,
     env,
     project,
     publishSessionChanged,

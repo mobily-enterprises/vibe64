@@ -39,6 +39,8 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * @param {import("./types.js").ProductionEnvironmentProvider} [dependencies.productionEnvironmentProvider]
  * @param {ProjectService} dependencies.project
  * @param {ProjectServices} dependencies.projectServices
+ * @param {() => Promise<object>} dependencies.openProjectForStart the project runtime's open for a start someone asks
+ *   for: the project runtime is built after the command services
  * @param {PublishAgentSessionChanged} dependencies.publishAgentSessionChanged
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  * @param {AssistantRouting["recordOutcome"]} dependencies.recordWorkflowOutcome
@@ -63,6 +65,7 @@ function createServiceCommandServices({
   productionEnvironmentProvider,
   project,
   projectServices,
+  openProjectForStart,
   publishAgentSessionChanged,
   publishSessionChanged,
   recordWorkflowOutcome,
@@ -86,6 +89,7 @@ function createServiceCommandServices({
   let agentPreviewCommand;
   const outputTarget = createOutputTargetTerminalController({
     ensureProjectServices: projectServices.ensure,
+    openProjectForStart,
     env,
     logger,
     previewPrepareWaitMs,

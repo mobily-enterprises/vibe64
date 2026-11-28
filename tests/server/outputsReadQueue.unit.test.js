@@ -23,6 +23,7 @@ async function sessionReadsDuring(t, waiting, options = () => ({})) {
   const controller = createOutputTargetTerminalController({
     env: process.env,
     ensureProjectServices: async () => {},
+    openProjectForStart: async () => ({ ok: true }),
     ensureWorkspacePrepared: async () => ({ completion: null }),
     project: {
       currentProjectSlug: () => "",

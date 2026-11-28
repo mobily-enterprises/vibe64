@@ -12,6 +12,7 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { createKeyedQueue } from "@local/vibe64-core/server/keyedOperations";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { PROJECT_RUNTIME_IDLE_TIMEOUT_REASON, projectRuntimeDormancyState } from "./projectRuntimeDormancy.js";
 import { openProjectRuntimeRecords } from "./serviceSessionAccess.js";
 import { sessionRecordId } from "./serviceSessionRecords.js";
@@ -29,6 +30,15 @@ import { sessionHasActiveAiTask } from "./temporaryConversationRules.js";
 /** @typedef {import("./types.js").OutputTargetTerminalController} OutputTargetTerminalController */
 
 const PROJECT_RUNTIME_MARKER_MISSING_REASON = "project-runtime-marker-missing";
+const PROJECT_RUNTIME_START_OPEN_REASON = "output-start";
+
+function projectClosingRefusal() {
+  return vibe64Error(
+    "The project is closing, so nothing in it can start now. Run it again once the Close has finished: that opens the project again.",
+    "vibe64_project_closing",
+    { status: 409 }
+  );
+}
 
 function closedProjectOutputTargetStatus({
   closeResult = null,
@@ -99,6 +109,27 @@ function createServiceProjectRuntime({
   sessionAgent
 }) {
   const projectRuntimeOpens = createKeyedQueue();
+  // By project runtime: how many Closes run now, and the opens of starts waiting in its open queue.
+  const runningCloses = new Map();
+  const startOpens = new Map();
+
+  /**
+   * A Close that begins refuses the starts still waiting for their open: a Close waits for the session's running
+   * commands, and a start such as `vibe64-helper preview ensure` runs in one, so neither may wait for the other.
+   */
+  function beginRuntimeClose(key) {
+    runningCloses.set(key, (runningCloses.get(key) || 0) + 1);
+    const waiting = startOpens.get(key);
+    startOpens.delete(key);
+    for (const refusal of waiting || []) refusal.reject(projectClosingRefusal());
+    waiting?.clear();
+  }
+
+  function endRuntimeClose(key) {
+    const left = (runningCloses.get(key) || 0) - 1;
+    if (left > 0) runningCloses.set(key, left);
+    else runningCloses.delete(key);
+  }
 
   /**
    * A read of a closed project closes whatever it finds still running. It
@@ -285,33 +316,61 @@ function createServiceProjectRuntime({
     );
   }
 
+  /** An open, inside the project's open queue. */
+  async function openInQueue(context, reason) {
+    const key = context.projectRuntimeRoot;
+    projectServices.opened(context);
+    const previousRuntime = await readProjectRuntimeOpenState({ projectRuntimeRoot: key });
+    const runtime = await writeProjectRuntimeOpenState({
+      projectRuntimeRoot: key,
+      projectSlug: context.projectSlug,
+      reason
+    });
+    const result = {
+      ok: true,
+      projectContextRoot: context.projectContextRoot,
+      projectSlug: context.projectSlug,
+      reason,
+      runtime
+    };
+    if (!previousRuntime.open) {
+      await publishProjectRuntimeChanged(result, { action: "runtime-opened" });
+    }
+    return result;
+  }
+
   async function openProjectRuntime(input) {
     const context = sessionAccess.projectRuntimeContext();
     const reason = String(input?.reason || "project-open").trim() || "project-open";
-    const key = context.projectRuntimeRoot;
     // Tabs share a runtime. Serialize opens so they observe one transition,
     // while every visit still refreshes the dormant-runtime grace period. An
     // open that arrives during idle cleanup waits for its Close, then reopens.
-    return projectRuntimeOpens.run(key, async () => {
-      projectServices.opened(context);
-      const previousRuntime = await readProjectRuntimeOpenState({ projectRuntimeRoot: key });
-      const runtime = await writeProjectRuntimeOpenState({
-        projectRuntimeRoot: key,
-        projectSlug: context.projectSlug,
-        reason
-      });
-      const result = {
-        ok: true,
-        projectContextRoot: context.projectContextRoot,
-        projectSlug: context.projectSlug,
-        reason,
-        runtime
-      };
-      if (!previousRuntime.open) {
-        await publishProjectRuntimeChanged(result, { action: "runtime-opened" });
-      }
-      return result;
-    });
+    return projectRuntimeOpens.run(context.projectRuntimeRoot, () => openInQueue(context, reason));
+  }
+
+  /**
+   * The open of a start someone asks for (Start, an AI's start, a session command such as `vibe64-helper preview
+   * ensure`, a browser-test run): a visit's open, in the same queue, so a project idle cleanup closed, which nobody
+   * may have visited since, opens again before its services start. A start never waits for a Close, which waits for
+   * the session's running commands: one waiting when a Close begins, or asked for during one, is refused
+   * (`vibe64_project_closing`) and opens nothing.
+   */
+  async function openProjectRuntimeForStart() {
+    const context = sessionAccess.projectRuntimeContext();
+    const key = context.projectRuntimeRoot;
+    if (runningCloses.has(key)) throw projectClosingRefusal();
+    const refusal = Promise.withResolvers();
+    const waiting = startOpens.get(key) || new Set();
+    startOpens.set(key, waiting);
+    waiting.add(refusal);
+    // A refused start's turn in the queue opens nothing.
+    const open = () => (waiting.has(refusal) ? openInQueue(context, PROJECT_RUNTIME_START_OPEN_REASON) : null);
+    try {
+      return await Promise.race([projectRuntimeOpens.run(key, open), refusal.promise]);
+    } finally {
+      waiting.delete(refusal);
+      if (waiting.size === 0 && startOpens.get(key) === waiting) startOpens.delete(key);
+    }
   }
 
   /**
@@ -390,6 +449,7 @@ function createServiceProjectRuntime({
     const pinRuntime = await project.createRuntimeWithoutSource();
     return pinRuntime.store.withUnpinnedProject(async () => {
       projectServices.beginClose(context);
+      beginRuntimeClose(context.projectRuntimeRoot);
       const failed = [];
       let agentProviderRuntimesStopped = 0;
       let projectCwdTerminalClosed = 0;
@@ -535,6 +595,8 @@ function createServiceProjectRuntime({
           reason
         });
         throw error;
+      } finally {
+        endRuntimeClose(context.projectRuntimeRoot);
       }
     });
   }
@@ -576,6 +638,7 @@ function createServiceProjectRuntime({
     closeProjectRuntime,
     noteProjectRuntimeActivity,
     openProjectRuntime,
+    openProjectRuntimeForStart,
     outputTargetStatus
   });
 }

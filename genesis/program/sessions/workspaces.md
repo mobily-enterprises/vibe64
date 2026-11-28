@@ -1071,7 +1071,19 @@ that queue, with reason `chat-message`, before it waits for workspace setup and
 delivers, so a message sent during or after idle cleanup reaches the reopened
 project; an open that fails returns `ok: false` with the open's code, the
 `messageId` and "The project could not open, so the message was not sent", and
-the assistant is never called. Typing presence records project activity through the
+the assistant is never called. A start someone asks for (Start, an AI's start, a
+session command such as `vibe64-helper preview ensure` or `restart`, a
+browser-test run) opens the project runtime through that queue too, with reason
+`output-start` (`openProjectRuntimeForStart`, called by
+`outputTargetLaunchStart.js` before the session's launch lock), so a project idle
+cleanup closed, which nobody may have visited since, starts its services again:
+before, only a visit or a message opened it, and a check a host ran in a
+session of such a project had its Preview refused until the editor restarted. An automatic start (the restart after a workspace
+preparation, the page's own start) never reopens a closed project. A Close waits
+for the session's running commands, and such a start runs in one, so a start
+never waits for a Close: one still waiting for its open when a Close begins, or
+asked for during one, is refused with `vibe64_project_closing` and opens nothing,
+and the same start after the Close opens the project. Typing presence records project activity through the
 same queue by refreshing the open marker's `updatedAt`; it never reopens a closed
 project. The open marker is replaced atomically, so no reader sees a partial one.
 A session whose source was never created ran no assistant, so idle cleanup,

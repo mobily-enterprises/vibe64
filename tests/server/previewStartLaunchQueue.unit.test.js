@@ -49,6 +49,7 @@ function preparingWorld(t, { inLock = false } = {}) {
   const controller = createOutputTargetTerminalController({
     env: process.env,
     ensureProjectServices: async () => {},
+    openProjectForStart: async () => ({ ok: true }),
     async ensureWorkspacePrepared() {
       state.preparations += 1;
       preparing.resolve();
