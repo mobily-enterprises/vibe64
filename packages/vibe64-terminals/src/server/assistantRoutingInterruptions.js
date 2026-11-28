@@ -1,7 +1,9 @@
+import { VIBE64_ASSISTANT_ACCESS_ERROR_CODES } from "@local/vibe64-runtime/shared";
 import { assistantGoalIsActive } from "@local/vibe64-runtime/shared/assistantRouting";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { plannedRestart } from "@local/vibe64-core/server/plannedRestart";
-import { read, activeMessage, owesStep } from "./assistantRoutingRequests.js";
+import { turnInterruptionAccountWait } from "../shared/turnInterruptionText.js";
+import { read, activeMessage, owesStep, waitsForAccount } from "./assistantRoutingRequests.js";
 import {
   INTERRUPTION_CAUSE,
   TURN_RESUME_BACKOFF_MS,
@@ -18,14 +20,28 @@ import {
 /** @typedef {import("./types.js").AssistantRoutingRecords} AssistantRoutingRecords */
 /** @typedef {import("./types.js").AssistantRoutingDelivery} AssistantRoutingDelivery */
 /** @typedef {import("./types.js").AssistantRoutingAdmission} AssistantRoutingAdmission */
+/** @typedef {import("./types.js").AssistantRoutingDecisions} AssistantRoutingDecisions */
+
+/**
+ * The refusals of an AI account its person can't use now (not connected or signed out, or another person's), and the
+ * engine's fence when the account changed between that check and the send: a resume so refused waits for an account.
+ */
+const ACCOUNT_REFUSALS = Object.freeze([
+  VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE,
+  VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED,
+  "vibe64_assistant_connection_changed"
+]);
 
 /**
  * What follows a chat turn that an interruption ended (turnInterruptions.js): what ended it, its red entry in the
  * chat's history, and its resume once in the same conversation, now or after a short wait, or why not. A request an
- * earlier server left before its message reached the AI is sent now under the same loop rule.
+ * earlier server left before its message reached the AI is sent now under the same loop rule. A turn its AI account
+ * stopped (signed out, or a resume the account refused) waits for an account its person can use, and setting one
+ * continues it once (continueAfterAccountSet).
  * @param {object} dependencies
  * @param {AssistantRoutingState} dependencies.routingState
  * @param {AssistantRoutingRecords} dependencies.records
+ * @param {AssistantRoutingDecisions} dependencies.decisions Whether the request's AI account takes its resume now.
  * @param {AssistantRoutingDelivery} dependencies.delivery
  * @param {AssistantRoutingAdmission} dependencies.admission
  * @param {(sessionId: string, options: object, operation: (context: object) => Promise<unknown>) => Promise<object>}
@@ -40,6 +56,7 @@ import {
 function createAssistantRoutingInterruptions({
   routingState,
   records,
+  decisions,
   delivery,
   admission,
   exclusiveAfterWrites,
@@ -84,15 +101,53 @@ function createAssistantRoutingInterruptions({
   }
 
   /**
-   * Sends the request's prepared resume now, as the person it ran for; a failure leaves it waiting for Continue and
-   * says so in red. Another turn that came first leaves it owed, to go ahead once a turn ends.
+   * Why the request's AI account can't take its prepared resume now, as the person it ran for, or null when it can or
+   * something else refuses it (the send then says what).
    */
-  async function resumeNow(sessionId, context, state, interruption) {
+  async function accountRefusal(context, state) {
+    try {
+      await decisions.resolve(context, state, true);
+      return null;
+    } catch (error) {
+      return ACCOUNT_REFUSALS.includes(error?.code) ? error : null;
+    }
+  }
+
+  /**
+   * Leaves a turn its AI account stopped waiting for an account its person can use, its prepared resume unsent: its
+   * interruption is marked with that resume (waitsForAccount) and not resumed, so setting an account continues it
+   * once (continueAfterAccountSet), and its red entry says so, once. `error` is the account's refusal; none after a
+   * sign-out.
+   */
+  async function waitForAccount(sessionId, context, state, interruption, error = "") {
+    const entry = state.interruptions.at(-1);
+    entry.awaitsAccount = state.followup.messageId;
+    entry.resumedAt = null;
+    state.status = "waiting";
+    state.delivery = "pending";
+    delete state.resumeAt;
+    state.error = turnInterruptionAccountWait(interruption.cause, error);
+    await records.save(context, state);
+    await records.writeNotice(context, state, interruptionNotice(interruption, "account", { error }));
+    logOutcome(sessionId, context, interruption, "waiting_for_account", error ? { error } : {});
+    await countCrashTurn(interruption, false);
+  }
+
+  /**
+   * Sends the request's prepared resume now, as the person it ran for; a failure leaves it waiting for Continue and
+   * says so in red. Another turn that came first leaves it owed, to go ahead once a turn ends. An AI account its
+   * person can't use sends nothing: the turn waits for one they can (waitForAccount).
+   * @param {{ newConnection?: boolean }} [options] newConnection: it continues on an account set since it stopped
+   */
+  async function resumeNow(sessionId, context, state, interruption, { newConnection = false } = {}) {
+    const marks = Boolean(state.followup) && Boolean(state.interruptions?.length);
+    const refused = marks ? await accountRefusal(context, state) : null;
+    if (refused) return waitForAccount(sessionId, context, state, interruption, refused.message);
     state.status = "working";
     delete state.error;
     delete state.resumeAt;
     await records.save(context, state);
-    await records.writeNotice(context, state, interruptionNotice(interruption, "resumed"));
+    await records.writeNotice(context, state, interruptionNotice(interruption, "resumed", { newConnection }));
     try {
       await delivery.deliver(sessionId, { ...context, vibe64User: state.submittedBy }, state, Boolean(state.followup));
       logOutcome(sessionId, context, interruption, "resumed");
@@ -102,6 +157,11 @@ function createAssistantRoutingInterruptions({
         // Not resumed yet: it goes ahead once the turn that came first ends.
         logOutcome(sessionId, context, interruption, "resume_owed", { code: error.code });
         await countCrashTurn(interruption, false);
+        return;
+      }
+      // The account changed again between the check and the send, and nothing was sent.
+      if (marks && ACCOUNT_REFUSALS.includes(error?.code) && !state.attemptedMessageId) {
+        await waitForAccount(sessionId, context, state, interruption, error.message);
         return;
       }
       state.status = "waiting";
@@ -149,8 +209,9 @@ function createAssistantRoutingInterruptions({
 
   /**
    * An ended turn the person did not complete: the chat's history gets the red entry, and the request continues in
-   * the same conversation with Vibe64's note leading its follow-up (decideResume). A turn the person stopped, or one
-   * an account problem or the AI's own error ended, is not resumed: its entry says why. A Main chat goal's turn is the
+   * the same conversation with Vibe64's note leading its follow-up (decideResume). A turn its AI account was signed
+   * out of waits, its resume prepared, for the account to be set again (waitForAccount). A turn the person stopped, or
+   * one a usage limit or the AI's own error ended, is not resumed: its entry says why. A Main chat goal's turn is the
    * goal's own recovery's; this leaves it.
    * @returns {Promise<boolean>} whether the request was settled here
    */
@@ -169,7 +230,8 @@ function createAssistantRoutingInterruptions({
       }
       return false;
     }
-    if (resumePolicy(interruption.cause) === "never") {
+    const signedOut = interruption.cause === INTERRUPTION_CAUSE.SIGN_IN;
+    if (!signedOut && resumePolicy(interruption.cause) === "never") {
       await records.writeNotice(context, state, interruptionNotice(interruption, neverResumedOutcome(interruption.cause)));
       logOutcome(sessionId, context, interruption, "skipped", { reason: interruption.cause });
       return false;
@@ -179,8 +241,35 @@ function createAssistantRoutingInterruptions({
     const restarted = await plannedRestart().resumeNote({ sessionId });
     const resumeNote = restarted ? `[${restarted}]` : resumeNoteForAi(interruption);
     await records.prepareFollowup(context, state, state.stage ?? null, { resumeNote });
-    await decideResume(sessionId, context, state, interruption, routingOptions);
+    if (!signedOut) {
+      await decideResume(sessionId, context, state, interruption, routingOptions);
+      return true;
+    }
+    state.interruptions = nextTurnInterruptions(state.interruptions, interruption, Date.now(), { resumes: false }).history;
+    await waitForAccount(sessionId, context, state, interruption);
     return true;
+  }
+
+  /**
+   * A turn its AI account stopped (waitsForAccount), now that an AI account is set: it continues once, through the
+   * resume every interrupted turn takes, as the person it ran for, under the session's lock, whatever it was doing.
+   * Another event, here or on another server, then finds nothing marked; one whose account its person still can't use
+   * goes on waiting. A chat idle when the account changed has nothing marked, whatever its plan.
+   * @returns {Promise<{ resumed: true } | { waiting: true } | { skipped: true }>} what it did
+   */
+  async function continueAfterAccountSet(sessionId, options) {
+    let result = { skipped: true };
+    await exclusiveAfterWrites(sessionId, options, async context => {
+      if (admission.isClosing() || routingState.running.has(records.keyFor(sessionId, context))) return;
+      const state = await read(context.runtime.store, sessionId);
+      if (!waitsForAccount(state)) return;
+      const entry = state.interruptions.at(-1);
+      delete entry.awaitsAccount;
+      entry.resumedAt = new Date().toISOString();
+      await resumeNow(sessionId, context, state, { key: entry.key, cause: entry.cause, at: entry.at }, { newConnection: true });
+      result = state.status === "working" ? { resumed: true } : { waiting: true };
+    });
+    return result;
   }
 
   /**
@@ -351,7 +440,8 @@ function createAssistantRoutingInterruptions({
     resumeUnsent,
     scheduleResume,
     stopUnrecovered,
-    resumeAfterPlannedRestart
+    resumeAfterPlannedRestart,
+    continueAfterAccountSet
   });
 }
 

@@ -78,6 +78,28 @@ function createServiceGoalInterruptions({
       await counted(false);
       return { sessionId, stoppedLoop: true, cause: interruption.cause };
     }
+    const history = decision.history;
+    const result = await resumeGoal(sessionId, context, { intent, observed, actor, interruption, history, newConnection });
+    if (result?.code === "vibe64_goal_main_ai_changed") return { sessionId, cancelled: true };
+    if (result?.ok === false) {
+      await counted(false);
+      throw Object.assign(new Error(result.error || "Goal continuation failed."), result);
+    }
+    await counted(true);
+    return { sessionId, resumed: true, cause: interruption.cause };
+  }
+
+  /**
+   * The one continuation of an interrupted goal, a restart's or an account set's (serviceGoalAccountWait.js): its
+   * "Resumed" entry, then Resume goal's own resume as the person who set it, on the AI connection connected now, its new
+   * intent keeping the interruptions `history` for the loop rule; a resume that could not be sent gets its red line.
+   * @param {string} sessionId
+   * @param {object} context
+   * @param {{ intent: object, observed: object, actor: object, interruption: object, history: object[],
+   *   newConnection?: boolean }} goal
+   * @returns {Promise<Record<string, any>>} the resume's result
+   */
+  async function resumeGoal(sessionId, context, { intent, observed, actor, interruption, history, newConnection = false }) {
     await writeGoalInterruptionNotice(sessionId, context, interruptionNotice(interruption, "resumed", { goal: true, newConnection }));
     const result = await writeAgentGoal(sessionId, {
       action: "resume",
@@ -85,16 +107,12 @@ function createServiceGoalInterruptions({
       expectedSegmentId: observed.target.segmentId,
       expectedGoalId: observed.goal.id,
       messageId: `goal-restart-${randomUUID()}`
-    }, { canonical: true, restartIntentId: intent.id, interruption: decision.history, followConnection: true });
-    if (result?.code === "vibe64_goal_main_ai_changed") return { sessionId, cancelled: true };
-    if (result?.ok === false) {
+    }, { canonical: true, restartIntentId: intent.id, interruption: history, followConnection: true });
+    if (result?.ok === false && result.code !== "vibe64_goal_main_ai_changed") {
       const error = result.error || "the goal could not continue";
       await writeGoalInterruptionNotice(sessionId, context, interruptionNotice(interruption, "failed", { goal: true, error }));
-      await counted(false);
-      throw Object.assign(new Error(result.error || "Goal continuation failed."), result);
     }
-    await counted(true);
-    return { sessionId, resumed: true, cause: interruption.cause };
+    return result;
   }
 
   /**
@@ -111,10 +129,19 @@ function createServiceGoalInterruptions({
     if (interruption.crashId) await serverRun.countCrashTurn(interruption.crashId, false);
   }
 
+  /** Counts a crash's goal that was not resumed (one now waiting for an account) into its crash record. */
+  function countUnresumed(interruption) {
+    return interruption.crashId ? serverRun.countCrashTurn(interruption.crashId, false) : undefined;
+  }
+
   return Object.freeze({
     requirePreviousServerStopped,
     continueInterruptedGoal,
-    stopUnrecoverableGoal
+    countUnresumed,
+    interruptionOf,
+    resumeGoal,
+    stopUnrecoverableGoal,
+    writeGoalInterruptionNotice
   });
 }
 

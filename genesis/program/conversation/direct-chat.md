@@ -1725,7 +1725,10 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/serviceGoals.js`
 - `packages/vibe64-terminals/src/server/serviceGoalRecovery.js`
 - `packages/vibe64-terminals/src/server/serviceGoalInterruptions.js`
+- `packages/vibe64-terminals/src/server/serviceGoalAccountWait.js`
 - `packages/vibe64-terminals/src/server/serviceTurnRecovery.js`
+- `packages/vibe64-terminals/src/server/serviceTurnsAfterAccountSet.js`
+- `tests/server/assistantTurnAccountSet.test.js`
 - `packages/vibe64-terminals/src/server/turnInterruptions.js`
 - `packages/vibe64-terminals/src/shared/turnInterruptionText.js`
 - `src/components/studio/vibe64-session/Vibe64TurnInterruption.vue`
@@ -1737,6 +1740,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `tests/server/claudeGoalRestart.unit.test.js`
 - `tests/server/claudeGoalRestartControls.unit.test.js`
 - `tests/server/claudeGoalUsageLimit.unit.test.js`
+- `tests/server/claudeGoalAccountSet.unit.test.js`
 - `packages/vibe64-terminals/src/server/codexSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/openCodeSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/mainConversationBinding.js`
@@ -5657,8 +5661,8 @@ engine stopping, never an AI error: the person's Stop interrupts with nothing to
 say and marks the request stopped. The AI is told nothing when the turn
 completed, was cancelled or was a plain Stop. A crash, restart, update or
 engine stop resumes at once; a lost connection or overloaded service after
-`TURN_RESUME_BACKOFF_MS` (30 s, Continue resumes sooner); a sign-in, usage limit
-or other error is never resumed. The resume is a follow-up (`followup.resume`)
+`TURN_RESUME_BACKOFF_MS` (30 s, Continue resumes sooner); a usage limit or other
+error is never resumed. The resume is a follow-up (`followup.resume`)
 in the same conversation and engine session whose message leads with
 `resumeNoteForAi`. The request keeps its last nine interruptions
 (`interruptions`) for the loop rule (`nextTurnInterruptions`). A planned stop (an
@@ -5673,6 +5677,42 @@ The one backstop for planned stops: the tenth in a row
 turn (its goal recovery decides) and an AI task's turn (its runner decides) are
 never resumed here. A send left unsent is resent once, and one that may have
 reached the AI is inspected and never resent.
+
+A turn its AI account stopped waits for an account its person can use, and
+setting one continues it, once. Two ends mark it: a sign-out (`turnEnding`'s
+sign-in), whose resume is prepared and not sent; and a resume of any other
+interruption that the account refuses, which `resumeNow` checks before it writes
+"Resumed" (routing's `resolve`, as the person it ran for: an account not
+connected or signed out, or another person's), or that the engine's fence
+refuses because the account changed again before the send. `waitForAccount`
+marks the request's latest interruption with its prepared resume's message id
+(`awaitsAccount`), clears that interruption's `resumedAt` (it was not resumed,
+so the loop rule counts it only once it is), leaves the request waiting with its
+resume pending and an error saying so ("Sign in to the AI account again in AI
+Accounts, and Vibe64 continues this turn." or "<refusal>. Vibe64 continues this
+turn once an AI account you can use is set in AI Accounts."), and writes the red
+`account` entry once. `waitsForAccount`
+([assistantRoutingRequests.js](../../../packages/vibe64-terminals/src/server/assistantRoutingRequests.js))
+reads the mark: waiting, that resume still pending and never attempted, not
+stopped, cancelled or owed. A Continue, a new message or a Stop leaves nothing
+marked, and a chat that was idle when the account changed never had a mark,
+whatever its plan. An AI account set (vibe64-accounts' `aiAccountWasSet`: a
+sign-in or account connected now, an API key saved, an OpenCode provider
+connected; never GitHub, a sign-out or a removal) starts
+`continueTurnsAfterAccountSet`
+([serviceTurnsAfterAccountSet.js](../../../packages/vibe64-terminals/src/server/serviceTurnsAfterAccountSet.js)),
+tracked as shutdown work: every open session's Main chat and temporary chat
+(never an AI task's) whose saved request waits for an account is told, as its
+sender, to `continueAfterAccountSet`. Under the session's lock routing reads the
+request again; one still marked loses its mark, takes `resumedAt` now and goes
+through `resumeNow` with the entry "Resumed after …, with the AI account
+connected now.", the same resume whatever the request was doing, a plan's step
+or a plain request; one whose account its person still can't use is marked
+again, its entry unchanged. A second event, a second pass or another server
+finds the request sent and does nothing. A Main chat goal is marked on its own
+interruption record instead (`goalWaitsForAccount`, below); a sign-out that ends a
+turn after its account was already set again waits for the next account set or
+Continue.
 
 Each decision writes one system message in the chat's history, its id
 `vibe64-turn-interrupted:<interruption>:<outcome>` so a second writer adds
@@ -5802,11 +5842,34 @@ cleanup, and invokes the ordinary canonical Resume owner. Unknown receipt or
 identity evidence blocks continuation. This does not replay ordinary messages,
 repair historical state, or enroll older goals. Development copies drop intent.
 Temporary-chat restart continuation remains separate unfinished work.
-A Codex account change pauses a running goal natively on the runtime that keeps
-its turn; once that runtime stopped, JSKIT calls the Terminals
-`continueGoalAfterAccountChange(sessionId, { threadId })`, which re-authorizes
-the intent's actor and sends the same canonical Resume only for active intent on
-that thread whose native goal is paused. A refusal is logged and leaves it paused.
+A goal whose turn its AI account stopped waits for an account the same way
+([serviceGoalAccountWait.js](../../../packages/vibe64-terminals/src/server/serviceGoalAccountWait.js)):
+a sign-out that ends a Main turn while the goal's intent still continues
+(`waitGoalForAccountAfterTurn`, after each Main turn; Claude's goal can't be read
+while it is signed out, so the intent decides), the last restart pass whose
+continuation the account refused (none connected, or another person's) instead of
+stopping it, and a Codex account change, which pauses a running goal natively on
+the runtime that keeps its turn; once that runtime stopped, JSKIT calls the
+Terminals `continueGoalAfterAccountChange(sessionId, { threadId })`, which marks
+that thread's goal and continues it at once through the same continuation. The
+mark is the goal intent's latest `interruptions` entry carrying `awaitsAccount`
+set to the intent's id (`awaitsAccount` in turnInterruptions.js reads both kinds),
+with the goal's error saying why ("Sign in to the AI account again in AI Accounts,
+and Vibe64 continues the goal." or "<refusal>. Vibe64 continues the goal once an
+AI account you can use is set in AI Accounts.") and its red `account` entry
+written once. `continueTurnsAfterAccountSet` visits a waiting goal after the
+session's chats and calls `continueGoalAfterAccountSet`: under the goal settings
+lock the mark is cleared and `resumedAt` set, so a second event, pass or server
+finds nothing. A goal an earlier server ran (a restart found it waiting, or left
+it so) then goes through that restart's own continuation (`recoverSessionGoal`),
+which verifies the earlier run stopped first. Otherwise, as the person who set it,
+an account they still can't use marks it again, a Claude goal a turn already
+carries on needs nothing, and an active or paused goal goes through `resumeGoal`
+([serviceGoalInterruptions.js](../../../packages/vibe64-terminals/src/server/serviceGoalInterruptions.js)),
+the resume a restart's continuation takes, with "Resumed after …, with the AI
+account connected now." and its history kept for the loop rule. Restart recovery
+leaves a waiting goal alone (`waiting-for-account`), and the person's Pause, Stop
+or Cancel ends its intent and with it the wait.
 The shared native reader also preserves Claude's structured impossible-goal
 evaluation and explicit repeated-stop-hook termination as `blocked`. Main restart recovery retains the goal and its intent
 without sending Resume for that native state. The existing goal controls show

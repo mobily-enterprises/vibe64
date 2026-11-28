@@ -1,5 +1,6 @@
 import { createAiConnectionActions } from "./accountsActions.js";
 import {
+  aiAccountWasSet,
   createVibe64AccountAuthSessionChangedPublisher,
   createVibe64AccountsChangedPublisher,
   createVibe64ConnectionsChangedPublisher
@@ -112,6 +113,15 @@ function setupAccounts({
       handle: () => teamAi.invalidate()
     });
   }
+
+  // A turn its AI account stopped continues once an AI account is set; the sweep is the terminals service's own work.
+  events.register({
+    id: "vibe64.accounts.turns-after-account-set",
+    matches: aiAccountWasSet,
+    handle: () => {
+      void terminals.continueTurnsAfterAccountSet();
+    }
+  });
 
   configureSignInStatusRuntime({
     accounts,

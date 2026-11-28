@@ -9,6 +9,7 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantTaskPurpose } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 import { workPlanStep } from "../shared/assistantWorkPlan.js";
+import { awaitsAccount } from "./turnInterruptions.js";
 
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 
@@ -254,6 +255,17 @@ const owesStep = (state) => Boolean(state?.followup?.owed) && state.status === "
   !state.attemptedMessageId && !state.stopped && !state.cancelled;
 
 /**
+ * Whether the saved request is a turn its AI account stopped, waiting for an account its person can use
+ * (assistantRoutingInterruptions.js): its latest interruption is marked with the resume it prepared, still unsent, and
+ * the person has not stopped or cancelled it. Setting an account continues it, once; a Continue, a new message or a
+ * Stop leaves nothing marked.
+ * @param {object | null} state the saved routing request
+ */
+const waitsForAccount = (state) => awaitsAccount(state?.interruptions, state?.followup?.messageId) &&
+  state.status === "waiting" && state.delivery === "pending" && !state.attemptedMessageId && !state.stopped &&
+  !state.cancelled && !state.followup.owed;
+
+/**
  * Whether `input` is another session's message while the request owes its step: not the person's word, it never
  * replaces that step, and runs as its own turn as written (assistantRoutingAdmission.js).
  * @param {object | null} state the saved routing request
@@ -321,5 +333,6 @@ export {
   savesAutomatically,
   userTurnsSince,
   usesWorkPlan,
+  waitsForAccount,
   withSelection
 };

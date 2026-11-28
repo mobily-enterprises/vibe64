@@ -65,6 +65,7 @@ import { createAccountsRuntime } from "../../packages/vibe64-accounts/src/server
 import { ACCOUNT_AUTH_NAMESPACE } from "../../packages/vibe64-accounts/src/server/authCommands.js";
 import {
   createVibe64AccountAuthSessionChangedPublisher,
+  createVibe64AccountsChangedPublisher,
   createVibe64ConnectionsChangedPublisher
 } from "../../packages/vibe64-accounts/src/server/accountRealtimeEvents.js";
 import {
@@ -316,6 +317,7 @@ async function startAccountsFeature({
 } = {}) {
   const registeredRoutes = [];
   const publishedEvents = [];
+  const registeredListeners = [];
   let observed = null;
   const projectApi = project || {
     currentTargetRoot() {
@@ -351,7 +353,9 @@ async function startAccountsFeature({
           publishedEvents.push(event);
           return event;
         },
-        register() {}
+        register(listener) {
+          registeredListeners.push(listener);
+        }
       },
       "runtime.fastify": {
         get(pathname, options, handler) {
@@ -375,6 +379,7 @@ async function startAccountsFeature({
     ...observed,
     project: projectApi,
     publishedEvents,
+    registeredListeners,
     registeredRoutes,
     runtime
   };
@@ -862,6 +867,40 @@ test("connection publisher invalidates every client without exposing connection 
     status: "connected"
   });
   assert.equal(JSON.stringify(events[0]).includes("apiKey"), false);
+});
+
+test("an AI account set tells the terminals service to continue the turns its account stopped, once per change", async () => {
+  let continued = 0;
+  const feature = await startAccountsFeature({
+    terminals: { ...ACCOUNTS_TERMINALS, continueTurnsAfterAccountSet: async () => { continued += 1; } }
+  });
+  try {
+    const listener = feature.registeredListeners.find(({ id }) => id === "vibe64.accounts.turns-after-account-set");
+    // The runtime's events reach the listener as JSKIT's do: each event it matches, handled.
+    const events = { async publish(event) { if (listener.matches(event)) await listener.handle(event); return event; } };
+    const publishAccountChanged = createVibe64AccountsChangedPublisher({ events });
+    const publishConnectionChanged = createVibe64ConnectionsChangedPublisher({ events });
+    const set = [
+      // A sign-in that finished connected (its twin connection event is not counted again), an API key saved, an
+      // OpenCode provider connected.
+      () => publishAccountChanged("claude", { account: { id: "claude", connected: true }, reason: "terminal-close" }),
+      () => publishAccountChanged("codex", { reason: "provider-key-saved" }),
+      () => publishConnectionChanged("zai-coding-plan", { connected: true, reason: "created" })
+    ];
+    for (const [index, change] of set.entries()) {
+      await change();
+      assert.equal(continued, index + 1);
+    }
+    for (const change of [
+      () => publishAccountChanged("claude", { account: { id: "claude", connected: false }, reason: "terminal-close" }),
+      () => publishAccountChanged("github", { account: { id: "github", connected: true }, reason: "terminal-close" }),
+      () => publishAccountChanged("codex", { reason: "provider-key-removed" }),
+      () => publishConnectionChanged("zai-coding-plan", { connected: false, reason: "removed" })
+    ]) await change();
+    assert.equal(continued, set.length, "a sign-out, GitHub and a removal continue nothing");
+  } finally {
+    await feature.runtime.shutdown();
+  }
 });
 
 test("GitHub identity save updates Git config without starting an auth terminal", async () => {

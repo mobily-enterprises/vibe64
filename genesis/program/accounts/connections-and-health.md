@@ -885,9 +885,10 @@ and provider identity (`currentCodexLoginGeneration`, read from the marker below
 and cached by its file identity), so a session's next message starts a runtime on
 the current account beside the finishing one, and a session saved on the previous
 sign-in moves to the new directory. Once the previous runtime stopped, the
-terminals service's `continueGoalAfterAccountChange` resumes a goal the change
-paused, through the ordinary goal resume; without a Codex sign-in that resume is
-refused and the goal stays paused. Recording the session's runtime for the new
+terminals service's `continueGoalAfterAccountChange` marks a goal the change
+paused as stopped by its account and continues it through the goal's resume;
+without a Codex sign-in the goal stays paused, waiting for an account its person
+can use, and the next AI account set continues it (serviceGoalAccountWait.js). Recording the session's runtime for the new
 sign-in reports the directory it recorded before (`supersededRuntimeDir` from
 `writeCodexAppServerIdentityMetadata`), and JSKIT removes that directory once its
 runtime has verifiably stopped. A running Codex process keeps its own sign-in in
@@ -1028,7 +1029,16 @@ The configuration view loads independent orchestrator catalogues concurrently,
 then checks model-specific access in bounded batches. Catalogue assembly still
 verifies pagination progress and a single revision. The client reuses the same
 actor/project's configuration for 30 seconds when reopening the dialog;
-connection changes invalidate it and saves reload it. Dispatch always resolves
+connection changes invalidate it and saves reload it. An AI account set
+(`aiAccountWasSet` in
+[accountRealtimeEvents.js](../../../packages/vibe64-accounts/src/server/accountRealtimeEvents.js):
+a sign-in or account connected now, an API key saved, an OpenCode provider
+connected; never GitHub, a sign-out or a removal) also tells the terminals
+service to continue the turns an AI account stopped
+(`vibe64.accounts.turns-after-account-set` in
+[accountsSetup.js](../../../packages/vibe64-accounts/src/server/accountsSetup.js);
+[direct chat](../conversation/direct-chat.md#interrupted-turn-resumption)),
+without waiting for them. Dispatch always resolves
 current access and catalogue compatibility independently. Missing roles and denied
 access fail before native catalogue discovery;
 eligible destinations still require the current catalogue before dispatch.

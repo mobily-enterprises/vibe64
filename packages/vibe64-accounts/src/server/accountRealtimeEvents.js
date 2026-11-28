@@ -282,7 +282,23 @@ function resultStatusFromAccount(account = null) {
   return isRecord(account) ? normalizeText(account.status) : "";
 }
 
+/**
+ * Whether an account event says an AI account was set: a sign-in or account that is connected now, or an API key
+ * saved, and an OpenCode provider connected, whose connection events have no account. GitHub's account, a sign-out
+ * and a removal are not; each change's twin connection event is not counted again.
+ * @param {{ source?: string, entity?: string, realtime?: { payload?: object } } | null} event
+ */
+function aiAccountWasSet(event) {
+  if (event?.source !== VIBE64_ACCOUNT_EVENT_SOURCE) return false;
+  const payload = normalizeObject(event.realtime?.payload);
+  if (event.entity === VIBE64_ACCOUNT_EVENT_ENTITY) {
+    return payload.accountId !== "github" && (payload.connected === true || payload.reason === "provider-key-saved");
+  }
+  return event.entity === "connection" && !payload.accountId && payload.connected === true;
+}
+
 export {
+  aiAccountWasSet,
   vibe64AccountAuthSessionChangedActionEvent,
   vibe64AccountsChangedActionEvent,
   vibe64ConnectionsChangedActionEvent,

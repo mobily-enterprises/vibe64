@@ -24,8 +24,8 @@ const MAIN_TURN_IDLE_ENGINES = new Map([
 /**
  * An agent session's change publication and the work that follows a turn: the plan usage it reports, a temporary
  * chat's review, and after a Main turn the routing review, the goal's main AI check, the Resume the person asked for in
- * that turn or else its continuation once a usage limit resets, the workspace setup and the interrupted Closes its
- * engine can now finish.
+ * that turn or else its continuation once a usage limit resets or, after a sign-out, once an AI account is set, the
+ * workspace setup and the interrupted Closes its engine can now finish.
  * @param {object} dependencies
  * @param {SessionConversations["afterTemporaryTurn"]} dependencies.afterTemporaryTurn
  * @param {SessionConversations["finishInterruptedCloses"]} dependencies.finishInterruptedCloses
@@ -33,6 +33,7 @@ const MAIN_TURN_IDLE_ENGINES = new Map([
  * @param {ServiceGoals["cancelGoalIfMainAiChanged"]} dependencies.cancelGoalIfMainAiChanged
  * @param {ServiceGoals["continueGoalWhenLimitResets"]} dependencies.continueGoalWhenLimitResets
  * @param {ServiceGoals["resumeGoalAfterTurn"]} dependencies.resumeGoalAfterTurn
+ * @param {ServiceGoals["waitGoalForAccountAfterTurn"]} dependencies.waitGoalForAccountAfterTurn
  * @param {(sessionId: string) => Promise<unknown> | null} dependencies.restorePreviewAfterTurn restores the Preview a
  *   finished browser test left to the agent's turn end
  * @param {(sessionId: string) => Promise<unknown> | null} dependencies.summarizeTurnCommands shows the person the
@@ -51,6 +52,7 @@ function createServiceTurnPublication({
   cancelGoalIfMainAiChanged,
   continueGoalWhenLimitResets,
   resumeGoalAfterTurn,
+  waitGoalForAccountAfterTurn,
   restorePreviewAfterTurn,
   summarizeTurnCommands,
   logger,
@@ -76,7 +78,8 @@ function createServiceTurnPublication({
         }, "Automatic review needs attention.");
       }),
       // A goal's automatic continuation follows each of its turns: the person asked in that turn to resume it, or it
-      // ended at its AI account's usage limit and continues once the limit resets.
+      // ended at its AI account's usage limit and continues once the limit resets, or a sign-out ended it and it
+      // continues once an AI account is set.
       cancelGoalIfMainAiChanged(sessionId, null, { activeOnly: true }).catch((error) => {
         logOperationalEvent(logger, "warn", {
           component: "vibe64.agent_goal",
@@ -87,6 +90,7 @@ function createServiceTurnPublication({
       }).then(async cancelled => {
         if (cancelled === true || await resumeGoalAfterTurn(sessionId)) return;
         await continueGoalWhenLimitResets(sessionId);
+        await waitGoalForAccountAfterTurn(sessionId, payload);
       }),
       // A prepared session, or one whose preparation runs, needs nothing from the turn's end.
       workspacePreparation.ensureWorkspacePrepared(sessionId, {}, { waitMs: AGENT_WRITE_WAIT_MS }).catch((error) => {
