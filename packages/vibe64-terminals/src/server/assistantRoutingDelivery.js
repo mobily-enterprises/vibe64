@@ -157,7 +157,11 @@ function createAssistantRoutingDelivery({
     const messageId = input.messageId || state.messageId;
     const displayMessage = input.displayMessage || input.message;
     const selectedContext = withSelection(context, selection);
-    selectedContext.expectedConnectionIdentity = decisions.destinations(state.decision || {})[modelRole]?.connectionIdentity;
+    // The connection the request's decision holds: validateDecision below may move a follow-up to the account connected now.
+    const holdToDecision = () => {
+      selectedContext.expectedConnectionIdentity = decisions.destinations(state.decision || {})[modelRole]?.connectionIdentity;
+    };
+    holdToDecision();
     const uncertain = state.delivery === "uncertain";
     if (uncertain || state.attemptedMessageId === messageId) {
       // An inspection that fails decides nothing: the receipt stays unknown.
@@ -228,6 +232,7 @@ function createAssistantRoutingDelivery({
     });
     if (restartRefusal) throw failure(restartRefusal.message, PLANNED_RESTART_REFUSAL_CODE);
     await decisions.validateDecision(context, state, followup);
+    holdToDecision();
     records.mark(state.messageId, "deliver-validated");
     const currentSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const expected = followup ? state.deliverySelection : state.observedSelection;

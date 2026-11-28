@@ -218,16 +218,27 @@ function createAssistantRoutingDecisions({
         }
       : { [decision.role]: decision };
   }
+  /**
+   * Whether the request still goes to the AI it was admitted to, as its person may use it now (resolve refuses one they
+   * cannot). A new request's delivery holds to the connection its routing decided on. A follow-up (Vibe64's resume,
+   * the plan's next step, the person's Continue) carries the request on in its own conversation, which follows the
+   * account connected now as Main chat and a goal do: the same AI on an account changed or reconnected since becomes
+   * the request's connection (28 Nov: a Claude account switched mid-plan refused every resume of whs2's passes plan).
+   */
   async function validateDecision(context, state, followup = false) {
     if (!state.decision || state.admissionRequired) throw failure("This request needs fresh admission. Retry it before continuing.", "vibe64_assistant_routing_admission_required");
-    const current = destinations(await resolve(context, state, followup));
+    const decision = await resolve(context, state, followup);
+    const current = destinations(decision);
+    let reconnected = false;
     for (const [role, captured] of Object.entries(destinations(state.decision))) {
       if ((followup || assistantTaskPurpose(state.task)) && role === "router") continue;
-      if (!sameVibe64AssistantSelection(current[role]?.effectiveSelection, captured.effectiveSelection) ||
-          current[role]?.connectionIdentity !== captured.connectionIdentity) {
+      const changed = current[role]?.connectionIdentity !== captured.connectionIdentity;
+      if (!sameVibe64AssistantSelection(current[role]?.effectiveSelection, captured.effectiveSelection) || (changed && !followup)) {
         throw failure("The selected AI connection changed. Cancel this request and send it again.", "vibe64_assistant_routing_connection_changed");
       }
+      reconnected ||= changed;
     }
+    if (reconnected) state.decision = decision;
   }
 
   async function admitMigratedRequest(context, state) {
