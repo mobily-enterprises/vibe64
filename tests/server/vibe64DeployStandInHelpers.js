@@ -24,8 +24,12 @@ const SHOP = Object.freeze({
   build: { command: "npm ci && npm run build", output: ["dist", "node_modules", "package.json"] }
 });
 
-/** A gzip tarball of these files, each a ustar entry at the archive's root. @param {Record<string, string>} files */
-function tarballOf(files) {
+/**
+ * A plain tar of these files, in their order, each a ustar entry at the archive's root as mobilynet's mn writes one
+ * (mode 0644, owner 0, time 0), then the archive's two zero blocks.
+ * @param {Record<string, string | Buffer>} files
+ */
+function plainTarOf(files) {
   const blocks = [];
   for (const [name, content] of Object.entries(files)) {
     const data = Buffer.from(content);
@@ -42,8 +46,11 @@ function tarballOf(files) {
     header.write(`${header.reduce((sum, byte) => sum + byte, 0).toString(8).padStart(6, "0")}\0 `, 148, "ascii");
     blocks.push(header, data, Buffer.alloc((512 - (data.length % 512)) % 512));
   }
-  return gzipSync(Buffer.concat([...blocks, Buffer.alloc(1024)]));
+  return Buffer.concat([...blocks, Buffer.alloc(1024)]);
 }
+
+/** A gzip tarball of these files, each a ustar entry at the archive's root. @param {Record<string, string>} files */
+const tarballOf = (files) => gzipSync(plainTarOf(files));
 
 /**
  * A release's tarball and its SHA-256: its mobilynet.json and a file naming the release, so each release has its own
@@ -112,4 +119,4 @@ async function runningShop(parts = world(), declaration = SHOP) {
   return { ...parts, release, serviceId: created.service.id, created };
 }
 
-export { AT, DAY, HOST, SHOP, refusal, refused, runningShop, settle, upload, webSpec, world };
+export { AT, DAY, HOST, SHOP, plainTarOf, refusal, refused, runningShop, settle, upload, webSpec, world };
