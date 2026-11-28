@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { createRenderer, ssrContextKey } from "vue";
+import { createRenderer, ref, ssrContextKey } from "vue";
 import { afterEach, expect, it, vi } from "vitest";
 
 // Each command the dialog makes, and what it sent: its method, path and body.
@@ -18,6 +18,7 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
 import { NEED_HELP_STILL_OPEN_MS } from "@local/vibe64-terminals/shared/needHelp";
 import { vibe64NeedHelpPresentation, vibe64SessionNeedHelp } from "../../src/lib/vibe64NeedHelp.js";
 import NeedHelpDialog from "../../src/components/studio/vibe64-session/Vibe64NeedHelpDialog.vue";
+import { useVibe64SessionsNeedHelp } from "../../src/composables/useVibe64SessionsNeedHelp.js";
 
 // How a session shows its Need help (its tab, its header and the dialog), and what the dialog sends.
 
@@ -41,6 +42,7 @@ function mount(props) {
   return app._instance.setupState;
 }
 afterEach(() => {
+  vi.useRealTimers();
   app?.unmount();
   mocks.commands.length = 0;
   mocks.sent.length = 0;
@@ -97,12 +99,35 @@ it("answers, adds to and clears the session's Need help through its session rout
   expect(fresh.presentation).toBeNull();
 });
 
+it("names each tab's Need help by where it stands and its newest request, and opens a listed session's as the list changes", () => {
+  const sessions = ref([session(flag([request(RAISED, "The database is locked.\nI tried waiting."), request(RAISED + 1000, `${"x".repeat(130)}\nmore`)])),
+    { sessionId: "s-2", metadata: {} }]);
+  // A minute after the newest request: asked, not yet waiting long.
+  vi.useFakeTimers({ now: RAISED + 61_000 });
+  let tabs;
+  app = createRenderer({ createComment: (text) => ({ text }), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
+    .createApp({ setup() { tabs = useVibe64SessionsNeedHelp(sessions); return () => null; } });
+  app.mount({});
+  expect(tabs.fact(sessions.value[1])).toBe("");
+  expect(tabs.presentation(sessions.value[1])).toBeNull();
+  expect(tabs.fact(sessions.value[0])).toBe(`Open: ${"x".repeat(119)}…`);
+  expect(tabs.open(sessions.value[0], "")).toBe(false);
+  expect(tabs.session.value).toBeNull();
+  expect(tabs.open(sessions.value[0], "/api/app/shop/vibe64/sessions")).toBe(true);
+  expect(tabs.session.value.sessionId).toBe("s-1");
+  // The open dialog reads the session as the list now holds it.
+  sessions.value = [session(null), sessions.value[1]];
+  expect(tabs.session.value.metadata).toEqual({});
+  tabs.close();
+  expect(tabs.session.value).toBeNull();
+});
+
 it("shows Need help on each session's tab and in the session header, and says it in the guide", () => {
   const read = (file) => readFileSync(new URL(`../../${file}`, import.meta.url), "utf8");
   const toolbar = read("src/components/studio/vibe64-session/Vibe64SessionToolbar.vue");
   const header = read("src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue");
-  expect(toolbar).toContain('v-if="needHelpPresentation(sessionItem)"');
-  expect(toolbar).toContain('{{ needHelpPresentation(sessionItem) ? "Open Need help" : "Ask for help" }}');
+  expect(toolbar).toContain('v-if="needHelp.presentation(sessionItem)"');
+  expect(toolbar).toContain('{{ needHelp.presentation(sessionItem) ? "Open Need help" : "Ask for help" }}');
   expect(header).toMatch(/<v-chip\s+v-if="needHelp"\s+class="studio-autopilot__need-help-chip studio-autopilot__header-fixed"/u);
   expect(read("docs/colleague-usage/need-help.md")).toContain("**Need help · no answer yet**: nobody has answered its newest request for 15");
 });

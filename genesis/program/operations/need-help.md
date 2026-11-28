@@ -17,6 +17,7 @@ answers or clears it, and a host may forward it to whoever can help.
 - `packages/vibe64-terminals/src/server/needHelp/agentNeedHelpCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `src/lib/vibe64NeedHelp.js`
+- `src/composables/useVibe64SessionsNeedHelp.js`
 - `src/components/studio/vibe64-session/Vibe64NeedHelpDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotSessionHeader.vue`

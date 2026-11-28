@@ -1,4 +1,15 @@
+import { refuseUnreadFields } from "@local/vibe64-core/server/commandInput";
+import { vibe64Error } from "@local/vibe64-core/server/core";
 import { agentControlIdentitySource } from "@local/vibe64-execution/server";
+
+/** @typedef {import("../types.js").NeedHelpService} NeedHelpService */
+
+// What each `vibe64-helper need-help` operation reads.
+const NEED_HELP_FIELDS = Object.freeze({
+  raise: { operation: "need-help raise", fields: ["text"], required: ["text"] },
+  read: { operation: "need-help read", fields: [] },
+  clear: { operation: "need-help clear", fields: [] }
+});
 
 // The usage `vibe64-helper need-help --help` prints, and what each operation is for.
 const NEED_HELP_USAGE = [
@@ -73,4 +84,38 @@ try {
 `;
 }
 
-export { NEED_HELP_USAGE, needHelpCommandSource };
+/**
+ * The session command `vibe64-helper need-help raise|read|clear` reaches: the AI raises this session's Need help, or
+ * adds a follow-up to it, for the person whose request it works on, reads the answer and clears it, in the session's
+ * bound project. An operation's unread or missing field is refused before Need help is asked.
+ * @param {object} dependencies
+ * @param {() => NeedHelpService | null} dependencies.readNeedHelp Need help, or null while Vibe64 starts or stops
+ * @param {(sessionId: string, operation: (bound: { binding: object, store: object }) => Promise<object>) => Promise<object>} dependencies.runInSessionProject
+ * @param {(store: object, sessionId: string, binding: object) => Promise<object | null>} dependencies.requestActor
+ */
+function createAgentNeedHelpCommand({ readNeedHelp, runInSessionProject, requestActor }) {
+  /**
+   * @param {string} sessionId
+   * @param {{ operation?: string, text?: string }} input
+   */
+  return function manageNeedHelp(sessionId, input = {}) {
+    return runInSessionProject(sessionId, async ({ binding, store }) => {
+      const { operation, ...fields } = input;
+      const contract = Object.hasOwn(NEED_HELP_FIELDS, operation) ? NEED_HELP_FIELDS[operation] : null;
+      if (!contract) {
+        throw vibe64Error("Use vibe64-helper need-help raise, read or clear.", "vibe64_need_help_operation_invalid", { status: 400 });
+      }
+      refuseUnreadFields(fields, contract);
+      const needHelp = readNeedHelp();
+      if (!needHelp) {
+        throw vibe64Error("Need help is unavailable while Vibe64 starts or stops. Try again in a minute.", "vibe64_need_help_unavailable", { status: 503 });
+      }
+      if (operation === "raise") {
+        return needHelp.raise(sessionId, { text: fields.text, from: "agent", actor: await requestActor(store, sessionId, binding) });
+      }
+      return operation === "read" ? needHelp.read(sessionId) : needHelp.clear(sessionId);
+    });
+  };
+}
+
+export { NEED_HELP_USAGE, createAgentNeedHelpCommand, needHelpCommandSource };

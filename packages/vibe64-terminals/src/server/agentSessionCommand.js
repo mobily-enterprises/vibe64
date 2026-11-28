@@ -10,7 +10,7 @@ import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planPassItemsCheck, planPassListing, withAfterPlanPasses } from "./planPasses.js";
 import { listGenesisPasses } from "@local/vibe64-genesis/server";
 import { planCommandSource } from "./agentPlanCommand.js";
-import { needHelpCommandSource } from "./needHelp/agentNeedHelpCommand.js";
+import { createAgentNeedHelpCommand, needHelpCommandSource } from "./needHelp/agentNeedHelpCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { readAgentSessionStatus } from "./agentSessionStatus.js";
 import { runAgentSessionSave } from "./agentSessionSave.js";
@@ -24,16 +24,9 @@ import { assertSessionTempRootFits } from "@local/vibe64-runtime/server/sessionT
 
 import { refuseUnreadFields } from "@local/vibe64-core/server/commandInput";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import {
-  logOperationalEvent
-} from "@local/vibe64-core/server/logging";
-import {
-  vibe64ErrorResponse,
-  vibe64StatusCode
-} from "@local/vibe64-core/server/serverResponses";
-import {
-  sessionSourcePath
-} from "@local/vibe64-core/server/sessionSourcePath";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { vibe64ErrorResponse, vibe64StatusCode } from "@local/vibe64-core/server/serverResponses";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   agentControlFilePath,
   runVibe64Command,
@@ -59,9 +52,7 @@ import {
   createSessionCommandServers,
   shortCommandHash
 } from "./unixJsonCommand.js";
-import {
-  writeExecutableFileIfChanged
-} from "./writeExecutableFileIfChanged.js";
+import { writeExecutableFileIfChanged } from "./writeExecutableFileIfChanged.js";
 import {
   AGENT_SESSION_COMMAND_CONTRACT_VERSION,
   AGENT_SESSION_COMMAND_TIMEOUT_MS,
@@ -103,6 +94,7 @@ import { commandDatabaseServerWatch } from "./agentCommandDatabaseServers.js";
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
+/** @typedef {import("./types.js").NeedHelpService} NeedHelpService */
 
 const AGENT_SESSION_COMMAND_REQUEST_MAX_BYTES = 4 * 1024 * 1024;
 // What plan outcome reads: the workflow identity a plan read returns, under the same names, and the outcome itself.
@@ -110,12 +102,6 @@ const OUTCOME_FIELDS = Object.freeze({
   operation: "plan outcome",
   fields: ["messageId", "turnId", "stage", "status", "decision", "explanation", "progress", "expectedRevision", "expectedProgressRevision"],
   required: ["messageId", "turnId", "stage", "decision", "explanation", "progress"]
-});
-// What each `vibe64-helper need-help` operation reads.
-const NEED_HELP_FIELDS = Object.freeze({
-  raise: { operation: "need-help raise", fields: ["text"], required: ["text"] },
-  read: { operation: "need-help read", fields: [] },
-  clear: { operation: "need-help clear", fields: [] }
 });
 
 // Every route but run is authorized by the control token rather than the
@@ -188,8 +174,7 @@ const commandServers = createSessionCommandServers({
  * the destination it has now
  * @param {(sessionId: string, time: string) => boolean} dependencies.previewStartedBefore whether the session's
  * Preview runs in a process started before `time`
- * @param {() => ReturnType<typeof import("./needHelp/needHelpService.js").createNeedHelpService> | null} [dependencies.readNeedHelp]
- *   Need help, which `vibe64-helper need-help` raises, reads and clears, or null while Vibe64 starts or stops
+ * @param {() => NeedHelpService | null} dependencies.readNeedHelp Need help, or null while Vibe64 starts or stops
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -214,7 +199,7 @@ function createAgentSessionCommandService({
   updateSessionWork,
   saveSessionWork,
   previewStartedBefore,
-  readNeedHelp = () => null,
+  readNeedHelp,
   logger,
   project,
   publishSessionChanged,
@@ -493,30 +478,7 @@ function createAgentSessionCommandService({
     });
   }
 
-  /**
-   * `vibe64-helper need-help raise|read|clear`: the AI raises this session's Need help, or adds a follow-up to it, for
-   * the person whose request it works on, reads the answer and clears it.
-   * @param {string} sessionId
-   * @param {{ operation?: string, text?: string }} input
-   */
-  async function manageNeedHelp(sessionId, input = {}) {
-    return runInSessionProject(sessionId, async ({ binding, store }) => {
-      const { operation, ...fields } = input;
-      const contract = Object.hasOwn(NEED_HELP_FIELDS, operation) ? NEED_HELP_FIELDS[operation] : null;
-      if (!contract) {
-        throw vibe64Error("Use vibe64-helper need-help raise, read or clear.", "vibe64_need_help_operation_invalid", { status: 400 });
-      }
-      refuseUnreadFields(fields, contract);
-      const needHelp = readNeedHelp();
-      if (!needHelp) {
-        throw vibe64Error("Need help is unavailable while Vibe64 starts or stops. Try again in a minute.", "vibe64_need_help_unavailable", { status: 503 });
-      }
-      if (operation === "raise") {
-        return needHelp.raise(sessionId, { text: fields.text, from: "agent", actor: await requestActor(store, sessionId, binding) });
-      }
-      return operation === "read" ? needHelp.read(sessionId) : needHelp.clear(sessionId);
-    });
-  }
+  const manageNeedHelp = createAgentNeedHelpCommand({ readNeedHelp, runInSessionProject, requestActor });
 
   async function execute(input = {}, context = {}) {
     input.signal?.throwIfAborted();

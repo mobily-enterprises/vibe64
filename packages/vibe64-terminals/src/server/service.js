@@ -475,13 +475,7 @@ function createService({
     sessionAgent,
     workspaceSetup
   });
-  const workInspection = createServiceSessionWorkInspection({
-    sessionAccess,
-    sessionWork,
-    codexGitCommand,
-    env,
-    project
-  });
+  const workInspection = createServiceSessionWorkInspection({ sessionAccess, sessionWork, codexGitCommand, env, project });
   const projectRuntime = createServiceProjectRuntime({
     sessionAccess,
     terminals,

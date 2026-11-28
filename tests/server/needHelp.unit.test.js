@@ -277,7 +277,8 @@ test("a flag keeps its first message and the newest after it, and the AI's comma
       createSessionStore: async () => f.store,
       runInProjectContext: async (_slug, operation) => operation()
     },
-    publishSessionChanged: async () => null
+    publishSessionChanged: async () => null,
+    readNeedHelp: () => null
   });
   t.after(() => commands.closeAllForSession(SESSION));
   await commands.bindSession(SESSION, { wrapperHostDir: path.join(f.root, "wrappers") });

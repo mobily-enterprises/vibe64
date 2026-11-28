@@ -21,7 +21,7 @@ const needHelpSessionInputValidator = deepFreeze({ schema: createSchema({ sessio
 
 /**
  * @param {object} dependencies
- * @param {ReturnType<typeof import("./needHelpService.js").createNeedHelpService>} dependencies.needHelp
+ * @param {import("../types.js").NeedHelpService} dependencies.needHelp
  */
 function createNeedHelpActions({ needHelp }) {
   return Object.freeze([
