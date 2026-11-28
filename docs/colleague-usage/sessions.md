@@ -274,7 +274,13 @@ it, typing in one of its chats, session changes and assistant work). Opening the
 project while idle cleanup is closing it waits for that Close, however long it
 takes, then opens the project again. A chat message sent then, or after the Close, also reopens the
 project and then reaches the assistant; if the project cannot open, the message
-stays marked as not sent, with the reason. If idle cleanup closes the project
+stays marked as not sent, with the reason. Starting Preview or another output after
+the Close reopens the project the same way, also when the coding agent or a check
+starts it from the session (`vibe64-helper preview ensure` or `restart`, browser
+tests), with nobody visiting the project; one asked for while the project is still
+closing is refused with **The project is closing, so nothing in it can start now**:
+run it again once the Close has finished. A Preview that restarts by itself, after
+a workspace preparation, does not reopen a closed project. If idle cleanup closes the project
 while a chat holds a draft or an undelivered message, the page stays, showing
 **Idle cleanup closed this project** with **Reopen**; sending the message or
 choosing **Reopen** opens it again. Otherwise the page returns to the project

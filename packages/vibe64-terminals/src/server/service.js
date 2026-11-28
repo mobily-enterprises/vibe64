@@ -227,6 +227,7 @@ function createService({
     productionEnvironmentProvider,
     project,
     projectServices,
+    openProjectForStart: () => projectRuntime.openProjectRuntimeForStart(),
     publishAgentSessionChanged,
     publishSessionChanged,
     recordWorkflowOutcome: (sessionId, input, options) => assistantRouting.recordOutcome(sessionId, input, options),

@@ -65,13 +65,32 @@ function createProjectServices({
     project.status = "open";
   }
 
+  /**
+   * Why the project's services cannot start now for the session, or null: the project is closed or closing, or that
+   * session's own cleanup is running.
+   */
+  function startRefusal(project, sessionId) {
+    if (project.status === "closed") {
+      return vibe64Error(
+        "The project is closed, so its services cannot start until it is opened again.",
+        "vibe64_project_services_closed"
+      );
+    }
+    if (project.status !== "open") {
+      return vibe64Error("The project is closing, so its services cannot start.", "vibe64_project_services_closing");
+    }
+    if (project.closingSessions.has(sessionId)) {
+      return vibe64Error("This session is closing, so its services cannot start.", "vibe64_project_services_closing");
+    }
+    return null;
+  }
+
   async function ensure(context) {
     const project = projectState(context);
     const sessionId = String(context.session?.sessionId || "").trim();
     return exclusive(project, async () => {
-      if (project.status !== "open" || project.closingSessions.has(sessionId)) {
-        throw vibe64Error("Project or session is closing; its services cannot start.", "vibe64_project_services_closing");
-      }
+      const refusal = startRefusal(project, sessionId);
+      if (refusal) throw refusal;
       const source = context.sessionSourceRoot;
       const baseEnv = await context.runtime.resolvePromptEnvironment();
       let declaration;
@@ -118,9 +137,8 @@ function createProjectServices({
             continue;
           }
         }
-        if (project.status !== "open" || project.closingSessions.has(sessionId)) {
-          throw vibe64Error("Project or session is closing; its services cannot start.", "vibe64_project_services_closing");
-        }
+        const refusedNow = startRefusal(project, sessionId);
+        if (refusedNow) throw refusedNow;
         const runtime = vibe64RuntimePacks(service.runtimeRequirements);
         if (!runtime.available) throw new Error(runtime.disabledReason);
         const result = await runCommand({
@@ -180,7 +198,6 @@ function createProjectServices({
     for (const [key, service] of project.services) {
       if (!sessionId || service.sessionId === sessionId) project.services.delete(key);
     }
-    if (!sessionId) project.closingSessions.clear();
     if (!sessionId && project.status === "closing") {
       project.status = "closed";
     }
@@ -198,9 +215,14 @@ function createProjectServices({
     const project = projectState(context);
     project.closingSessions.add(sessionId);
     return exclusive(project, async () => {
-      await drain(project, "session-close", sessionId);
-      project.closingSessions.delete(sessionId);
-      return { ok: true };
+      try {
+        await drain(project, "session-close", sessionId);
+        return { ok: true };
+      } finally {
+        // The mark refuses the session's starts only while its cleanup runs. A failed cleanup is its caller's error
+        // (archive, renewal, project Close), and the session's next start keeps a service still running.
+        project.closingSessions.delete(sessionId);
+      }
     });
   }
 

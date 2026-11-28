@@ -90,24 +90,40 @@ test("one session's declaration does not remove another's warm service, but scop
   assert.equal(calls.length, 1);
 });
 
-test("session close drains a racing start and blocks that session on failed cleanup", async () => {
-  let release, started;
-  const starting = new Promise(resolve => { started = resolve; });
-  const { manager, calls } = fixture({
-    inspect: async () => ({ services: [{ ...service, scope: "session" }] }),
-    runCommand: async () => { started(); await new Promise(resolve => { release = resolve; }); return { ok: true, execution: { id: "racing" } }; },
-    stopOwned: async selector => { calls.push({ stop: selector }); return { supported: true, scopeEmpty: false, error: "still running" }; }
+test("session close drains a racing start, and a failed cleanup is its caller's error, never a closing mark left behind",
+  async () => {
+    let release, started;
+    const starting = new Promise(resolve => { started = resolve; });
+    const launches = [];
+    const { manager, calls, exited } = fixture({
+      inspect: async () => ({ services: [{ ...service, scope: "session" }] }),
+      runCommand: async (request) => {
+        launches.push(request.execution.sessionId);
+        if (launches.length === 1) {
+          started();
+          await new Promise(resolve => { release = resolve; });
+        }
+        return { ok: true, execution: { id: `launch-${launches.length}` } };
+      },
+      stopOwned: async selector => { calls.push({ stop: selector }); return { supported: true, scopeEmpty: false, error: "still running" }; }
+    });
+    const launch = manager.ensure(sessionContext("a"));
+    await starting;
+    const closing = manager.closeSession(context(), "a");
+    const queued = manager.ensure(sessionContext("a"));
+    const closeCheck = assert.rejects(closing, /still running/);
+    release();
+    await Promise.all([launch, closeCheck]);
+    assert.equal(calls[0].stop.sessionId, "a");
+    // The close ended, failed, and said so to its caller. The start queued behind it finds the service it could not
+    // stop still running and keeps it, rather than being refused as if the session were still closing.
+    await queued;
+    assert.deepEqual(launches, ["a"]);
+    // Once that service exits, the session's next start starts it again: nothing stays refused after the close.
+    exited();
+    await manager.ensure(sessionContext("a"));
+    assert.deepEqual(launches, ["a", "a"]);
   });
-  const launch = manager.ensure(sessionContext("a"));
-  await starting;
-  const closing = manager.closeSession(context(), "a");
-  const queued = manager.ensure(sessionContext("a"));
-  const closeCheck = assert.rejects(closing, /still running/);
-  const queuedCheck = assert.rejects(queued, /session is closing/);
-  release();
-  await Promise.all([launch, closeCheck, queuedCheck]);
-  assert.equal(calls[0].stop.sessionId, "a");
-});
 
 test("standalone session close stops only that session's owned handles", async () => {
   const stopped = [];
@@ -168,7 +184,8 @@ test("project close drains a racing start and prevents new starts until reopen",
   await Promise.all([launch, closing]);
   assert.equal(calls.length, 1);
   assert.ok(calls[0].stop.ownerId);
-  await assert.rejects(manager.ensure(context()), /closing/);
+  // A closed project says so: it is not still closing, and opening it again admits its services.
+  await assert.rejects(manager.ensure(context()), { code: "vibe64_project_services_closed", message: /project is closed/ });
 });
 
 test("a successfully drained project can reopen and start its service again", async () => {
