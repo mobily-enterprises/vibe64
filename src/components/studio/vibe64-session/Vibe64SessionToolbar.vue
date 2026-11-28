@@ -258,7 +258,6 @@ function renameSession(session) {
   renamingSession.value = { ...session };
 }
 
-const needHelp = useVibe64SessionsNeedHelp(allSessions);
 function openNeedHelp(session) {
   if (!needHelp.open(session, props.toolbar.sessionsApiPath)) return;
   infoSessionId.value = "";
@@ -357,6 +356,7 @@ function sessionTabAriaLabel(sessionItem = {}) {
 }
 
 const allSessions = computed(() => Array.isArray(props.toolbar.sessions) ? props.toolbar.sessions : []);
+const needHelp = useVibe64SessionsNeedHelp(allSessions);
 const archiveNow = ref(Date.now());
 const hasClosingSessions = computed(() => props.active && allSessions.value.some((session) => session.archiving));
 onMounted(() => {
