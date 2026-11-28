@@ -36,18 +36,20 @@ function plannedRestartPausedLabel(active) {
 }
 
 /**
- * The calm message once after the restart: when, that nothing was lost, the AI that picked up where it left off, and
- * what else the restart stopped.
+ * The calm message once after the restart: when, that nothing was lost, the AI that picked up where it left off, what
+ * else the restart stopped, and, when the update changed the page's code, that Reload gets it.
  * @param {{ restartedAt: string, sessions: number, stopped: Array<{ label: string, sessionName: string }> }} restarted
+ * @param {{ updated?: boolean }} [options] `updated`: the server serves another client build than the page runs
  */
-function plannedRestartAfterText(restarted) {
+function plannedRestartAfterText(restarted, { updated = false } = {}) {
   const stopped = restarted.stopped.map(({ label, sessionName }) => (sessionName ? `${label} (${sessionName})` : label));
   const resumed = restarted.sessions === 1 ? "The AI that was working picked up where it left off."
     : restarted.sessions > 1 ? `The AI in the ${restarted.sessions} sessions that were working picked up where it left off.` : "";
   return [
     `Restarted for an update at ${plannedRestartClock(restarted.restartedAt)}. Nothing was lost.`,
     resumed,
-    stopped.length ? `Stopped then: ${stopped.join("; ")}.` : ""
+    stopped.length ? `Stopped then: ${stopped.join("; ")}.` : "",
+    updated ? "Reload to get the latest version." : ""
   ].filter(Boolean).join(" ");
 }
 

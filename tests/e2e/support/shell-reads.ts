@@ -6,7 +6,7 @@
  */
 const SHELL_READS = Object.freeze([
   ["/studio/health/crashes/summary", { ok: true, canAcknowledge: true, unacknowledged: 0, latest: null }],
-  ["/studio/health/planned-restart", { ok: true, active: null, restarted: null, clientBuildId: "" }]
+  ["/studio/health/planned-restart", { ok: true, active: null, restarted: null }]
 ] as const);
 
 export { SHELL_READS };

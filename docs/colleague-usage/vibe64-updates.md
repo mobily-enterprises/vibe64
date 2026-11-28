@@ -4,10 +4,17 @@ A browser tab keeps running the version of Vibe64 it loaded until it reloads.
 After Vibe64 is updated and restarted, an open tab reconnects by itself, but
 it still runs the old version, so fixes in the update do not reach it yet.
 
-When the tab reconnects to a Vibe64 that serves a different version, a banner
-appears at the top of the page:
+When the tab reconnects to a Vibe64 that serves a different version, a blue
+banner appears across the top of the page:
 
-**Vibe64 was updated. Reload to get the latest version.** with **Reload**
+**Vibe64 was updated. Reload to get the latest version.** with **Reload** and
+**Dismiss**
+
+One update is one notice. After a restart the host announced (see the Planned
+restarts guide), the green message after the restart says it instead: it ends
+with **Reload to get the latest version.** and has **Reload** beside
+**Dismiss**. A host's own page without the editor's top banner shows the same
+sentence in the shell's banner, with **Reload** and a close button.
 
 - **A plain reload is enough.** Choosing **Reload**, the browser's reload
   button or opening Vibe64 again loads the new version. You never need a hard
@@ -21,15 +28,16 @@ appears at the top of the page:
   banner **The app cannot reload because the app server is not reachable.
   Restart the server, then click Reload.** appears instead. Wait until Vibe64
   is back, then choose **Reload** again.
-- Closing the banner hides it for that version. It returns only for a later
-  update. Until you reload, the tab keeps running the old version.
+- **Dismiss** (or closing the shell's banner) hides it for that version. It
+  returns only for a later update. Until you reload, the tab keeps running the
+  old version.
 - Reconnecting to the same version does not show the banner again. If Vibe64
   goes back to the version the tab is running, the banner disappears.
 - An update or restart that leaves the page's code unchanged (a server-only
   fix, a planned restart) does not show it, wherever the update was built.
 - Each tab checks for itself: reload every open Vibe64 tab that shows the
   banner.
-- The banner and its button are the same on desktop and phone.
+- The banner and its buttons are the same on desktop and phone.
 - Running Vibe64 from source in development mode (`npm run dev`) has no
   version to compare, so the banner never appears there; the development
   server updates the page itself.
@@ -55,7 +63,10 @@ open tab carries on by itself, and you don't need to do anything:
 
 - After a moment without an answer, a banner at the top of the page says
   **Updating…**. It goes away by itself when Vibe64 answers again, usually
-  within half a minute. Closing it only hides it.
+  within half a minute. Closing it only hides it. While it shows, the editor's
+  own banner across the top (a planned restart's countdown, for example) steps
+  aside, so the page says one thing at a time; it comes back once Vibe64
+  answers.
 - What the page was loading finishes once Vibe64 is back. Live updates (chat,
   status, lists) catch up by themselves.
 - Something you do while the banner shows (sending, saving, starting) waits

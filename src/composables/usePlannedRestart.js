@@ -1,9 +1,10 @@
 import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { pageClientBuildId } from "@jskit-ai/kernel/shared/support/clientBuild";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { STUDIO_PLANNED_RESTART_ENDPOINT } from "@/lib/studioGateApi.js";
+import { clientUpdateOffer, dismissClientUpdateOffer, hostClientUpdateOffer } from "@/lib/vibe64ClientUpdateOffer.js";
+import { editorReconnect } from "@/lib/vibe64EditorReconnect.js";
 import { plannedRestartPausedLabel } from "@/lib/vibe64PlannedRestartPresentation.js";
 import { VIBE64_SURFACE_ID } from "@/lib/vibe64RequestConfig.js";
 
@@ -25,12 +26,15 @@ function readShown() {
 const shared = {
   status: shallowRef(null),
   now: ref(Date.now()),
-  shown: ref(readShown())
+  shown: ref(readShown()),
+  // The page says "Updating…" (src/error.js): the editor does not answer, as while it restarts.
+  updating: ref(false)
 };
 
 /**
  * Keeps the page's planned restart current: the shell's banner runs it once for the page, so every control that
- * reads usePlannedRestart() follows one read.
+ * reads usePlannedRestart() follows one read. The banner also shows JSKIT's offer to reload after an update, and
+ * follows whether the page says "Updating…".
  */
 function usePlannedRestartWatch() {
   const resource = useEndpointResource({
@@ -44,6 +48,12 @@ function usePlannedRestartWatch() {
   const socket = useRealtimeSocket();
   const reconnected = () => void resource.reload();
   socket.on("connect", reconnected);
+  const endHosting = hostClientUpdateOffer();
+  // Unreachable now is "Updating…" in a moment, or answered (and the banner back) at once.
+  shared.updating.value = editorReconnect.unreachable();
+  const stopFollowingEditor = editorReconnect.subscribe((event) => {
+    shared.updating.value = event.type === "updating";
+  });
   // The countdown's clock while a notice is in force, which also ends the notice here at its expiry, before the next read.
   let ticking = null;
   const tick = () => { shared.now.value = Date.now(); };
@@ -60,13 +70,16 @@ function usePlannedRestartWatch() {
   onScopeDispose(() => {
     socket.off("connect", reconnected);
     stopTicking();
+    endHosting();
+    stopFollowingEditor();
   });
 }
 
 /**
  * The host's planned restart as every page sees it: whether a notice is in force (its time and reason, and the
  * "Paused until HH:MM" the paused controls show), and once after the restart what it stopped. A host's own pages use
- * it for their own paused controls.
+ * it for their own paused controls. The banner also reads JSKIT's offer to reload after an update (`updateOffer`) and
+ * whether the page says "Updating…" (`updating`).
  */
 function usePlannedRestart() {
   const notice = computed(() => {
@@ -77,7 +90,9 @@ function usePlannedRestart() {
     const value = shared.status.value?.restarted || null;
     return value && value.id !== shared.shown.value ? value : null;
   });
+  // The banner's Dismiss closes what it shows: the message after the restart and the offer to reload with it.
   function dismissRestarted() {
+    dismissClientUpdateOffer();
     const id = restarted.value?.id;
     if (!id) return;
     shared.shown.value = id;
@@ -87,22 +102,17 @@ function usePlannedRestart() {
       // Without storage the banner goes for this page only.
     }
   }
-  // The page runs another client build than the server serves now: only then does the message offer Reload.
-  const clientChanged = computed(() => {
-    const page = pageClientBuildId();
-    const served = String(shared.status.value?.clientBuildId || "");
-    return Boolean(page && served && page !== served);
-  });
   return {
     active: computed(() => Boolean(notice.value)),
-    clientChanged,
     dismissRestarted,
     notice,
     now: shared.now,
     pausedLabel: computed(() => (notice.value ? plannedRestartPausedLabel(notice.value) : "")),
     reason: computed(() => notice.value?.reason || ""),
     restartAt: computed(() => notice.value?.restartAt || ""),
-    restarted
+    restarted,
+    updateOffer: clientUpdateOffer,
+    updating: shared.updating
   };
 }
 

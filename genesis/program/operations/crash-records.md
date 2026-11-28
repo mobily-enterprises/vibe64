@@ -77,4 +77,7 @@ an assistant tool. The editor's shell layout shows the red banner above the app
 bar on every page (owner: the error, **See crashes**, **Copy for a bug report**,
 **Acknowledge**; member: a smaller line without the error), re-read when the
 realtime connection returns and when the tab is focused, and `/app/crashes`
-lists every record with its stack.
+lists every record with its stack. Its buttons draw in the banner's on-colour
+(Acknowledge filled, the others outlined), so each reads as enabled on the red;
+the app's primary default looked disabled on a filled banner (28 Nov 2026,
+`tests/e2e/crash-banner.spec.ts`).

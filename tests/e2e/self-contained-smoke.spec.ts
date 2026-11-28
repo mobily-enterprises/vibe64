@@ -143,10 +143,7 @@ const UPDATED_BUILD = "0000000000000000";
 test("after a restart for an update the page shows one notice, with Reload and Dismiss that read as enabled", async ({ page }) => {
   const realtime = await mockRealtime(page, UPDATED_BUILD);
   const restarted = { id: "restart-a", restartedAt: new Date().toISOString(), reason: "An update", sessions: 0, stopped: [] };
-  await mockReadyStudioShell(page, {
-    // The server's answer on 28 Nov: the restart's record, and the build it serves now.
-    plannedRestart: () => ({ ok: true, active: null, restarted, clientBuildId: UPDATED_BUILD })
-  });
+  await mockReadyStudioShell(page, { plannedRestart: () => ({ ok: true, active: null, restarted }) });
   await page.goto(DEVELOPMENT_PATH);
   await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
   await realtime.announced;

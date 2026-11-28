@@ -15,7 +15,9 @@ Every open page of the editor shows an amber banner across the top:
 > then stops, and the AI picks up where it left off afterwards.
 
 The time is in your own time zone, and the countdown moves every second. The
-reason is whatever the host gave.
+reason is whatever the host gave. When the restart begins and the editor stops
+answering, the page says **Updating…** instead, alone, until the workspace is
+back.
 
 ## What is paused, and what still works
 
@@ -76,10 +78,14 @@ request. A turn you stopped yourself during the five minutes stays stopped;
 choose **Continue** or send a message when you want it to go on. Each chat is
 resumed once, never twice. Commands that were stopped are not rerun for you;
 the AI reruns what it needs. **Dismiss** hides the message.
-**Reload** appears only when the editor itself changed in the update; reload
-then to use the new version. The red crash banner is for real crashes only: a
-planned restart stops the editor cleanly and doesn't show it (see the Crashes
-guide).
+When the editor itself changed in the update, the message ends with **Reload
+to get the latest version.** and has **Reload**: reload then to use the new
+version (the When Vibe64 is updated guide says what reloading keeps). That is
+the update's only notice: no second banner offers the same reload, and
+**Dismiss** closes both the message and the offer. **Reload** is filled in the
+banner's light colour and **Dismiss** outlined in it, on desktop and phone.
+The red crash banner is for real crashes only: a planned restart stops the
+editor cleanly and doesn't show it (see the Crashes guide).
 
 ## When the restart doesn't happen
 
