@@ -106,6 +106,18 @@ describe("the session the address names", () => {
     expect(sessionAddressQuery({ ...shown, route: route({ pane: "dashboard" }), shownSessionId: "s2" })).toBe(null);
     expect(sessionAddressQuery({ ...shown, route: route({ session: ["s1", "s2"] }), shownSessionId: "s1" })).toBe(null);
   });
+
+  it("is a renewal's successor, once its renewal confirms it, with the same chat: the work goes on there", () => {
+    const sessions = [{ sessionId: "s1" }, { sessionId: "s2" }];
+    const route = (session) => ({ params: { slug: "demo" }, query: { session, chat: "main", conversation: "c1", pane: "dashboard" } });
+    const handover = { projectSlug: "demo", sessions, shownSessionId: "s2" };
+
+    expect(sessionAddressQuery({ ...handover, route: route("renewed"), renewal: { fromId: "renewed", confirmed: true } }))
+      .toEqual({ session: "s2", chat: "main", conversation: "c1", pane: "dashboard" });
+    // A switch the person makes, from a session still listed to one renewed from it, drops the chat.
+    expect(sessionAddressQuery({ ...handover, route: route("s1"), renewal: { fromId: "s1", confirmed: true } }))
+      .toEqual({ session: "s2", pane: "dashboard" });
+  });
 });
 
 describe("the project page's address", () => {
