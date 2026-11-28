@@ -123,6 +123,23 @@ starting count, it is refused with the fix; so is a top-level Production line of
 another form. An optional line within v2: a reader without it refuses it as an
 unknown entry.
 
+`- Signed release` names, in backticks, a release and the command that builds
+it, such as `- Signed release \`Control plane release\`: \`sh\` \`release/signed-release.sh\``:
+Production is then one signed prebuilt release of an app a provider's machine
+already runs, for a project its own Production can't build, such as a
+provider's control plane. The name follows the Production line's name rule; the
+command is a command as a step's is (`processArguments`), with no `{host}` or
+`{port}` and setting neither a host-owned name (`APP_ENV` and the rest) nor
+`V64_COMMIT`, `V64_RELEASE_DIR` or `V64_RELEASE_KEY`, which a host gives it.
+The result is `signedRelease: { name, argv }`, only when the Stack says it and
+outside the recipe, so Staging and the recipe's hash are the same with or
+without it. A Deployment of the line alone runs nothing on a host, as
+`- Nothing.` does. The entry is the whole Deployment's, refused under a
+`### Service` heading, twice, or beside `- Production: managed by` (Production
+is deployed one way). The deploy engine's Plan refuses such a Production and its
+signed release engine releases it ([deploy engine](../deploy/deploy-engine.md),
+A signed release). An optional line within v2.
+
 ## Services and resources
 
 A Deployment may describe the application's services: each kind of process it

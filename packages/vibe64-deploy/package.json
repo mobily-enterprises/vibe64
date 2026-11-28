@@ -17,6 +17,7 @@
     "./steps": "./src/steps.js",
     "./record": "./src/record.js",
     "./image": "./src/image.js",
+    "./signed-release": "./src/signedRelease.js",
     "./adapters/mobilynet": "./src/adapters/mobilynet/index.js",
     "./adapters/mobilynet/declaration": "./src/adapters/mobilynet/declaration.js",
     "./adapters/mobilynet/client": "./src/adapters/mobilynet/client.js",
@@ -52,6 +53,10 @@
           {
             "subpath": "./image",
             "summary": "The release as an OCI image for a provider that runs containers: each service's declaration, scripts and Containerfile."
+          },
+          {
+            "subpath": "./signed-release",
+            "summary": "A Production the Stack releases as a signed release: built at the saved commit, signed where the release key is, handed to a provider machine's app as one prebuilt release and followed."
           },
           {
             "subpath": "./adapters/mobilynet",

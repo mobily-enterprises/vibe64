@@ -238,7 +238,7 @@ test("a signed release starts only for the Stack's line, one of the project's re
     [(dir, made) => {
       writeFileSync(path.join(dir, "output.tar"), made.output);
       writeFileSync(path.join(dir, "manifest.json"), prebuiltRelease({ key: other.fingerprint, release: COMMIT }).manifest);
-    }, new RegExp(`^The manifest names the key ${other.fingerprint.slice(0, 12)}, not the release key you chose \\(${key.fingerprint.slice(0, 12)}\\)\\.$`, "u")],
+    }, (chosen) => new RegExp(`^The manifest names the key ${other.fingerprint.slice(0, 12)}, not the release key you chose \\(${chosen.slice(0, 12)}\\)\\.$`, "u")],
     [(dir, made) => {
       writeFileSync(path.join(dir, "output.tar"), Buffer.concat([made.output, Buffer.alloc(512)]));
       writeFileSync(path.join(dir, "manifest.json"), made.manifest);
@@ -250,7 +250,8 @@ test("a signed release starts only for the Stack's line, one of the project's re
     const broken = signedWorld(t, { write });
     const ended = await signedRelease({ ...broken.parts, record: null, start: { commit: COMMIT, target: { vps: broken.vps, app: "shop" }, key: broken.key.fingerprint } });
     assert.equal(ended.outcome, "failed");
-    assert.match(ended.message, pattern);
+    // Each broken build is in a world of its own, with the release key chosen there.
+    assert.match(ended.message, typeof pattern === "function" ? pattern(broken.key.fingerprint) : pattern);
     assert.equal(broken.kept.record.releases.at(-1).state, "failed");
     assert.deepEqual(writes(broken.standIn), []);
   }

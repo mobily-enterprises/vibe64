@@ -74,4 +74,4 @@ function machineWorld({ scopes = [...ENGINE_SCOPES, ...MACHINE_SCOPES], now = ()
   return { standIn, client, adapter, vps, key, projectId: standIn.projectId };
 }
 
-export { MACHINE_SCOPES, MANIFEST_FORMAT, OLD_VERSION, machineWorld, prebuiltDeclaration, prebuiltRelease, releaseKey, sha256 };
+export { MACHINE_SCOPES, OLD_VERSION, machineWorld, prebuiltDeclaration, prebuiltRelease, releaseKey, sha256 };
