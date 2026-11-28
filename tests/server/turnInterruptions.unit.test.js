@@ -171,6 +171,9 @@ test("what ended a turn this server sent, and when Vibe64 resumes each", () => {
   assert.equal(ended("failed", "read ECONNRESET").cause, "connection");
   assert.equal(ended("failed", "API Error: 529 Overloaded").cause, "overloaded");
   assert.equal(ended("failed", "Not logged in · Please run /login").cause, "sign-in");
+  // Claude Code's refusal of a revoked sign-in, and JSKIT's answer for a conversation whose account signed out under it.
+  assert.equal(ended("failed", "OAuth token revoked · Please run /login").cause, "sign-in");
+  assert.equal(ended("failed", "Claude isn't connected. Sign in to Claude, then send your message again.").cause, "sign-in");
   assert.equal(ended("failed", "Claude AI usage limit reached|1767225600").cause, "usage-limit");
   assert.equal(ended("failed", "Model refused the request.").cause, "failed");
   assert.equal(ended("timed_out").cause, "failed");

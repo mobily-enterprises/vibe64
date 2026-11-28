@@ -161,6 +161,8 @@ const plan = input => new Promise((resolve, reject) => {
 });
 // The message each application tool call was made for, by its call id.
 const toolTurns = new Map();
+// A goal's turn at work, until it ends: signed out meanwhile (its sign-in removed), Claude's next request fails.
+let signedOutWatch = null;
 createInterface({ input: process.stdin }).on('line', async line => {
   const frame = JSON.parse(line);
   trace({ frame });
@@ -168,7 +170,10 @@ createInterface({ input: process.stdin }).on('line', async line => {
     if (frame.request.subtype === 'initialize') emit({ type: 'system', subtype: 'init', capabilities: ['interrupt_send_now_v1'] });
     emit({ type: 'control_response', response: { subtype: 'success', request_id: frame.request_id,
       response: { models: [{ value: 'sonnet', supportedEffortLevels: ['high'] }] } } });
-    if (frame.request.subtype === 'interrupt') emit({ type: 'result', subtype: 'success', terminal_reason: 'aborted_streaming', result: '' });
+    if (frame.request.subtype === 'interrupt') {
+      clearInterval(signedOutWatch);
+      emit({ type: 'result', subtype: 'success', terminal_reason: 'aborted_streaming', result: '' });
+    }
     return;
   }
   if (frame.type === 'control_response' && toolTurns.has(frame.response?.request_id)) {
@@ -246,6 +251,19 @@ createInterface({ input: process.stdin }).on('line', async line => {
       report();
       return;
     }
+    // Signed out while it works, the turn ends with Claude Code's own answer to a request its account refused.
+    clearInterval(signedOutWatch);
+    signedOutWatch = setInterval(() => {
+      if (existsSync(${JSON.stringify(credentialsPath)})) return;
+      clearInterval(signedOutWatch);
+      const text = 'Invalid API key · Please run /login';
+      const answer = { type: 'assistant', uuid: frame.uuid + '-signed-out', parentUuid: frame.uuid, timestamp: new Date().toISOString(),
+        isApiErrorMessage: true, error: 'authentication_failed',
+        message: { id: frame.uuid + '-signed-out', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text }] } };
+      record(answer);
+      emit(answer);
+      emit({ type: 'result', subtype: 'success', is_error: true, result: text });
+    }, 20);
     emit({ type: 'stream_event', event: { type: 'message_start', message: { id: frame.uuid + '-reply' } } });
     emit({ type: 'stream_event', event: { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } } });
     emit({ type: 'stream_event', event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Working on the goal' } } });
@@ -346,7 +364,10 @@ createInterface({ input: process.stdin }).on('line', async line => {
     removeSender() { senderRemoved = true; },
     options, store, warnings, actor, goalCommands, intent, turnActive, waitFor, trace,
     failNextStart: () => writeFile(failStartPath, ""),
-    /** Claude's account from now on, as `claude auth status` reports it: another account, or signed out. */
+    /**
+     * Claude's account from now on, as `claude auth status` reports it: another account, or signed out, which ends a
+     * goal's turn at work with Claude Code's own refusal.
+     */
     async setAccount(account) {
       await writeFile(accountPath, JSON.stringify(account));
       if (account.loggedIn) await writeFile(credentialsPath, JSON.stringify({ signedIn: account.email }));

@@ -14166,10 +14166,13 @@ test("Main Cancel answers while the goal settings lock is held and its goal paus
 });
 
 
-test("a Codex goal paused by an account change resumes on the current account once the old runtime stopped", { timeout: 30_000 }, async () => {
-  await withAgentMessageController(async ({ captures, controllerOptions, runtime, sessionId, store, terminals }) => {
+test("a Codex goal paused by an account change resumes on the current account once the old runtime stopped, or once an account it can use is set", { timeout: 30_000 }, async () => {
+  await withAgentMessageController(async ({ captures, controllerOptions, project, runtime, sessionId, store, terminals }) => {
     const actor = { ...os.userInfo(), role: "owner" };
     const options = { runtime, vibe64User: actor };
+    runtime.listSessions = async () => [await store.readSession(sessionId)];
+    project.listProjects = async () => ({ projects: [{ slug: "test-project", runtime: { open: true } }] });
+    project.runInProjectContext = async (_slug, operation) => operation();
     await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
     let goal = null;
     const writes = [];
@@ -14193,13 +14196,19 @@ test("a Codex goal paused by an account change resumes on the current account on
 
     assert.deepEqual(await terminals.continueGoalAfterAccountChange(sessionId, { threadId: "another-thread" }),
       { sessionId, skipped: true }, "only the goal of the paused thread continues");
-    // Disconnecting Codex leaves nothing to continue on.
+    // Disconnecting Codex leaves nothing to continue on: the goal waits, marked, for an account it can use.
     terminals.configureAssistantRuntime({ codexConnectionStatus: async () => false });
     const refused = await terminals.continueGoalAfterAccountChange(sessionId, { threadId });
-    assert.equal(refused.code, "vibe64_assistant_connection_unavailable", JSON.stringify(refused));
+    assert.deepEqual(refused, { sessionId, waiting: true });
     assert.equal(goal.status, "paused", "Without a Codex sign-in the goal stays paused");
+    const waiting = (await store.readConversationLog(sessionId))
+      .filter(turn => turn.system?.messageId?.startsWith("vibe64-turn-interrupted:goal:")).map(turn => turn.system.text);
+    assert.equal(waiting.length, 1, JSON.stringify(waiting));
+    assert.match(waiting[0], /^The AI engine stopped at \d\d:\d\d UTC: The signed-in AI account changed\.\nNot resumed yet: .+\. Vibe64 continues it once an AI account you can use is set in AI Accounts\.$/u);
+    // Signing Codex in again sets an account: the sweep that continues every turn an account stopped continues it, once.
     terminals.configureAssistantRuntime({ codexConnectionStatus: async () => true });
-    assert.deepEqual(await terminals.continueGoalAfterAccountChange(sessionId, { threadId }), { sessionId, resumed: true });
+    await terminals.continueTurnsAfterAccountSet();
+    await terminals.continueTurnsAfterAccountSet();
     assert.deepEqual(writes, [["set", threadId], ["active", threadId]]);
     const intent = JSON.parse((await store.readSession(sessionId)).metadata.assistant_goal_intent);
     assert.equal(intent.active, true);

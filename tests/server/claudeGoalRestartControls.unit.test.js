@@ -64,8 +64,9 @@ test("a goal no attempt after a restart could continue stops once, saying why in
   await h.inProject(async () => {
     await h.startRunningGoal("All checks pass");
     const commandsBefore = await h.goalCommands();
-    // Claude is signed out while Vibe64 restarts: nothing can continue the goal until the person signs in again.
-    await h.setAccount({ loggedIn: false });
+    // The project no longer authorizes the person who set it while Vibe64 restarts. (A goal a restart finds signed out
+    // waits for an account instead: claudeGoalAccountSet.unit.test.js.)
+    h.removeSender();
     await h.restart();
     // The last attempt (here the only one) fails.
     const recovery = await h.service.recoverActiveGoals({ retryDelaysMs: [] });
@@ -81,8 +82,7 @@ test("a goal no attempt after a restart could continue stops once, saying why in
       /^Vibe64 restarted at \d\d:\d\d UTC \(it was stopped and started again\)\.\nNot resumed: .+\. Choose Resume goal to try again\.$/u);
     assert.equal(entries[0].metadata.vibe64TurnInterruption.outcome, "not-resumed");
     assert.equal(h.warnings.filter(record => record?.event === "vibe64.agent_goal.recovery_stopped").length, 1, JSON.stringify(h.warnings));
-    // Later restarts leave it alone, even once the account is back: Resume goal continues it.
-    await h.setAccount({ loggedIn: true, authMethod: "claude.ai", email: "owner@example.test" });
+    // Later restarts leave it alone: Resume goal continues it once the person can use the project again.
     for (let restart = 0; restart < 2; restart += 1) {
       await h.restart();
       const later = await h.service.recoverActiveGoals({ retryDelaysMs: [] });
