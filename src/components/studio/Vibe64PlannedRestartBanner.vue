@@ -27,15 +27,15 @@
           <div v-if="kind !== 'notice'" class="vibe64-planned-restart-banner__actions">
             <v-btn
               v-if="updateOffer"
-              :color="onColour"
+              :color="KINDS[kind].onColour"
               size="small"
-              :style="{ color: colour }"
+              :style="{ color: KINDS[kind].colour }"
               variant="flat"
               @click="reloadForClientUpdate"
             >
               Reload
             </v-btn>
-            <v-btn :color="onColour" size="small" variant="outlined" @click="dismissRestarted">Dismiss</v-btn>
+            <v-btn :color="KINDS[kind].onColour" size="small" variant="outlined" @click="dismissRestarted">Dismiss</v-btn>
           </div>
         </div>
       </v-alert>
@@ -55,10 +55,26 @@ import { plannedRestartAfterText, plannedRestartHeadline } from "@/lib/vibe64Pla
 usePlannedRestartWatch();
 const { active, dismissRestarted, notice, now, restarted, updateOffer, updating } = usePlannedRestart();
 
+// Each kind's colour and on-colour are named in full, as the theme declares them (vibe64ThemeColours.vitest.js).
 const KINDS = Object.freeze({
-  notice: Object.freeze({ testId: "vibe64-planned-restart-banner", type: "warning" }),
-  restarted: Object.freeze({ testId: "vibe64-planned-restart-after", type: "success" }),
-  updated: Object.freeze({ testId: "vibe64-client-update", type: "info" })
+  notice: Object.freeze({
+    testId: "vibe64-planned-restart-banner",
+    type: "warning",
+    colour: "rgb(var(--v-theme-warning))",
+    onColour: "rgb(var(--v-theme-on-warning))"
+  }),
+  restarted: Object.freeze({
+    testId: "vibe64-planned-restart-after",
+    type: "success",
+    colour: "rgb(var(--v-theme-success))",
+    onColour: "rgb(var(--v-theme-on-success))"
+  }),
+  updated: Object.freeze({
+    testId: "vibe64-client-update",
+    type: "info",
+    colour: "rgb(var(--v-theme-info))",
+    onColour: "rgb(var(--v-theme-on-info))"
+  })
 });
 
 // What the banner shows, if anything: "Updating…" (the shell's banner) is the one notice while the editor does not
@@ -69,8 +85,6 @@ const kind = computed(() => {
   if (restarted.value) return "restarted";
   return updateOffer.value ? "updated" : "";
 });
-const colour = computed(() => `rgb(var(--v-theme-${KINDS[kind.value]?.type || "surface"}))`);
-const onColour = computed(() => `rgb(var(--v-theme-on-${KINDS[kind.value]?.type || "surface"}))`);
 
 const text = computed(() => {
   if (kind.value === "notice") return plannedRestartHeadline(notice.value, now.value);
