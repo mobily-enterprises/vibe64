@@ -953,9 +953,10 @@ describe("completed renewal URL follows collection reconciliation", () => {
         const reloaded = scope.run(() => actual.useVibe64SessionSelection({ projectSlug: ref("project-a"), route: creationHarness.route }));
         expect(reloaded.selectedId.value).toBe("successor-a");
       } finally { scope.stop(); }
+      // The person picks another session: the address names it (useVibe64SessionAddress), without the chat.
       f.sessionData.selectSessionId("other-session");
-      await nextTick();
-      expect(f.router.currentRoute.value.query.session).toBe("successor-a");
+      await vi.waitFor(() => expect(f.router.currentRoute.value.query.session).toBe("other-session"));
+      expect(f.router.currentRoute.value.query).toEqual({ session: "other-session", pane: "files", filter: ["a", "b"] });
       expect(f.sessionData.selectedSessionId.value).toBe("other-session");
     } finally { f.cleanup(); }
   });
