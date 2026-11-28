@@ -194,7 +194,7 @@ test("rework Senior's review hands back to Junior returns to the same review ste
 
 test("a plan already past Senior's review, its request in a Review pass, just goes on: the pass runs as its own turn, then the next", async (t) => {
   const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
-  // compas-next's case: Senior's review full-ticked the items before this release, and the plan's Review pass is next.
+  // Senior's review full-ticked the items before this release, and the plan's Review pass is next.
   await publishPlanFixture(f.context, planWith(["Review: the plan's changes", "Security pass: the plan's changes"]).replace("- [~] Required", "- [x] Required"));
   await f.service.send("session-1", { messageId: "continue-1", message: "Continue the plan's passes.", passAction: "continue", submissionKind: "send" }, f.context);
   assert.deepEqual([f.state().stage, f.state().pass.id], ["pass", "review"]);
