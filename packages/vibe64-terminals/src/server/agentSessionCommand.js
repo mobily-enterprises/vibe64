@@ -10,6 +10,7 @@ import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planPassItemsCheck, planPassListing, withAfterPlanPasses } from "./planPasses.js";
 import { listGenesisPasses } from "@local/vibe64-genesis/server";
 import { planCommandSource } from "./agentPlanCommand.js";
+import { needHelpCommandSource } from "./needHelp/agentNeedHelpCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { readAgentSessionStatus } from "./agentSessionStatus.js";
 import { runAgentSessionSave } from "./agentSessionSave.js";
@@ -110,6 +111,12 @@ const OUTCOME_FIELDS = Object.freeze({
   fields: ["messageId", "turnId", "stage", "status", "decision", "explanation", "progress", "expectedRevision", "expectedProgressRevision"],
   required: ["messageId", "turnId", "stage", "decision", "explanation", "progress"]
 });
+// What each `vibe64-helper need-help` operation reads.
+const NEED_HELP_FIELDS = Object.freeze({
+  raise: { operation: "need-help raise", fields: ["text"], required: ["text"] },
+  read: { operation: "need-help read", fields: [] },
+  clear: { operation: "need-help clear", fields: [] }
+});
 
 // Every route but run is authorized by the control token rather than the
 // shell-execution token, and hands its command the agent's own fields.
@@ -130,6 +137,7 @@ const commandServers = createSessionCommandServers({
     "/agent-session-command/update": controlRoute("updateSession"),
     "/agent-session-command/save": controlRoute("saveSession"),
     "/agent-session-command/plan": controlRoute("managePlan"),
+    "/agent-session-command/need-help": controlRoute("manageNeedHelp"),
     [HELPER_GROUP_ROUTE]: { handle: streamHelperGroup, token: "controlToken" },
     "/agent-session-command/run": {
       handle({ commandService, input, request, response }) {
@@ -180,6 +188,8 @@ const commandServers = createSessionCommandServers({
  * the destination it has now
  * @param {(sessionId: string, time: string) => boolean} dependencies.previewStartedBefore whether the session's
  * Preview runs in a process started before `time`
+ * @param {() => ReturnType<typeof import("./needHelp/needHelpService.js").createNeedHelpService> | null} [dependencies.readNeedHelp]
+ *   Need help, which `vibe64-helper need-help` raises, reads and clears, or null while Vibe64 starts or stops
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -204,6 +214,7 @@ function createAgentSessionCommandService({
   updateSessionWork,
   saveSessionWork,
   previewStartedBefore,
+  readNeedHelp = () => null,
   logger,
   project,
   publishSessionChanged,
@@ -482,6 +493,31 @@ function createAgentSessionCommandService({
     });
   }
 
+  /**
+   * `vibe64-helper need-help raise|read|clear`: the AI raises this session's Need help, or adds a follow-up to it, for
+   * the person whose request it works on, reads the answer and clears it.
+   * @param {string} sessionId
+   * @param {{ operation?: string, text?: string }} input
+   */
+  async function manageNeedHelp(sessionId, input = {}) {
+    return runInSessionProject(sessionId, async ({ binding, store }) => {
+      const { operation, ...fields } = input;
+      const contract = Object.hasOwn(NEED_HELP_FIELDS, operation) ? NEED_HELP_FIELDS[operation] : null;
+      if (!contract) {
+        throw vibe64Error("Use vibe64-helper need-help raise, read or clear.", "vibe64_need_help_operation_invalid", { status: 400 });
+      }
+      refuseUnreadFields(fields, contract);
+      const needHelp = readNeedHelp();
+      if (!needHelp) {
+        throw vibe64Error("Need help is unavailable while Vibe64 starts or stops. Try again in a minute.", "vibe64_need_help_unavailable", { status: 503 });
+      }
+      if (operation === "raise") {
+        return needHelp.raise(sessionId, { text: fields.text, from: "agent", actor: await requestActor(store, sessionId, binding) });
+      }
+      return operation === "read" ? needHelp.read(sessionId) : needHelp.clear(sessionId);
+    });
+  }
+
   async function execute(input = {}, context = {}) {
     input.signal?.throwIfAborted();
     const command = decodedCommand(input.commandBase64);
@@ -682,6 +718,7 @@ function createAgentSessionCommandService({
     updateSession,
     saveSession,
     managePlan,
+    manageNeedHelp,
     run,
     summarizeTurnCommands: repeats.summarize,
     helperGroups: helperGroups.listing,
@@ -713,6 +750,7 @@ async function prepareAgentSessionCommand({
   const controlFilePath = agentControlFilePath(normalizedWrapperHostDir, "session");
   await Promise.all([
     writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-plan"), planCommandSource(SESSION_RENAME_CONTROL_ENV, controlFilePath)),
+    writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-need-help"), needHelpCommandSource(SESSION_RENAME_CONTROL_ENV, controlFilePath)),
     writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-session"), sessionRenameCommandSource(controlFilePath)),
     writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource()),
     writeExecutableFileIfChanged(runnerHostPath(normalizedWrapperHostDir), commandRunnerSource()),

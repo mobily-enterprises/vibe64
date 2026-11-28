@@ -95,8 +95,11 @@ click or tap the work icon after the tab's name, such as the green tick of
 **All work is saved**: every device shows it, and it opens the same details
 without selecting the session; another click or tap closes them. With the
 keyboard, Tab to the icon and press Enter or Space. The details
-list **Status**, **Assistant**, **Model**, **Work**, **Saves to**, **Session**,
-**Session branch** and **Created**, with **Rename session**. **Saves to**
+list **Status**, **Assistant**, **Model**, **Need help** (while it has one),
+**Work**, **Saves to**, **Session**, **Session branch** and **Created**, with
+**Rename session** and **Ask for help** (**Open Need help** while it has one; see
+[Need help](need-help.md)). A session that needs help also shows a lifebuoy icon
+after its name, and its header a **Need help** chip. **Saves to**
 always names where that session's **Save** puts its work: the repository in
 short form (`owner/name` for GitHub, the project's short name for Vibe64 Git,
 or **Project repository** for a project folder on this computer, never a

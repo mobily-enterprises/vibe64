@@ -804,6 +804,12 @@ delivery; Core's problemReport module owns the bundle's shape and masking. The
 routing's delivery is observed for the session's timeline (its failed and
 refused deliveries), without changing a routing decision.
 
+Owns each session's Need help (its `need_help` metadata, written through the
+Runtime session store): the AI raises, reads and clears it through its
+vibe64-helper command and the person raises, answers and clears it through the
+session's routes; an optional host forwards each raised flag, and an answer is
+told to the Main chat's AI.
+
 Owns each Main turn's count of its repeated shell commands
 (`agentCommandRepeats.js`), in memory and for the running turn only: a turn
 that clearly reruns too much tells its AI once through Main chat's note and
@@ -817,6 +823,7 @@ shows the person its numbers when it ends, never stopping or slowing a command.
 - `genesis/program/conversation/repeated-commands.md`
 - `genesis/program/conversation/temporary-assistance.md`
 - `genesis/program/execution/workspace-setup.md`
+- `genesis/program/operations/need-help.md`
 - `genesis/program/operations/problem-reports.md`
 - `genesis/program/preview/managed-application.md`
 - `genesis/program/source/save-work.md`

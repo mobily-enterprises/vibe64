@@ -66,6 +66,7 @@ function createServiceState({ readClaudeAccountStatus }) {
     shutdownSignal,
     slots: Object.seal({
       databaseToolsProvider: null,
+      needHelp: null,
       pagesProvider: null,
       planCompleted: null,
       sessionSave: null,

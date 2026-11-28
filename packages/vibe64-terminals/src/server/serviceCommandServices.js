@@ -173,6 +173,8 @@ function createServiceCommandServices({
           error: "Save is unavailable while Vibe64 starts or stops."
         },
     previewStartedBefore,
+    // The Need help feature fills it; while it is absent, as Vibe64 starts or stops, need-help is unavailable.
+    readNeedHelp: () => state.slots.needHelp,
     listProjectSessions: input => listProjectSessions(input, {
       project,
       authorize: authorizeProjectMessage,

@@ -66,6 +66,28 @@
     >
       {{ mainChatApprovals.waitingCount }} waiting
     </v-chip>
+    <!-- The session's Need help, until it's cleared: it says when nobody has answered for a while. -->
+    <v-chip
+      v-if="needHelp"
+      class="studio-autopilot__need-help-chip studio-autopilot__header-fixed"
+      :color="needHelp.color"
+      variant="tonal"
+      size="small"
+      prepend-icon="$support"
+      :aria-label="`${needHelp.label}. ${needHelp.title}`"
+      :title="needHelp.title"
+      data-vibe64-need-help
+      @click="needHelpOpen = true"
+    >
+      {{ needHelp.label }}
+    </v-chip>
+    <Vibe64NeedHelpDialog
+      v-if="needHelpOpen && props.session?.sessionId && readRefOrGetterValue(props.sessionsApiPath)"
+      :session="props.session"
+      :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
+      @close="needHelpOpen = false"
+      @changed="props.refreshSessionData()"
+    />
     <!-- After Save, actions keep the header in priority order; the lowest move into Session actions first. -->
     <div class="studio-autopilot__header-actions">
       <v-badge
@@ -218,13 +240,15 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import Vibe64NeedHelpDialog from "./Vibe64NeedHelpDialog.vue";
 import Vibe64SessionPin from "./Vibe64SessionPin.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import { splitVibe64SessionHeaderActions, vibe64SessionNameStripWidth } from "@/lib/vibe64SessionToolbarVisibility.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64SessionSaveTarget } from "@/lib/vibe64SessionSaveTarget.js";
 import { saveWorkButtonPress } from "@/lib/vibe64SaveWorkButton.js";
+import { vibe64NeedHelpPresentation, vibe64SessionNeedHelp } from "@/lib/vibe64NeedHelp.js";
 
 // The session header: the session names, Save, this session's actions and
 // Session actions, which holds whatever does not fit.
@@ -256,6 +280,19 @@ const sessionRenewalActionPresentation = computed(() => (
   }
 ));
 const sessionActionsTrigger = ref(null);
+// The session's Need help, with a clock that moves while it is shown, so its chip says when nobody has answered.
+const needHelpFlag = computed(() => vibe64SessionNeedHelp(props.session));
+const needHelpNow = ref(Date.now());
+onMounted(() => {
+  watch(() => Boolean(needHelpFlag.value), (shown, _previous, onCleanup) => {
+    needHelpNow.value = Date.now();
+    if (!shown) return;
+    const timer = setInterval(() => { needHelpNow.value = Date.now(); }, 30_000);
+    onCleanup(() => clearInterval(timer));
+  }, { immediate: true });
+});
+const needHelp = computed(() => vibe64NeedHelpPresentation(needHelpFlag.value, needHelpNow.value));
+const needHelpOpen = ref(false);
 const temporaryAiHasUnreadMessages = computed(() => temporaryAiWorkspace.value?.hasUnreadMessages === true);
 // Session names get the header's room first, then Save, then these actions in
 // priority order; whatever does not fit moves into Session actions.
@@ -388,6 +425,7 @@ async function requestSessionSaveWork() {
 watch(() => [
   (props.sessionToolbar?.sessions || []).map((session) => session?.sessionName || session?.sessionId).join("\n"),
   headerActionsAvailable.value.join(),
+  needHelp.value?.label || "",
   saveWorkHeaderVisible.value,
   mainChatApprovals.waitingCount
 ].join("|"), () => nextTick(measureHeaderActionRoom));
@@ -467,7 +505,8 @@ watch(() => [
   min-height: 3rem;
 }
 
-.studio-autopilot__approvals-chip {
+.studio-autopilot__approvals-chip,
+.studio-autopilot__need-help-chip {
   align-self: center;
   flex-shrink: 0;
 }
