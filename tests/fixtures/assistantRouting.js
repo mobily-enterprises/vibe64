@@ -222,6 +222,8 @@ async function fixture(t, preferences = { mode: "auto" }, {
   const interrupts = [];
   const discards = [];
   let dispatchGate = null;
+  // Fields the next native dispatch's receipt gains (deliverNextAs).
+  let nextDelivery = null;
   // Genesis's pass list for the session's source; a test may change it, count its reads, read what each asked for or
   // make them fail.
   const genesis = { unavailable: null, passes: GENESIS_PASSES, master: GENESIS_MASTER_PASS };
@@ -247,7 +249,9 @@ async function fixture(t, preferences = { mode: "auto" }, {
       sends.push({ input, selection: selected.assistantSelection, trigger: timelineTrigger(selected) });
       if (failAdmission) throw new Error("Lost admission response.");
       receipts.set(input.messageId, input);
-      return { ok: true, delivered: true, threadId: "native-thread", turnId: `turn-${sends.length}` };
+      const delivered = { ok: true, delivered: true, threadId: "native-thread", turnId: `turn-${sends.length}`, ...nextDelivery };
+      nextDelivery = null;
+      return delivered;
     } };
   const service = createAssistantRouting(routingOptions);
   return { service, context, metadata, agent, router, sends, events, notices, catalog, catalogs, connections, assignments, configuration,
@@ -274,6 +278,9 @@ async function fixture(t, preferences = { mode: "auto" }, {
     lockWait: (ms) => { lockWaitMs = ms; },
     helperCalls: () => helperCalls, cleanupCalls: () => cleanupCalls,
     rejectAdmission: result => { rejectedAdmission = result; },
+    // The next dispatch's receipt gains `fields`: a steer its engine started as a turn of its own says
+    // `deliveryMode: "new_turn"`, as every engine's does.
+    deliverNextAs: fields => { nextDelivery = fields; },
     failAdmission: (value = true) => { failAdmission = value; }, state: () => JSON.parse(metadata.assistant_routing_request || "null") };
 }
 export { fixture, planDocument, publishPlanFixture };
