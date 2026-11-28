@@ -185,9 +185,11 @@ function useVibe64SessionData() {
     return true;
   });
   const {
+    selectionRenewalConfirmed,
     selectionRenewalPredecessorId,
     selectionRenewalResource
   } = useVibe64SelectedSessionRenewal({
+    availableSessions,
     projectSlug,
     selectedListSession,
     selectedSessionId,
@@ -490,8 +492,16 @@ function useVibe64SessionData() {
 
   useVibe64CurrentSessionPublication({ selectionReconciliationState });
   // A session that leaves the list (another project's, gone, or renewed) leaves the address once the
-  // selection moves off it; while a renewal still decides, the selection and so the address keep it.
-  useVibe64SessionAddress({ projectSlug, route, router, selectedSessionId, sessions });
+  // selection moves off it; while a renewal still decides, the selection and so the address keep it. A renewal's
+  // successor takes its address with the same chat.
+  useVibe64SessionAddress({
+    projectSlug,
+    renewal: { fromId: selectionRenewalPredecessorId, confirmed: selectionRenewalConfirmed },
+    route,
+    router,
+    selectedSessionId,
+    sessions
+  });
 
   return {
     archive,

@@ -59,14 +59,16 @@ async function mountPage(start, { before = "", sessions = ["s1", "s2"], conversa
   await router.push(start);
   const list = ref(sessions.map(sessionId => ({ sessionId })));
   const views = Object.fromEntries(["s1", "s2", "s3"].map(id => [id, sessionView(id)]));
-  const page = { list, router, route: router.currentRoute, views };
+  const page = { list, renewal: { fromId: ref(""), confirmed: ref(false) }, router, route: router.currentRoute, views };
   let slots = null;
   const Root = defineComponent({
     setup() {
       const route = useRoute();
       const projectSlug = computed(() => projectSlugFromRoute(route));
       const selection = useVibe64SessionSelection({ projectSlug, rememberedId: () => "", route });
-      useVibe64SessionAddress({ projectSlug, route, router: useRouter(), selectedSessionId: selection.selectedId, sessions: list });
+      useVibe64SessionAddress({
+        projectSlug, renewal: page.renewal, route, router: useRouter(), selectedSessionId: selection.selectedId, sessions: list
+      });
       page.selection = selection;
       if (conversationQuery) {
         useVibe64ColleagueNavigation({ conversationQuery: true });

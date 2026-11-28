@@ -117,7 +117,9 @@ A project link opens the session named in its address. The address always
 names the session on screen: selecting another tab, starting a new session or
 archiving the one shown changes its `session` part (and drops the previous
 session's chat), so a reload, a copied link or the address opened again shows
-the session you were looking at. These changes replace the address, so the
+the session you were looking at. A session renewed while you look at it hands
+its address to its successor with the same chat, since the work goes on there.
+These changes replace the address, so the
 browser's **Back** leaves the project rather than stepping through sessions.
 Following a different session link selects its named session. A session being
 archived is temporarily unavailable for selection.

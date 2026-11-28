@@ -272,9 +272,9 @@ reload, a copied link or the address opened again shows it. The session
 collection is the address's one writer of `?session=`: whenever its selection
 moves to another listed session (a tab, a new session once listed, the session
 before an archived one, the fallback for a session that has gone or belongs to
-another project, a renewal's successor), an address naming a different session
-is replaced (never pushed, as Colleague's write-back of the chat is) with the
-shown one, without the previous session's `?conversation=` and `?chat=`; when
+another project), an address naming a different session is replaced (never
+pushed, as Colleague's write-back of the chat is) with the shown one, without
+the previous session's `?conversation=` and `?chat=`; when
 the page shows none, the address loses its session. An address that moves (a
 link, Back, a navigation) leads instead and the selection follows it. An address
 without a session keeps none: the project opens the last opened session. A host
@@ -301,8 +301,13 @@ readers in the tab (Env, preview identities); it no longer restores the project'
 session, and no runtime mounts before the list names the selected session.
 
 The session collection's existing completed-renewal reconciliation selects the
-exact unique `renewed_from` successor; the address then names it as it names
-any selection. While the renewal is running, failed or unconfirmed, the
+exact unique `renewed_from` successor. A renewal goes on with the same work in
+its successor, so an address naming the renewed session, gone from the list,
+hands over to the successor with its `?chat=` and `?conversation=` once the
+renewal confirms it (`selectionRenewalConfirmed` in
+`useVibe64SelectedSessionRenewal.js`: completed, from the session the shown one
+was renewed from, naming exactly the shown one, the list's only successor);
+only a switch the person makes drops the chat. While the renewal is running, failed or unconfirmed, the
 selection, and so the address, keeps the predecessor. The original runtime-host
 renewal selection callback and controller fences are unchanged.
 
