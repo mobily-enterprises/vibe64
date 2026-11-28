@@ -296,6 +296,7 @@ async function planCommands(f) {
     runInProjectContext: async (_slug, operation) => operation()
   }, reportWorkflowOutcome: (id, input) => f.service.recordOutcome(id, input, f.context),
   handPlanToSenior: (id, input) => { handoffs.push(input); return f.service.handPlanToSenior(id, input, f.context); },
+  handActionOn: (id, input) => f.service.handActionOn(id, input, f.context),
   // The session's Genesis pass list, as the routing service reads it.
   listPasses: f.listPasses });
   await commands.bindSession("session-1", { wrapperHostDir: f.context.runtime.stateRoot });

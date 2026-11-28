@@ -18,6 +18,7 @@ import {
 import { STATE_KEY, failure, usesWorkPlan, followupConversation } from "./assistantRoutingRequests.js";
 import { planReviewPass } from "./planPasses.js";
 import { ASSISTANT_PLAN_CHANGE_MESSAGE, ASSISTANT_PLAN_HANDOFF_MESSAGE } from "./assistantPlanHandoff.js";
+import { ASSISTANT_ACT_HANDOFF_MESSAGE } from "./assistantActHandoff.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
@@ -131,6 +132,7 @@ function createAssistantRoutingRecords({
    * for the Review pass it runs in the same turn (planReviewPass, decided again each time the review
    * is prepared), as the message's last paragraph;
    * Senior's planning turn after a plan handoff writes the plan from the request and the conversation;
+   * the acting turn after an act handoff does what the person asked, from the request and the conversation;
    * every other stage continues the request's own work.
    */
   async function prepareFollowup(context, state, stage, { resumeNote = "" } = {}) {
@@ -138,6 +140,7 @@ function createAssistantRoutingRecords({
     const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
     const pass = assistantPlanPass(state);
     const handoff = stage === "planning" ? state.planHandoff : null;
+    const acting = stage === "implementation" ? state.actHandoff : null;
     const reviewer = state.mode === "auto" ? "Senior" : assistantModeLabel(state.resolvedMode);
     // Auto's Senior reviews a plan Junior implemented, and a Senior chat's its own built plan; without one it verifies
     // a review.
@@ -147,6 +150,7 @@ function createAssistantRoutingRecords({
     else delete state.reviewPass;
     let displayMessage = stage === "planning" ? "Continue planning." : "Continue implementation.";
     if (handoff) displayMessage = handoff.implementing ? "Senior changes the plan." : "Senior makes the plan.";
+    if (acting) displayMessage = `${assistantModeLabel(state.resolvedMode)} does what you asked.`;
     if (stage === "review") {
       displayMessage = !checksPlan ? `Continue ${reviewer} review.`
         : reviewPass ? `Senior reviews the plan and runs its ${reviewPass.title} pass.` : "Senior reviews the plan.";
@@ -162,11 +166,15 @@ function createAssistantRoutingRecords({
       lead = "Continue the full test suite from where the last turn stopped: it runs once in this request, never again, and what it found is fixed.";
     }
     if (handoff) lead = handoff.implementing ? ASSISTANT_PLAN_CHANGE_MESSAGE : ASSISTANT_PLAN_HANDOFF_MESSAGE;
+    if (acting) lead = ASSISTANT_ACT_HANDOFF_MESSAGE;
     const last = Boolean(reviewPass) && workPlanLastPass(plan.text, reviewPass.item);
     if (stage === "review") lead = checksPlan ? assistantPlanReviewMessage(reviewPass, { last }) : ASSISTANT_SENIOR_VERIFICATION_MESSAGE;
-    const previous = handoff
-      ? `The previous turn (${assistantModeLabel(handoff.role)}) handed this request to Senior and wrote no plan.`
-      : `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`;
+    let previous = `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`;
+    if (handoff) previous = `The previous turn (${assistantModeLabel(handoff.role)}) handed this request to Senior and wrote no plan.`;
+    if (acting) {
+      previous = `The previous turn (${assistantModeLabel(acting.role)}) could only ${acting.reason === "planning" ? "plan" : "answer"} ` +
+        "and handed this request on without acting.";
+    }
     const message = pass ? pass.request : [lead, `Original request: ${state.input.message}`,
       `Accepted steering: ${JSON.stringify(state.steering || [])}`, previous, ...(reviewPass ? [reviewPass.request] : [])].join("\n\n");
     state.followup = {

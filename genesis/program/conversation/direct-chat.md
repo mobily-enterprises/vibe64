@@ -1561,6 +1561,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantRoutingInterruptions.js`
 - `packages/vibe64-terminals/src/server/assistantRoutingOwedSteps.js`
 - `packages/vibe64-terminals/src/server/assistantPlanHandoff.js`
+- `packages/vibe64-terminals/src/server/assistantActHandoff.js`
+- `packages/vibe64-terminals/src/server/assistantRoutingHandoffs.js`
 - `packages/vibe64-terminals/src/server/assistantPlanCheck.js`
 - `packages/vibe64-terminals/src/server/planSourceChanges.js`
 - `packages/vibe64-terminals/src/server/afterPlanBase.js`
@@ -2575,6 +2577,39 @@ changes Plan content (`vibe64_work_plan_content_senior_only`) is often a slip
 while ticking marks, so it hands nothing on: Junior hears the refusal with how to
 hand a real scope change over. A Junior chat refuses `plan handoff`, as it has no
 Senior, and its Junior writes nothing and says plans need Senior or Auto.
+
+Router's prompt also names the person accepting the assistant's own offer or
+recommendation to act (a yes, go ahead or do it, or a numbered answer choosing
+it) and explicit authorisation to act as implementation, never conversation
+(planning when the action is making or changing a plan), with examples
+(an accepted "open an issue in the dependency's tracker" among them);
+implementation covers every authorised action, also one outside the
+application's files, and a reply that does not clearly accept stays
+conversation. A turn that may only answer or only plan never refuses an action
+it was asked for, nor tells the person to do it themselves: Auto's conversation
+intent (also Vibe64's note on passes the person asked for) and Auto's planning
+intent tell it to run `vibe64-helper plan act`, which reads no input
+(`handActionOver` in `assistantActHandoff.js`; a planning turn saves the plan
+change first and reports no outcome). `assistantActHandsOn` admits a working,
+accepted turn whose reason is conversation, or Auto's planning stage, never a
+pass, a task or the plan check; any other turn hears
+`vibe64_work_act_handoff_unavailable`: it may act itself. Routing's
+`handActionOn` checks the request and its active native turn under the routing
+lock and records `actHandoff` (that turn, its role and reason). Both handoffs'
+routing side is `assistantRoutingHandoffs.js`: `afterTurn` asks its
+`continueHandedOn` first, before any other outcome. When that turn completes
+unstopped, the same request becomes an implementation turn (`continueActing`:
+resolved mode Junior after Auto's planning and the turn's own role otherwise,
+reason and stage implementation, a workflow, review in Auto, plan not involved
+until its own outcome says so), a step like any automatic follow-up, with the
+**Junior is doing what you asked.** notice, naming the acting role
+(`assistantActHandoffNotice`), and a follow-up displayed as **Junior does what
+you asked.** whose message is
+`ASSISTANT_ACT_HANDOFF_MESSAGE`, the original request, accepted steering and
+which turn could only answer or plan; it then follows implementation's own
+outcomes. A plan handoff of the same turn wins and drops the act handoff: the
+planning turn hands the action on itself once the plan is saved. A stopped or
+failed turn never uses it.
 
 A plan stays in Implementation until every item outside its Passes is built:
 Auto refuses Junior's implementation handoff of an involved active plan while

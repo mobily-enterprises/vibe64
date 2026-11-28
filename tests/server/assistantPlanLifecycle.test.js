@@ -332,7 +332,7 @@ test("the installed plan command uses the admitted role, emits live changes and 
   const command = (operation, input = {}) => new Promise((resolve, reject) => {
     const child = execFile(path.join(wrapperHostDir, "vibe64-plan"), [operation, ...(["read", "history"].includes(operation) && Object.keys(input).length ? ["--input"] : [])], { env: { ...process.env, ...prepared.env }, timeout: 5000 },
       (error, stdout, stderr) => error ? reject(new Error(stderr)) : resolve(JSON.parse(stdout)));
-    if (!["read", "history", "handoff"].includes(operation) || Object.keys(input).length) child.stdin.end(JSON.stringify(input));
+    if (!["read", "history", "handoff", "act"].includes(operation) || Object.keys(input).length) child.stdin.end(JSON.stringify(input));
   });
   const help = await new Promise((resolve, reject) => execFile(path.join(wrapperHostDir, "vibe64-plan"), ["--help"],
     { env: { ...process.env, ...prepared.env }, timeout: 5000 }, (error, stdout) => error ? reject(error) : resolve(stdout)));
@@ -373,6 +373,11 @@ test("the installed plan command uses the admitted role, emits live changes and 
   // Handoff takes no input either; a Junior chat has no Senior to hand the plan to.
   request = { schemaVersion: 7, status: "working", delivery: "accepted", mode: "junior", resolvedMode: "junior" };
   await assert.rejects(command("handoff"), /This is a Junior chat, with no Senior to hand the plan to/u);
+  // Act takes no input either; a turn that may act does what the person asked itself.
+  assert.match(help, /act \(no input\): a turn that may only answer \(one Router took for conversation\) or only plan, asked to act/u);
+  request = { schemaVersion: 7, status: "working", delivery: "accepted", mode: "auto", resolvedMode: "junior", reason: "implementation",
+    stage: "implementation", messageId: "request-1", turnId: "turn-1" };
+  await assert.rejects(command("act"), /Only a turn that may only answer or only plan hands its request on with plan act/u);
   const laterHead = await commit();
   metadata.delete("after_plan_base");
   request = { schemaVersion: 7, status: "working", delivery: "accepted", resolvedMode: "senior" };

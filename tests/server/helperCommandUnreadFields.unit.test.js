@@ -53,6 +53,7 @@ const OPERATIONS = [
     required: ["messageId", "turnId", "stage", "decision", "explanation", "progress"], send: plan("outcome"),
     base: { messageId: "request-1", turnId: "turn-1", stage: "implementation", decision: "continue", explanation: "Saved.", progress: true } },
   { name: "plan handoff", fields: [], send: plan("handoff") },
+  { name: "plan act", fields: [], send: plan("act") },
   { name: "session list-project", fields: ["projectSlug"], required: ["projectSlug"], base: { projectSlug: "alpha" },
     send: session("listProject") },
   { name: "session message-project", fields: ["projectSlug", "message", "messageId", "destinationSessionId"],
@@ -101,7 +102,7 @@ async function fixture(t) {
   }, publishSessionChanged: called("publishSessionChanged"),
   listProjectSessions: called("listProjectSessions"), sendProjectMessage: called("sendProjectMessage"),
   readProjectPreview: called("readProjectPreview"), reportWorkflowOutcome: called("reportWorkflowOutcome"),
-  handPlanToSenior: called("handPlanToSenior"), retryWorkspaceSetup: called("retryWorkspaceSetup", { ok: true, state: {} }),
+  handPlanToSenior: called("handPlanToSenior"), handActionOn: called("handActionOn"), retryWorkspaceSetup: called("retryWorkspaceSetup", { ok: true, state: {} }),
   updateSessionWork: called("updateSessionWork"), saveSessionWork: called("saveSessionWork"),
   previewStartedBefore: () => false,
   helperCommandGroups: [{ name: "inventory", summary: "Count the stock", help: "Usage: vibe64-helper inventory count", run: called("inventory", { exit: 0 }) }] });

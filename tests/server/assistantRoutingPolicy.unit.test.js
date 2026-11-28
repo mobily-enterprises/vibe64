@@ -321,6 +321,56 @@ test("a request to make, save or extend a plan is planning, so Senior gets the A
   }
 });
 
+// An Auto chat's Senior ended a turn with a numbered question recommending an action outside the application's files;
+// Router took the person's "YES!!!" for conversation, whose turn answered that it could not act and gave the person the
+// issue to file, and took "I authorise you to do it" for conversation again.
+const ACCEPTED_OFFERS = [
+  ["YES!!!", "1. Should I open an issue in the dependency's tracker asking its check to skip the folders the app's lint already ignores? Recommended: yes."],
+  ["WTF! I authorise you to do it!!!! NOW!", "I can't file it from this turn: this turn can only answer and investigate. Here is the issue to file."],
+  ["1, yes", "1. Shall I push the fix to its branch? Recommended: yes."],
+  ["go ahead", "Want me to send the summary to the team channel?"]
+];
+
+test("accepting the assistant's offer to act, or authorising the action, is implementation, never conversation; an unclear reply stays conversation", () => {
+  for (const [message, offer] of ACCEPTED_OFFERS) {
+    const prompt = assistantRoutingPrompt({ message, messages: [{ role: "user", text: "Run the checks." }, { role: "assistant", text: offer }] });
+    const input = JSON.parse(prompt.slice(prompt.indexOf("\n") + 1));
+    assert.equal(input.message, message);
+    assert.equal(input.messages.at(-1).text, offer, "Router reads the offer the reply accepts");
+    // Implementation covers every authorised action, also one outside the application's files.
+    assert.match(prompt, /Implementation executes authorised changes to the application, including continuing a plan or accepted choices that allow execution, and every other authorised action, such as opening an issue, pushing, sending, saving or running a step\./u);
+    assert.match(prompt, /Conversation answers or investigates without changing files or plans, and acts on nothing\./u);
+    // The person accepting the assistant's own offer or recommendation authorises exactly that action.
+    assert.match(prompt, /The person accepting the assistant's own offer or recommendation to act \(yes, OK, go ahead, do it, or a numbered answer choosing it\) authorises exactly that action, and explicit authorisation to act is never conversation: both are implementation \(planning when the action is making or changing a plan\)\./u);
+    for (const example of ["YES!!!", "1, yes", "go ahead and push it", "I authorise you to do it"]) {
+      assert.ok(prompt.includes(`"${example}"`), example);
+    }
+    assert.ok(prompt.includes("\"1. Should I open an issue in the dependency's tracker? Recommended: yes.\""), "the offer the example accepts");
+    assert.match(prompt, /An acceptance authorises only the action offered, nothing more\./u);
+    // An unclear reply is not an acceptance.
+    assert.match(prompt, /Questions and ambiguous offers are conversation, not execution authority, and so is a reply that does not clearly accept an offer, such as "maybe later" or "what would that change\?"\./u);
+  }
+});
+
+test("a turn that may only answer or plan never refuses an action it was asked for: it hands the request on with plan act", () => {
+  const text = "YES!!!";
+  for (const mode of ["junior", "senior"]) {
+    const conversation = assistantModePrompt(mode, text, { intent: "conversation" });
+    // It still changes nothing itself.
+    assert.match(conversation, /Do not change a plan's status, edit application files, run state-changing operations, or delegate implementation yourself\./u);
+    assert.match(conversation, /If the request in fact asks you to act \(it accepts your own offer or recommendation to act, such as yes, go ahead, do it or a numbered answer choosing it, or it authorises or asks for an action this turn may not take, such as changing files, opening an issue, pushing, sending or saving\), do nothing yourself: run vibe64-helper plan act and end your turn with one short line saying the work starts now\./u);
+    assert.match(conversation, /Vibe64 then continues this request in a turn that may act, without the person asking again; never refuse it, and never tell the person to do it themselves or to ask again\./u);
+    assert.match(conversation, /A question, or a reply that does not clearly accept an offer, is answered here\./u);
+    // The plan handoff stays as it was.
+    assert.match(conversation, /in fact asks to make, change, extend, reopen or archive a plan, write nothing: run vibe64-helper plan handoff/u);
+    assert.ok(conversation.endsWith(text));
+  }
+  const planning = assistantModePrompt("senior", text, { intent: "planning", planInstructions: "Auto planning instructions" });
+  assert.match(planning, /Do not change application files in a planning-only request\./u);
+  assert.match(planning, /If the latest message also asks you to act beyond the plan \(it accepts your own offer or recommendation to act, or it authorises or asks for an action, implementing the plan included\), save the plan change it asks for first, then run vibe64-helper plan act instead of reporting an outcome, and end your turn with one short line saying the work starts now: Vibe64 continues this request in a turn that may act, without the person asking again\./u);
+  assert.match(planning, /Agreeing to make or change a plan never asks you to act\./u);
+});
+
 test("explicit closure by scope reduction is Senior's implementation, verified before the plan completes, while draft edits and unrequested deferrals are not", () => {
   const plan = { status: "active", revision: "scope", outline: "# Notifications\n- [x] In-app notifications\n- [ ] Real email delivery",
     progressRevision: "evidence", progressOutline: "In-app delivery tested. SMTP setup is missing." };
@@ -429,6 +479,7 @@ test("task intent sets permissions independently of the selected role", () => {
   assert.match(assistantModePrompt("senior", text), /You may edit application files when requested/);
   const conversation = assistantModePrompt("senior", text, { intent: "conversation" });
   assert.match(conversation, /Do not change a plan's status, edit application files/);
+  assert.match(conversation, /run vibe64-helper plan act and end your turn/u, "a request to act is handed on, never refused");
   // Router may misread a plan request as an answer: the turn writes nothing and hands it to Senior's planning turn.
   assert.match(conversation, /in fact asks to make, change, extend, reopen or archive a plan, write nothing: run vibe64-helper plan handoff and end your turn/);
   assert.match(conversation, /Senior's planning turn, which writes the plan from the request and the conversation; never ask the person to switch modes/);

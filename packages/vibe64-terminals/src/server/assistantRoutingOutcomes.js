@@ -12,9 +12,9 @@ import {
   assistantReplyAsksPerson,
   latestAssistantQuestionsAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
-import { read, failure, activeMessage, assistantPlanHandsOff, receiptTurnId, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
+import { read, failure, activeMessage, receiptTurnId, savesAutomatically, usesWorkPlan } from "./assistantRoutingRequests.js";
+import { createAssistantRoutingHandoffs } from "./assistantRoutingHandoffs.js";
 import { askWholeChecks, writeWholeChecksQuestion } from "./assistantWholeChecks.js";
-import { PLAN_HANDOFF_OPERATIONS, assistantPlanHandoffNotice } from "./assistantPlanHandoff.js";
 import { createAssistantRoutingInterruptions } from "./assistantRoutingInterruptions.js";
 import { createAssistantRoutingOwedSteps } from "./assistantRoutingOwedSteps.js";
 import { createAssistantPlanCheck } from "./assistantPlanCheck.js";
@@ -173,6 +173,8 @@ function createAssistantRoutingOutcomes({
   });
   const { interruptionOf, afterInterruption, resumeUnsent, scheduleResume, stopUnrecovered } = interruptions;
   const planCheck = createAssistantPlanCheck({ routingState, records, delivery });
+  // A turn's request handed on to the turn that may do it (assistantRoutingHandoffs.js).
+  const handoffs = createAssistantRoutingHandoffs({ records, delivery, agent, exclusiveAfterWrites, continueRecovered, settleRefusedStep });
 
   /**
    * The active agent declares an outcome; this does not dispatch while its turn runs. Its identity is the workflow a
@@ -257,60 +259,6 @@ function createAssistantRoutingOutcomes({
       await records.save(context, state);
       return { ok: true, outcome: state.outcome };
     });
-  }
-
-  /**
-   * The plan command refused Auto's running turn a plan change only Senior may make (creating a plan, changing its
-   * scope, reopening or archiving it), or the turn handed it over itself: the request is Senior's once this turn ends.
-   */
-  async function handPlanToSenior(sessionId, input, options) {
-    return exclusiveAfterWrites(sessionId, options, async context => {
-      const state = await read(context.runtime.store, sessionId);
-      if (!assistantPlanHandsOff(state) || input.messageId !== state.messageId || input.turnId !== state.turnId ||
-          !PLAN_HANDOFF_OPERATIONS.includes(input.operation)) {
-        throw failure("The plan handoff does not match the active Auto request and turn.", "vibe64_assistant_plan_handoff_mismatch");
-      }
-      const native = await agent.sessionState(sessionId, context);
-      if (!native?.turn?.active || native.turn.id && native.turn.id !== state.turnId) {
-        throw failure("Only the active turn can hand its plan change to Senior.", "vibe64_assistant_plan_handoff_turn_inactive");
-      }
-      state.planHandoff = {
-        turnId: state.turnId,
-        role: state.resolvedMode,
-        reason: state.reason,
-        operation: input.operation,
-        // Handed over while implementing the plan: once Senior saves the change, the implementation goes on.
-        // A request Router took for implementation that never worked on the plan is planning, which waits.
-        ...(state.stage === "implementation" && state.planInvolved ? { implementing: true } : {})
-      };
-      await records.save(context, state);
-      return { ok: true, handedTo: "senior" };
-    });
-  }
-
-  /**
-   * The turn whose plan change only Senior may make ended: the same request continues as Senior's planning turn, with
-   * the conversation, and then follows planning's own outcomes. Handed over while implementing, the implementation
-   * goes on once Senior saves the change.
-   */
-  async function continueWithSeniorPlan(context, state, { recovered, live, ended }) {
-    Object.assign(state, { resolvedMode: "senior", reason: "planning", workflow: false, review: false, planInvolved: false });
-    if (state.planHandoff.implementing) state.resumeImplementation = true;
-    state.steps = (state.steps || 0) + 1;
-    state.stalledTurns = 0;
-    delete state.outcome;
-    await records.prepareFollowup(context, state, "planning");
-    const notice = assistantPlanHandoffNotice(state);
-    delete state.planHandoff;
-    state.status = "working";
-    await records.save(context, state);
-    await records.writeNotice(context, state, notice);
-    if (recovered && !live) return continueRecovered(context, state, ended);
-    try {
-      await delivery.deliver(context.session.sessionId, { ...context, vibe64User: state.submittedBy }, state, true);
-    } catch (error) {
-      await settleRefusedStep(context, state, error);
-    }
   }
 
   /**
@@ -478,15 +426,9 @@ function createAssistantRoutingOutcomes({
       // The message the ended turn was sent as.
       const ended = activeMessage(state).messageId || state.messageId;
       const planCheckFrom = planCheck.takeStart(key, ended);
-      // A plan change only Senior may make, refused in this turn, makes the request Senior's planning turn, unless
-      // the person stopped it or the turn did not complete.
-      if (state.planHandoff) {
-        if (state.planHandoff.turnId === state.turnId && !state.stopped && run.state === "completed") {
-          await continueWithSeniorPlan(context, state, { recovered, live, ended });
-          return;
-        }
-        delete state.planHandoff;
-      }
+      // A turn that handed its request on (a plan change only Senior may make, or an action a turn that may only answer
+      // or plan was asked for) makes it that handoff's next turn, unless the person stopped it or the turn did not complete.
+      if (await handoffs.continueHandedOn(context, state, run, { recovered, live, ended })) return;
       const interruption = await interruptionOf(state, run);
       if (interruption && await afterInterruption(sessionId, context, state, interruption, routingOptions)) return;
       // The plan check's own turn ended: the request settles as the turn before it would have. Any other turn that
@@ -728,7 +670,8 @@ function createAssistantRoutingOutcomes({
 
   return Object.freeze({
     recordOutcome,
-    handPlanToSenior,
+    handPlanToSenior: handoffs.handPlanToSenior,
+    handActionOn: handoffs.handActionOn,
     afterTurn,
     decideOwed,
     reconcile,

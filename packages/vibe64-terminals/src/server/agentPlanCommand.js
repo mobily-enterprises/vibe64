@@ -14,7 +14,7 @@ import http from "node:http";
 ${agentControlIdentitySource(controlFilePath)}
 const [operation, ...extra] = process.argv.slice(2);
 if (!operation || ["--help", "-h"].includes(operation)) {
-  console.log('Usage: vibe64-helper plan <read|history|new|write|progress-write|checked|complete|archive|reopen|outcome|handoff>\\n'
+  console.log('Usage: vibe64-helper plan <read|history|new|write|progress-write|checked|complete|archive|reopen|outcome|handoff|act>\\n'
     + 'Mutations take JSON input on stdin. new/write require text (Markdown title and checklists: - [ ] not done yet, - [~] built, - [x] proven). progress-write requires progressText: the whole new Progress, under the name read returns it. A field an operation does not read, or a missing one it needs, is refused, never ignored, and changes nothing: the refusal names the fields the operation takes. The operation is the argument, never a field.\\n'
     + 'write and progress-write replace the whole Plan or Progress, so they also require readThrough: the last page of a read (hasMore false) returns it, and so does the answer of each write.\\n'
     + 'For read pagination or archive selection, use read --input with JSON on stdin. Bare read/history never wait for stdin.\\n'
@@ -26,13 +26,14 @@ if (!operation || ["--help", "-h"].includes(operation)) {
     + 'Only Senior can create, complete, reopen or archive; complete needs every checklist item - [x]. Junior can update Progress with progress-write and existing checklist ticks with write; all other Plan content stays unchanged.\\n'
     + 'Each turn acts as its role (in Auto, the one Router gave it), also a turn that only answers a question, so Senior\\'s and Junior\\'s ticks and Progress go through. A pass the person started on its own outside the plan, a Custom chat and a turn with no running request can only read and history: the refusal says which turn it is and how the person gets the change; do not retry it.\\n'
     + 'checked takes the paired revisions and changes nothing: it records that you walked the checklist and nothing needs a new mark or Progress, which counts as the plan being up to date.\\n'
-    + 'In Auto, a turn asked to make, change, reopen or archive a plan that its role may not (Junior), or that Router took for conversation, writes nothing and runs handoff (no input): Senior makes the plan from the request and the conversation in its own turn right after yours. A plan change refused to such a turn is handed over the same way, without its text.');
+    + 'In Auto, a turn asked to make, change, reopen or archive a plan that its role may not (Junior), or that Router took for conversation, writes nothing and runs handoff (no input): Senior makes the plan from the request and the conversation in its own turn right after yours. A plan change refused to such a turn is handed over the same way, without its text.\\n'
+    + 'act (no input): a turn that may only answer (one Router took for conversation) or only plan, asked to act (the person accepts your own offer or recommendation to act, or authorises or asks for an action), does nothing itself and runs act; it never refuses the action or tells the person to do it themselves. Vibe64 continues the same request in a turn that may act, right after yours, without the person asking again. A turn that may act does it itself.');
   process.exit(0);
 }
 try {
-  if (extra.some(arg => arg !== '--input') || !['read', 'history', 'new', 'write', 'progress-write', 'checked', 'complete', 'archive', 'reopen', 'outcome', 'handoff'].includes(operation)) throw new Error('Use vibe64-helper plan --help.');
+  if (extra.some(arg => arg !== '--input') || !['read', 'history', 'new', 'write', 'progress-write', 'checked', 'complete', 'archive', 'reopen', 'outcome', 'handoff', 'act'].includes(operation)) throw new Error('Use vibe64-helper plan --help.');
   let text = '';
-  if ((!['read', 'history', 'handoff'].includes(operation) || extra.includes('--input')) && !process.stdin.isTTY) for await (const chunk of process.stdin) {
+  if ((!['read', 'history', 'handoff', 'act'].includes(operation) || extra.includes('--input')) && !process.stdin.isTTY) for await (const chunk of process.stdin) {
     text += chunk;
     if (Buffer.byteLength(text) > 512 * 1024) throw new Error('Plan input is too large.');
   }

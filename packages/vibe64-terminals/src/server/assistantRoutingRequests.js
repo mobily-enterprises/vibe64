@@ -82,6 +82,18 @@ function assistantPlanHandsOff(request) {
     request.stage !== "pass" && request.status === "working" && request.delivery === "accepted" &&
     (request.reason === "conversation" || !["senior", "review"].includes(assistantPlanRole(request)));
 }
+/**
+ * Whether the request's running turn hands an action it was asked for on to a turn that may act (`plan act`): a turn
+ * that may only answer (reason conversation: Router's, or Vibe64's note on passes the person asked for) or only plan
+ * (Auto's planning), never a pass, a task, the plan check or a turn that may act already.
+ * @param {object | null} request the saved routing request
+ */
+function assistantActHandsOn(request) {
+  return Boolean(request) && !request.stopped && Boolean(request.turnId) && !assistantTaskPurpose(request.task) &&
+    request.stage !== "pass" && request.status === "working" && request.delivery === "accepted" &&
+    request.followup?.planCheck !== true &&
+    (request.reason === "conversation" && !request.stage || request.mode === "auto" && request.stage === "planning");
+}
 const usesWorkPlan = state => state.planInvolved === true;
 function failure(message, code) {
   return new AppError(409, message, { code });
@@ -290,6 +302,7 @@ export {
   activeMessage,
   assistantCancelledMessageIds,
   assistantPlanHandsOff,
+  assistantActHandsOn,
   assistantPlanRole,
   assistantRoutingRequestForMessage,
   failure,
