@@ -270,6 +270,7 @@ import { WHOLE_CHECKS_YES_MESSAGE } from "@local/vibe64-runtime/shared/assistant
 import { workPlanStatusLine } from "@local/vibe64-terminals/shared/assistantWorkPlan";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, nextTick, ref, useId, watch } from "vue";
+import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64WorkPlan from "./Vibe64WorkPlan.vue";
@@ -323,7 +324,10 @@ const composerSettingsOpen = ref(false);
 const composerSettingsButton = ref(null);
 const workPlanViewer = ref(null);
 const routingActionSending = ref("");
-const routingActionError = ref("");
+// A refused workflow action is the person's own command refused: the shell's action feedback shows it in the snackbar,
+// and the notice keeps it beside the control, until the person acts again or the saved request really moves on.
+const routingFeedback = useUiFeedback({ source: "vibe64.chat.workflow-action", errorChannel: "snackbar", dedupeWindowMs: 0 });
+const routingActionError = computed(() => routingFeedback.messageType.value === "error" ? routingFeedback.message.value : "");
 // What holds the chat's workflow actions: the assistant's turn, the person's message being sent, or their spoken one.
 const chatHold = computed(() => {
   if (agentActive.value) return "turn";
@@ -395,13 +399,16 @@ function showApprovedMessage(entry) {
   mainChat.value?.querySelector(`.vibe64-conversation-log [data-approval-id="${CSS.escape(entry.id)}"]`)
     ?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
-watch(() => [routingRequest.value?.messageId, routingRequest.value?.stage, routingRequest.value?.status, routingRequest.value?.delivery],
-  () => { routingActionError.value = ""; });
+// Each part is compared on its own: every read of the session brings the saved request back as a new object, so the
+// same request read again is no change (28 Nov 2026: a refused Continue implementation vanished as the read after it
+// landed, when one getter returned a new array of the four each time).
+watch([() => routingRequest.value?.messageId, () => routingRequest.value?.stage, () => routingRequest.value?.status,
+  () => routingRequest.value?.delivery], () => routingFeedback.success());
 async function sendRoutingAction(action) {
   const request = routingRequest.value;
   if (routingActionSending.value || !request) return;
   routingActionSending.value = action;
-  routingActionError.value = "";
+  routingFeedback.success();
   try {
     let result;
     if (action === "implement") {
@@ -420,7 +427,7 @@ async function sendRoutingAction(action) {
     }
     return result;
   }
-  catch (error) { routingActionError.value = error?.message || "The workflow action did not start."; return false; }
+  catch (error) { routingFeedback.error(error, "The workflow action did not start."); return false; }
   finally { routingActionSending.value = ""; }
 }
 const conversationAssistantLabel = computed(() => props.session?.assistantSelection
