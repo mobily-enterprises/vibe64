@@ -275,7 +275,9 @@ before an archived one, the fallback for a session that has gone or belongs to
 another project), an address naming a different session is replaced (never
 pushed, as Colleague's write-back of the chat is) with the shown one, without
 the previous session's `?conversation=` and `?chat=`; when
-the page shows none, the address loses its session. An address that moves (a
+the page shows none, the address loses its session. A change still pending when
+the page closes or the project changes is cancelled (a one-off `beforeResolve`
+guard), so it cannot overwrite the newer address. An address that moves (a
 link, Back, a navigation) leads instead and the selection follows it. An address
 without a session keeps none: the project opens the last opened session. A host
 that keeps the conversation in the address writes the shown session's
