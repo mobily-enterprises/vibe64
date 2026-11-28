@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  routeQueryWithoutUnlistedSession,
   sessionListRealtimeShouldRefresh,
   shouldPreserveSelectedSessionDuringRefresh
 } from "../../src/composables/useVibe64SessionData.js";
@@ -130,28 +129,6 @@ describe("current session selection", () => {
     await pending;
     await publisher.request({ apiPath: "/a/current", sessionId: "also-not-published" });
     expect(calls).toEqual([{ apiPath: "/a/current", sessionId: "session-a" }]);
-  });
-
-  it("drops another project's session from the URL, with its chat", () => {
-    const sessions = [{ sessionId: "inspector-session" }];
-    const route = (session, slug = "shop-inspector") => ({
-      params: { slug },
-      query: { session, chat: "main", conversation: "c1", pane: "dashboard" }
-    });
-
-    expect(routeQueryWithoutUnlistedSession({
-      route: route("shop-session"), projectSlug: "shop-inspector", sessions
-    })).toEqual({ pane: "dashboard" });
-    expect(routeQueryWithoutUnlistedSession({
-      route: route("inspector-session"), projectSlug: "shop-inspector", sessions
-    })).toBe(null);
-    // A view still showing while the route names the next project keeps it.
-    expect(routeQueryWithoutUnlistedSession({
-      route: route("shop-session", "shop"), projectSlug: "shop-inspector", sessions
-    })).toBe(null);
-    expect(routeQueryWithoutUnlistedSession({
-      route: { params: { slug: "shop-inspector" }, query: {} }, projectSlug: "shop-inspector", sessions
-    })).toBe(null);
   });
 
   it("preserves a temporarily missing selection only during refresh", () => {

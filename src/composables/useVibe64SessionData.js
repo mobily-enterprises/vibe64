@@ -5,6 +5,7 @@ import { useVibe64SessionDialogs } from "@/composables/useVibe64SessionDialogs.j
 import { useVibe64SessionCreation } from "@/composables/useVibe64SessionCreation.js";
 import { useVibe64SelectedSessionRenewal } from "@/composables/useVibe64SelectedSessionRenewal.js";
 import { useVibe64CurrentSessionPublication } from "@/composables/useVibe64CurrentSessionPublication.js";
+import { useVibe64SessionAddress } from "@/composables/useVibe64SessionAddress.js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
@@ -13,11 +14,7 @@ import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
-import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
-import {
-  selectedSessionIdFromRoute,
-  useVibe64SessionSelection
-} from "@/composables/useVibe64SessionSelection.js";
+import { useVibe64SessionSelection } from "@/composables/useVibe64SessionSelection.js";
 import {
   VIBE64_CURRENT_SESSION_API_SUFFIX,
   VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
@@ -50,18 +47,6 @@ import {
   agentTurnRealtimeOverlayFromPayload,
   latestAgentTurnRealtimeOverlay
 } from "@/lib/vibe64AgentTurnRealtimeOverlay.js";
-
-// A ?session= that is not one of this project's sessions (another project's,
-// or one that is gone) leaves the URL, with its chat, once the list has
-// answered; the project's normal session choice then applies. Null keeps the
-// URL: no such param, or the route already shows another project.
-function routeQueryWithoutUnlistedSession({ route = {}, projectSlug = "", sessions = [] } = {}) {
-  const routeSessionId = selectedSessionIdFromRoute(route);
-  if (!routeSessionId || projectSlugFromRoute(route) !== projectSlug ||
-    sessionIdExistsInList(routeSessionId, sessions)) return null;
-  const { session: _session, conversation: _conversation, chat: _chat, ...query } = route.query || {};
-  return query;
-}
 
 function shouldPreserveSelectedSessionDuringRefresh({
   createSessionRunning = false,
@@ -201,13 +186,9 @@ function useVibe64SessionData() {
   });
   const {
     selectionRenewalPredecessorId,
-    selectionRenewalResource,
-    syncRenewalSuccessorUrl
+    selectionRenewalResource
   } = useVibe64SelectedSessionRenewal({
-    availableSessions,
     projectSlug,
-    route,
-    router,
     selectedListSession,
     selectedSessionId,
     selectedSessionMissing,
@@ -400,11 +381,6 @@ function useVibe64SessionData() {
     }
   }, { immediate: true });
 
-  function dropUnlistedRouteSession() {
-    const query = routeQueryWithoutUnlistedSession({ route, projectSlug: projectSlug.value, sessions: sessions.value });
-    if (query) void router.replace({ path: route.path, hash: route.hash, query }).catch(() => null);
-  }
-
   const selectionReconciliationState = computed(() => {
     const nextSessions = availableSessions.value;
     return {
@@ -487,11 +463,8 @@ function useVibe64SessionData() {
                 getId: (session) => session.sessionId
               });
             }
+            return;
           }
-          if (renewedSuccessorId && selectedSessionId.value === renewedSuccessorId) {
-            syncRenewalSuccessorUrl(state.selectionRenewalPredecessorId, renewedSuccessorId);
-          }
-          if (state.selectedSessionMissing) return;
         } else if (state.selectedSessionMissing && ["failed", "running"].includes(renewalStatus)) {
           return;
         }
@@ -501,8 +474,6 @@ function useVibe64SessionData() {
         }
       }
     }
-    // A renewal owns its predecessor's link (syncRenewalSuccessorUrl).
-    if (!state.selectionRenewalPredecessorId) dropUnlistedRouteSession();
     if (
       !state.selectedSessionId &&
       emptySessionListObservedForProject === state.selectionScope
@@ -518,6 +489,9 @@ function useVibe64SessionData() {
   });
 
   useVibe64CurrentSessionPublication({ selectionReconciliationState });
+  // A session that leaves the list (another project's, gone, or renewed) leaves the address once the
+  // selection moves off it; while a renewal still decides, the selection and so the address keep it.
+  useVibe64SessionAddress({ projectSlug, route, router, selectedSessionId, sessions });
 
   return {
     archive,
@@ -541,7 +515,6 @@ function useVibe64SessionData() {
 }
 
 export {
-  routeQueryWithoutUnlistedSession,
   sessionListRealtimeShouldRefresh,
   shouldPreserveSelectedSessionDuringRefresh,
   useVibe64SessionData
