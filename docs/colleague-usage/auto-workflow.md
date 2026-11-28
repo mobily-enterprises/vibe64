@@ -13,6 +13,13 @@ update or extend a plan goes to Senior as planning, including "Yes, make a plan
 from it" as the answer to a numbered question, "OK make the plan!", a plan built
 from the conversation so far, and "in the same plan" to add work to the current
 or a completed plan. Agreeing to make a plan never starts implementing it.
+Accepting the assistant's own offer or recommendation to act authorises exactly
+that action, also one outside the project's files such as opening an issue in a
+dependency's tracker, pushing or sending something: "Yes", "go ahead", "do it"
+or the number of a question that recommends it goes to the role that acts (Junior
+unless you name Senior), and so does "I authorise you to do it". A reply that does
+not clearly accept, such as "maybe later" or "what would that change?", only gets
+an answer.
 Junior implements an existing plan: say “Execute the plan” or ask it to continue
 implementation. Answering the plan's open questions so coding
 can proceed also defaults to Junior; recording accepted choices or implementation
@@ -46,6 +53,18 @@ over the same way, without its text. **Stop** during the first turn hands
 nothing on. This happens only in Auto: in a Junior chat, which you chose, Junior
 writes nothing and tells you that plans need **Senior** or **Auto**, which you
 choose in **Chat mode**.
+
+You never have to ask twice for an action either. If a request to act still
+reaches a turn that may only answer (a turn Router took for conversation) or only
+plan (Senior's Planning turn), that turn does nothing itself and never tells you to
+do it yourself: it hands the request on and ends its turn with one short line. A
+notice such as **Junior is doing what you asked.** appears, the chat shows the
+automatic **Junior does what you asked.** message, and as soon as the first turn
+ends the same request continues as an Implementation turn that may act: Junior's
+after Senior's Planning turn, the same role's after an answer. It does exactly the
+action you accepted or asked for, then reports its outcome like any
+implementation. A Planning turn asked to make the plan and implement it saves the
+plan first. **Stop** during the first turn hands nothing on.
 
 At planning, implementation and review, the working agent reports one of four
 outcomes:

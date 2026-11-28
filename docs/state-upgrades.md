@@ -2365,6 +2365,19 @@ planning turn. A stopped turn leaves it unused, the next turn of the same
 request drops it, and a new request replaces the whole record. Focused
 evidence: `assistantWorkflow.test.js`.
 
+## Auto act handoff (no upgrade)
+
+The saved routing request (`assistant_routing_request`, schema version 7) may
+hold an optional `actHandoff`: `{turnId, role, reason}`. Only the plan command
+writes it, when a running turn that may only answer (reason `conversation`) or
+only plan (Auto's planning stage) runs `vibe64-helper plan act`. Only the turn it
+names uses it, and only when that turn completes unstopped: its end removes the
+field and makes the same request an implementation turn (Junior's after Auto's
+planning, the turn's own role otherwise). A stopped or failed turn leaves it
+unused and its end removes it, a plan handoff of the same turn removes it, and a
+new request replaces the whole record. Records written before it have none, which
+means no handoff. Focused evidence: `assistantActHandoff.test.js`.
+
 ## Owed automatic steps (no upgrade)
 
 A saved routing request's prepared follow-up (`assistant_routing_request`,

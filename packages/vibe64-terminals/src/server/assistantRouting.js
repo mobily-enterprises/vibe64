@@ -175,6 +175,7 @@ function createAssistantRouting({
     inspectDelivery: cancellation.inspectDelivery,
     recordOutcome: outcomes.recordOutcome,
     handPlanToSenior: outcomes.handPlanToSenior,
+    handActionOn: outcomes.handActionOn,
     afterTurn: outcomes.afterTurn,
     decideOwed: outcomes.decideOwed,
     prepareGoal: goals.prepareGoal,

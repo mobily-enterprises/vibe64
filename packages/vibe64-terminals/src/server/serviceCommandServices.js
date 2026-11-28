@@ -42,7 +42,8 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * @param {PublishAgentSessionChanged} dependencies.publishAgentSessionChanged
  * @param {TerminalSessionChangedPublishers} dependencies.publishSessionChanged
  * @param {AssistantRouting["recordOutcome"]} dependencies.recordWorkflowOutcome
- * @param {AssistantRouting["handPlanToSenior"]} dependencies.handPlanToSenior
+ * @param {() => Pick<AssistantRouting, "handPlanToSenior" | "handActionOn">} dependencies.routingHandoffs routing's plan
+ *   and act handoffs, read when the plan command hands a request on: routing is built after the command services
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks
  * @param {import("./types.js").HelperCommandGroup[]} dependencies.helperCommandGroups a host's own vibe64-helper groups, or none
@@ -65,7 +66,7 @@ function createServiceCommandServices({
   publishAgentSessionChanged,
   publishSessionChanged,
   recordWorkflowOutcome,
-  handPlanToSenior,
+  routingHandoffs,
   runCodexGitGatewayCommand,
   savedEnvValueLinks,
   helperCommandGroups,
@@ -207,7 +208,8 @@ function createServiceCommandServices({
       const vibe64User = actor ? await authorizeProjectMessage(actor, projectSlug).catch(() => null) : null;
       return noteMainChat(sessionId, { message, nextTurn }, vibe64User ? { vibe64User } : {});
     },
-    handPlanToSenior,
+    handPlanToSenior: (sessionId, input, options) => routingHandoffs().handPlanToSenior(sessionId, input, options),
+    handActionOn: (sessionId, input, options) => routingHandoffs().handActionOn(sessionId, input, options),
     helperCommandGroups,
     logger,
     publishSessionChanged: publishAgentSessionChanged,

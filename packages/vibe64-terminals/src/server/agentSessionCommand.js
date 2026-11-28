@@ -91,6 +91,7 @@ import { toText } from "@jskit-ai/kernel/shared/support/normalize";
 import { assistantPlanRole } from "./assistantRoutingRequests.js";
 import { sessionSourceState } from "./planSourceChanges.js";
 import { handPlanOver, refusedPlanChange } from "./assistantPlanHandoff.js";
+import { handActionOver } from "./assistantActHandoff.js";
 import { commandLineFailure } from "./commandFailure.js";
 import { rememberAfterPlanBase } from "./afterPlanBase.js";
 import { createAgentCommandRepeats, createTurnCommandRepeats } from "./agentCommandRepeats.js";
@@ -171,6 +172,8 @@ const commandServers = createSessionCommandServers({
  * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.reportWorkflowOutcome
  * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.handPlanToSenior Records,
  *   for Auto's running turn, a plan change only Senior may make, which routing hands to Senior once the turn ends
+ * @param {(sessionId: string, input: object, options: object) => Promise<object>} dependencies.handActionOn Records an
+ *   action a turn that may only answer or plan was asked for, which routing hands on to a turn that may act
  * @param {(sessionId: string) => Promise<object>} dependencies.retryWorkspaceSetup
  * @param {(sessionId: string, input: object) => Promise<object>} dependencies.updateSessionWork the session's own Update
  * @param {(sessionId: string, input: object) => Promise<object>} dependencies.saveSessionWork the session's own Save, to
@@ -196,6 +199,7 @@ function createAgentSessionCommandService({
   readProjectPreview,
   reportWorkflowOutcome,
   handPlanToSenior,
+  handActionOn,
   retryWorkspaceSetup,
   updateSessionWork,
   saveSessionWork,
@@ -438,9 +442,10 @@ function createAgentSessionCommandService({
         refuseUnreadFields(fields, OUTCOME_FIELDS);
         return reportWorkflowOutcome(sessionId, input, { vibe64User: request?.submittedBy || null });
       }
-      if (operation === "handoff") {
-        refuseUnreadFields(fields, { operation: "plan handoff", fields: [] });
-        return { ok: true, ...await handPlanOver({ sessionId, request, handPlanToSenior }) };
+      if (["handoff", "act"].includes(operation)) {
+        refuseUnreadFields(fields, { operation: `plan ${operation}`, fields: [] });
+        const handed = await (operation === "act" ? handActionOver : handPlanOver)({ sessionId, request, handPlanToSenior, handActionOn });
+        return { ok: true, ...handed };
       }
       // A plan's pass ticks only its own Passes item, and a new plan in a chat whose plans run passes gets them.
       const role = assistantPlanRole(request);
