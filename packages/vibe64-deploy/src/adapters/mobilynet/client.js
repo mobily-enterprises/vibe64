@@ -1,16 +1,22 @@
 import dgram from "node:dgram";
 import dns from "node:dns";
+import { stat } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 
 import { Agent, fetch as undiciFetch } from "undici";
 
+import { prebuiltTar } from "./prebuilt.js";
+
 // The deploy engine's client of mobilynet's API (its OpenAPI document at mobilynet main c6af5ca3: openApiServices.js,
 // openApiHosted.js, openApiSetups.js, openApiNetwork.js, openApiBilling.js; an App Service's release tasks and logs at
 // main 17340a6a): a mobilynet project's App Services and their releases, instances, refreshes and logs, its hosted
-// services and their links, its releases of an app, its domains and routes, the prices and the hosted catalogue. It
+// services and their links, its releases of an app, its domains and routes, the prices and the hosted catalogue, and
+// (openApiVps.js, openApiApps.js, openApiReleaseKeys.js) its machines, their apps, a signed prebuilt release of one of
+// them and the project's release keys. It
 // takes `{ baseUrl, credential }`: mobilynet's address and either an API key of one mobilynet project (`mnk_…`) or a
 // token source that refreshes a grant's access token. Every request
-// is JSON both ways but an upload (a release's tarball, sent as its bytes with its SHA-256), carries the
+// is JSON both ways but an upload (a release's tarball, sent as its bytes with its SHA-256; a prebuilt release's plain
+// tar, streamed as mn sends it, with `MobilyNet-Release: prebuilt` and its output's SHA-256), carries the
 // `Idempotency-Key` the caller gives, follows no redirect and is tried once: the engine's next step tries again with the
 // same key. A refusal is a MobilynetError with mobilynet's `{ code, message, details, requestId }`.
 // App Services and hosted services carry tags, as every thing a mobilynet customer pays for does (its
@@ -47,6 +53,8 @@ const LOGS_QUERY = Object.freeze(["only", "except", "unit", "since", "until", "t
 const REQUEST_TIMEOUT_MS = 20_000;
 // An upload (a release's tarball: at most 1 GiB) has longer.
 const UPLOAD_TIMEOUT_MS = 10 * 60_000;
+// A prebuilt release's upload (its output: at most 4 GiB) has longer still.
+const PREBUILT_TIMEOUT_MS = 60 * 60_000;
 
 /**
  * Whether this machine has a route to an address: a UDP socket connected to it, which sends nothing, is refused at once
@@ -178,7 +186,7 @@ function createMobilynetClient({ baseUrl, credential, fetch: given, lookup = rou
   }
 
   /** One exchange with mobilynet: its status, body and request id, or the failure that left no answer. */
-  async function exchange(method, path, { body, query, idempotencyKey, contentSha256 }, token) {
+  async function exchange(method, path, { body, query, idempotencyKey, contentSha256, tar, release }, token) {
     const upload = Buffer.isBuffer(body);
     const url = new URL(path, root);
     for (const [name, value] of Object.entries(query ?? {})) {
@@ -188,14 +196,16 @@ function createMobilynetClient({ baseUrl, credential, fetch: given, lookup = rou
     }
     const headers = { accept: "application/json", authorization: `Bearer ${token}`, "user-agent": "vibe64-deploy" };
     if (body !== undefined) headers["content-type"] = upload ? "application/gzip" : "application/json";
-    if (upload) headers["mobilynet-content-sha256"] = String(contentSha256 ?? "");
+    if (tar) Object.assign(headers, { "content-type": "application/x-tar", "mobilynet-release": release });
+    if (upload || tar) headers["mobilynet-content-sha256"] = String(contentSha256 ?? "");
     if (idempotencyKey) headers["idempotency-key"] = idempotencyKey;
     const response = await fetchImpl(url, {
       method,
       headers,
-      body: body === undefined ? undefined : upload ? body : JSON.stringify(body),
+      body: tar ? tar() : body === undefined ? undefined : upload ? body : JSON.stringify(body),
+      ...(tar ? { duplex: "half" } : {}),
       redirect: "manual",
-      signal: AbortSignal.timeout(upload ? Math.max(timeoutMs, UPLOAD_TIMEOUT_MS) : timeoutMs),
+      signal: AbortSignal.timeout(tar ? Math.max(timeoutMs, PREBUILT_TIMEOUT_MS) : upload ? Math.max(timeoutMs, UPLOAD_TIMEOUT_MS) : timeoutMs),
       ...(dispatcher ? { dispatcher } : {})
     });
     const text = await response.text();
@@ -213,8 +223,9 @@ function createMobilynetClient({ baseUrl, credential, fetch: given, lookup = rou
    * one refresh and the same request again.
    * @param {string} method
    * @param {string} path
-   * @param {{ body?: unknown, query?: Record<string, unknown>, idempotencyKey?: string, contentSha256?: string }} [request]
-   *   `body` as a Buffer is an upload, sent as it is with its SHA-256 (`contentSha256`)
+   * @param {{ body?: unknown, query?: Record<string, unknown>, idempotencyKey?: string, contentSha256?: string, tar?: () => AsyncIterable<Buffer>, release?: string }} [request]
+   *   `body` as a Buffer is an upload, sent as it is with its SHA-256 (`contentSha256`); `tar` makes a plain tar's
+   *   body, streamed, each time it is sent, as a `release` (`prebuilt`) with its output's SHA-256
    */
   async function call(method, path, request = {}) {
     let refreshed = false;
@@ -296,6 +307,8 @@ function createMobilynetClient({ baseUrl, credential, fetch: given, lookup = rou
   const hostedPath = (hostedServiceId) => `/v1/hosted-services/${encodeURIComponent(hostedServiceId)}`;
   /** @param {string} leaseId */
   const leasePath = (leaseId) => `/v1/leases/${encodeURIComponent(leaseId)}`;
+  /** @param {string} vpsId @param {string} [app] */
+  const appsPath = (vpsId, app) => `/v1/vps/${encodeURIComponent(vpsId)}/apps${app === undefined ? "" : `/${encodeURIComponent(app)}`}`;
 
   /**
    * The calls within one mobilynet project.
@@ -339,6 +352,13 @@ function createMobilynetClient({ baseUrl, credential, fetch: given, lookup = rou
        * @param {string} app @param {{ archive: Buffer, sha256: string }} upload
        */
       createRelease: (app, { archive, sha256 }) => call("POST", `${projectAt}/apps/${encodeURIComponent(app)}/releases`, { body: archive, contentSha256: sha256 }),
+      /** The mobilynet project's machines not destroyed (`vps:read`), every page: each its id, name, state and region. */
+      listVpses: () => listAll(`${projectAt}/vps`, { destroyed: "false" }),
+      /**
+       * The mobilynet project's release keys (`vps:read`): each its name, fingerprint (the SHA-256 of its SPKI DER, in
+       * hex, as a manifest names it), public key (the base64 of its SPKI DER), who added it and when.
+       */
+      listReleaseKeys: async () => (await call("GET", `${projectAt}/release-keys`)).releaseKeys,
       /**
        * An App Service (`services:manage`): `{ service, refresh }`, `creating`, its first refresh (kind `create`) onto
        * the release `app` names (`{ name, version }`). Its name is its own among the project's services and hosted
@@ -600,7 +620,27 @@ function createMobilynetClient({ baseUrl, credential, fetch: given, lookup = rou
     /** Renews a lease this credential holds for `seconds` from now. @param {string} leaseId @param {{ seconds: number }} renewal */
     renewLease: (leaseId, { seconds }) => call("PATCH", leasePath(leaseId), { body: { seconds } }),
     /** Gives a lease up; one already gone answers `{ removed: true }`. @param {string} leaseId */
-    releaseLease: (leaseId) => removedOn404(() => call("DELETE", leasePath(leaseId)))
+    releaseLease: (leaseId) => removedOn404(() => call("DELETE", leasePath(leaseId))),
+    /** A machine's apps (`vps:read`): each its name, package (a catalogue app's), version, wanted version and state. @param {string} vpsId */
+    listVpsApps: async (vpsId) => (await call("GET", appsPath(vpsId))).items,
+    /** A machine's app (`vps:read`), or null when the machine or the app is none. @param {string} vpsId @param {string} app */
+    readVpsApp: async (vpsId, app) => (await orNull(() => call("GET", appsPath(vpsId, app))))?.app ?? null,
+    /**
+     * Hands a machine's app a signed prebuilt release (`vps:manage`), as mn's app release --prebuilt sends it: a plain
+     * tar of manifest.json, manifest.sig and output.tar, streamed from the output's file, with `MobilyNet-Release:
+     * prebuilt` and the output's SHA-256, and no Idempotency-Key (the same output again answers the release it made).
+     * `202 { release, build, app }`; a release mobilynet refuses is `422 validation_failed` under its field.
+     * @param {string} vpsId @param {string} app
+     * @param {{ manifest: Buffer, signature: string, output: { path: string, sha256: string } }} release
+     */
+    releasePrebuilt: async (vpsId, app, { manifest, signature, output }) => {
+      const { size } = await stat(output.path);
+      return call("POST", `${appsPath(vpsId, app)}/releases`, {
+        tar: () => prebuiltTar({ manifest, signature, output, size }),
+        release: "prebuilt",
+        contentSha256: output.sha256
+      });
+    }
   });
 }
 

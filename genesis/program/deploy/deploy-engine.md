@@ -31,6 +31,7 @@ mobilynet, Google Cloud and AWS.
 - `packages/vibe64-deploy/src/adapters/mobilynet/index.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/client.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/standIn.js`
+- `packages/vibe64-deploy/src/adapters/mobilynet/prebuilt.js`
 - `packages/vibe64-deploy/src/adapters/google/index.js`
 - `packages/vibe64-deploy/src/adapters/google/base.js`
 - `packages/vibe64-deploy/src/adapters/google/releases.js`
@@ -1038,6 +1039,37 @@ password with them) and a bucket's `driver`. The stand-in answers a fresh
 hosted service's backups as on with nothing restorable yet, and as a test sets
 them (`hosted.setBackups`).
 
+The adapter also hands a machine's app one signed prebuilt release
+(`prebuilt.js`), as mobilynet's own tools do (`mn app release --prebuilt`, its
+`docs/self-hosting.md` B3): an output built elsewhere (`output.tar`, its
+`mobilynet.json` first, a build of `{ "output": ["."] }` alone), the manifest
+naming the output's SHA-256 and size, its declaration's SHA-256 and the release
+key's fingerprint (the SHA-256 of the key's SPKI DER, in hex), and the key's
+Ed25519 signature of `mobilynet-release-v1\n` and the manifest's bytes, made
+where the key is and pasted. `releasePrebuilt({ vps, app, output, manifest,
+signature })` (`POST /v1/vps/{id}/apps/{app}/releases`, `vps:manage`) sends a
+plain tar of `manifest.json`, `manifest.sig` (the signature, one line) and
+`output.tar`, in that order, each member as mn's `tarMember` writes it, the
+output streamed from its file, with `MobilyNet-Release: prebuilt` and the
+output's SHA-256 and no Idempotency-Key (the same output again answers the
+release it made); it answers `{ version, app }`, the app moving to the
+release. A release mobilynet refuses (`422`) is a `prebuilt_refused` error
+carrying mobilynet's `field` (`signature`, `manifest`, `upload`, `output`,
+`declaration` or one of its fields) and its words, never tried again.
+`readVpsApp({ vps, app })` reads a machine's app (null when the machine or the
+app is none of the project's), `listVpsApps()` every app of the project's
+releases on each machine not destroyed, `listReleaseKeys()` the project's
+release keys (each `vps:read`), and `readReleaseManifest(bytes)` a manifest's
+key, output and declaration. The stand-in (`standIn/machines.js`, and
+`releases.js` for the checks) keeps a project's machines, their apps and its
+release keys as a test adds them, checks a prebuilt release in mobilynet's
+order and words (the signature against each of the project's keys, the
+manifest's key, the header's SHA-256, the output's size and SHA-256, its
+declaration and its build), and moves the app to it over two steps, or, with
+its `switchBack` fault, switches the app back to the version it ran with the
+check's failure as its `lastFailure`; `hostNotUpdated` answers `409
+host_not_updated`.
+
 ## The Google Cloud adapter
 
 `createGoogleAdapter()` answers the engine in Google Cloud's REST calls for one
@@ -1222,5 +1254,6 @@ request's signature (or the gateway's token), for the engine's tests.
 - `aliasesProblem()` — why the domain's other names can't be routed and given to the app, or "".
 - `setInstances()` — how many instances a running App Service runs, set at its provider at once.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.
+- `createPrebuiltCalls()` — the mobilynet adapter's signed prebuilt release, its machines' apps and the project's release keys.
 - `createGoogleAdapter()` — the same for Google Cloud; `createGoogleClient()` its REST client.
 - `createAwsAdapter()` — the same for AWS; `createAwsClient()` its client.
