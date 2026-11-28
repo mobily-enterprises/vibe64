@@ -31,6 +31,32 @@ const activeMessage = state => state.followup || state.input;
  * @param {{ turnId?: string, turn?: { id?: string }, codexAgentTurn?: { turnId?: string } } | null} result
  */
 const receiptTurnId = result => result?.turnId || result?.turn?.id || result?.codexAgentTurn?.turnId || "";
+
+/**
+ * A steer the AI received joins the request it was sent under, whose reported outcome it makes stale. A steer its
+ * engine started as a turn of its own, because the request's turn it was sent into ended as it went (the engine
+ * stopped that turn to change the signed-in account, say), is the request's turn from then on: the request takes its
+ * id and works on, as if its own turn had taken the steer, so its agent can report the step's outcome and the step is
+ * decided when that turn ends. The end of the turn it replaced then matches no request. A request the person stopped,
+ * one that finished, and one whose next step is being sent or has been sent stay as they are.
+ * @param {object} request the saved routing request, changed in place
+ * @param {{ messageId: string, message: string, displayMessage?: string }} input the steer
+ * @param {string} steeredTurnId the running turn the steer was sent into
+ * @param {object} result the engine's receipt for the steer
+ */
+function joinSteering(request, input, steeredTurnId, result) {
+  request.steering.push({ messageId: input.messageId, text: input.displayMessage || input.message });
+  delete request.outcome;
+  const turnId = receiptTurnId(result);
+  const undecided = request.status === "working" && request.delivery === "accepted";
+  const settled = request.status === "waiting" && ["accepted", "pending"].includes(request.delivery);
+  if (result?.deliveryMode !== "new_turn" || !turnId || turnId === request.turnId || !steeredTurnId ||
+      request.turnId !== steeredTurnId || request.stopped || request.cancelled || !(undecided || settled)) return;
+  Object.assign(request, { turnId, status: "working", delivery: "accepted" });
+  // What the replaced turn's end prepared for Continue, or for its timed resume, belongs to that turn.
+  for (const field of ["error", "followup", "awaitingAnswer", "resumeAt"]) delete request[field];
+}
+
 /**
  * The role the plan command acts as for the request's running turn: "" (read only) for a task or no working request;
  * "pass" for a plan's pass, which ticks only its own Passes item; "review" for Auto's Senior check in a review
@@ -269,6 +295,7 @@ export {
   failure,
   followupConversation,
   followupFitsPlan,
+  joinSteering,
   owesStep,
   passesOwedStep,
   personTurn,
