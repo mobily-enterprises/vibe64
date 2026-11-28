@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
+import { createServiceTurnsAfterAccountSet } from "../../packages/vibe64-terminals/src/server/serviceTurnsAfterAccountSet.js";
 import { fixture } from "../fixtures/assistantRouting.js";
 
 // 28 Nov: a turn its AI account stopped while it ran (the person switched the workspace's Claude account, and the
@@ -176,4 +178,55 @@ test("a turn the loop rule stopped, or one whose resume may have reached the AI,
   const sent = unsure.sends.length;
   assert.equal((await unsure.service.continueAfterAccountSet("session-1", unsure.context)).skipped, true);
   assert.equal(unsure.sends.length, sent);
+});
+
+test("an AI account set reaches every open session's chats whose turn waits for an account, and no other, as the person it ran for", async (t) => {
+  const f = await working(t);
+  await stopByTheAccount(f, "switch");
+  const marked = { assistant_routing_request: JSON.stringify({ ...f.state(), submittedBy: { id: "7", username: "member" } }) };
+  // Waiting for Continue, as a chat idle when the account changed is: nothing marked.
+  const unmarked = { assistant_routing_request: JSON.stringify({ ...f.state(), interruptions: [] }) };
+  const sessions = {
+    "session-1": { metadata: marked, chats: [
+      { conversationId: "chat-marked", routingMetadata: marked },
+      { conversationId: "chat-unmarked", routingMetadata: unmarked },
+      { conversationId: "chat-ai-task", task: { id: "task-1" }, routingMetadata: marked },
+      { conversationId: "chat-closing", state: "closing", routingMetadata: marked }
+    ] },
+    "session-2": { metadata: unmarked, chats: [] },
+    // Its Main chat fails to continue; the next session still goes on.
+    "session-3": { metadata: marked, chats: [] },
+    "session-4": { metadata: marked, chats: [] }
+  };
+  const calls = [];
+  const continued = (chat) => async (sessionId, options) => {
+    calls.push([sessionId, chat || options.conversationId, options.vibe64User]);
+    if (sessionId === "session-3") throw new Error("The session closed.");
+    return { resumed: true };
+  };
+  const continueTurnsAfterAccountSet = createServiceTurnsAfterAccountSet({
+    state: { lifecycle: { closing: false }, trackShutdownWork: (work) => work,
+      assistantRuntime: { authorizeProjectMessage: async (sender, projectSlug) => ({ ...sender, projectSlug }) } },
+    logger: silentLogger,
+    project: {
+      listProjects: async () => ({ projects: [{ slug: "open", runtime: { open: true } }, { slug: "dormant", runtime: { open: false } }] }),
+      runInProjectContext: async (_slug, operation) => operation()
+    },
+    sessionAccess: {
+      listOpenProjectRuntimeSessions: async () => Object.keys(sessions).map((sessionId) => ({ sessionId })),
+      projectRuntimeContext: () => ({ projectSlug: "open" })
+    },
+    assistantContext: { assistantSessionOptions: async (sessionId) => ({ session: { metadata: sessions[sessionId].metadata },
+      runtime: { store: { listSessionConversations: async () => sessions[sessionId].chats } } }) },
+    mainChatRouting: { continueAfterAccountSet: continued("main") },
+    sessionConversations: { continueTemporaryTurnAfterAccountSet: continued("") }
+  });
+  await continueTurnsAfterAccountSet();
+  const member = { id: "7", username: "member", projectSlug: "open" };
+  assert.deepEqual(calls, [
+    ["session-1", "main", member],
+    ["session-1", "chat-marked", member],
+    ["session-3", "main", member],
+    ["session-4", "main", member]
+  ]);
 });

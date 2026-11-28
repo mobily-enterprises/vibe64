@@ -266,8 +266,9 @@ function turnEnding(run = {}) {
 }
 
 /**
- * When Vibe64 resumes a turn this cause ended: at once, after the backoff, or never (the person signs in, waits for
- * the limit, or reads the error first).
+ * When Vibe64 resumes a turn this cause ended: at once, after the backoff, or never by itself (a turn signed out of
+ * its AI account waits for the account to be set again, assistantRoutingInterruptions.js; one at its usage limit for
+ * the limit; one the AI's error ended for the person to read it).
  * @param {string} cause
  * @returns {"now" | "later" | "never"}
  */
@@ -277,9 +278,11 @@ function resumePolicy(cause) {
   return "never";
 }
 
-/** The second line's outcome for a cause Vibe64 never resumes. @param {string} cause */
+/**
+ * The second line's outcome for a cause Vibe64 never resumes, other than a sign-out, which waits for the account.
+ * @param {string} cause
+ */
 function neverResumedOutcome(cause) {
-  if (cause === INTERRUPTION_CAUSE.SIGN_IN) return "sign-in";
   if (cause === INTERRUPTION_CAUSE.USAGE_LIMIT) return "usage-limit";
   return "not-resumed";
 }
@@ -289,7 +292,7 @@ function neverResumedOutcome(cause) {
  * names the interrupted turn, the interruption and the outcome, so each is written once however many processes or
  * passes see it (a conversation never stores a message id twice).
  * @param {{ key: string, cause: string, at: string, detail?: string, crashMessage?: string, unknownRun?: boolean }} interruption
- * @param {string} outcome resumed, resuming, loop, stopped, sign-in, usage-limit, not-resumed, uncertain or failed
+ * @param {string} outcome resumed, resuming, loop, stopped, account, usage-limit, not-resumed, uncertain or failed
  * @param {{ error?: string, goal?: boolean, resumeAt?: string, newConnection?: boolean }} [options] newConnection: it
  *   continued on the AI account connected now, which changed since it ran
  */

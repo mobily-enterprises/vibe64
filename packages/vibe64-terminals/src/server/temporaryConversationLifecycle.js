@@ -221,6 +221,16 @@ function createTemporaryConversationLifecycle({
     return routing.resumeAfterPlannedRestart(sessionId, options);
   }
 
+  /**
+   * A temporary chat's turn its AI account stopped, continued once now that an AI account is set
+   * (serviceTurnsAfterAccountSet.js).
+   * @param {string} sessionId
+   * @param {{ conversationId: string }} options
+   */
+  function continueTemporaryTurnAfterAccountSet(sessionId, options) {
+    return routing.continueAfterAccountSet(sessionId, options);
+  }
+
   async function stopTemporaryConversation(sessionId, input, options = {}) {
     await routing.cancel(sessionId, { ...options, conversationId: input.conversationId });
     const stopped = await chatTurns.write(sessionId, options, async (ctx) => {
@@ -416,6 +426,7 @@ function createTemporaryConversationLifecycle({
     reconcileTemporaryConversation,
     stopUnrecoveredTemporaryTurn,
     resumeTemporaryTurnAfterPlannedRestart,
+    continueTemporaryTurnAfterAccountSet,
     stopTemporaryConversation,
     readConversationTurn,
     deleteTemporaryConversation,

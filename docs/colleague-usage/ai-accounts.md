@@ -213,7 +213,10 @@ sign-out finishes. Claude Code reads the
 current sign-in for each request, so work in progress continues on the newly
 connected account. After a sign-out, a running chat's next request ends at once
 with "Claude isn't connected. Sign in to Claude, then send your message again."
-Nothing hangs; sign in again and resend.
+Nothing hangs; sign in again and resend. A turn the change stopped while it ran
+(its entry reads **Not resumed yet**) needs no resend: Vibe64 continues it by
+itself once an account you can use is set (see
+[Coding agent recovery](coding-agent-recovery.md)).
 Switching, signing in to or disconnecting Codex finishes at once and never stops
 an answer in progress. An answer Codex is already writing finishes on the account
 it started with; messages you send after it finishes, and new conversations, use

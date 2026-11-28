@@ -19,6 +19,7 @@ import { AGENT_WRITE_WAIT_MS, createServiceSessionAccess } from "./serviceSessio
 import { createServiceState } from "./serviceState.js";
 import { createServerRun } from "./turnInterruptions.js";
 import { createServiceTurnRecovery } from "./serviceTurnRecovery.js";
+import { createServiceTurnsAfterAccountSet } from "./serviceTurnsAfterAccountSet.js";
 import { createServiceWorkspacePreparation } from "./serviceWorkspacePreparation.js";
 import { createServiceAssistantContext } from "./serviceAssistantContext.js";
 import { createServiceAssistantPreparation } from "./serviceAssistantPreparation.js";
@@ -520,6 +521,8 @@ function createService({
   });
 
   const prepareSessionCommandEnvironment = createSessionCommandEnvironment({ commands, env, project });
+  // The open projects' chats, which restart recovery and an AI account set both reach.
+  const openChats = { state, logger, project, sessionAccess, assistantContext, mainChatRouting: assistantRouting, sessionConversations };
   return Object.freeze({
     temporaryConversationDataSchema: sessionConversations.temporaryConversationDataSchema,
     temporaryConversationSelectionSchema: sessionConversations.temporaryConversationSelectionSchema,
@@ -655,17 +658,13 @@ function createService({
     continueGoalAfterAccountChange: goals.continueGoalAfterAccountChange,
     recoverActiveGoals: goals.recoverActiveGoals,
     recoverInterruptedTurns: plannedRestart.afterRecoveryStarts(createServiceTurnRecovery({
-      state,
-      logger,
-      project,
-      sessionAccess,
-      assistantContext,
+      ...openChats,
       serverRun,
       ensureAgentSession: assistant.ensureAgentSession,
-      mainChatRouting: assistantRouting,
-      sessionConversations,
       plannedRestart: plannedRestart.reader
     })),
+    // A turn its AI account stopped continues once an AI account is set (vibe64-accounts tells it).
+    continueTurnsAfterAccountSet: createServiceTurnsAfterAccountSet(openChats),
     openBrowserConversation: assistant.openBrowserConversation,
     openTemporaryBrowserConversation: assistant.openTemporaryBrowserConversation,
     agentSessionState: assistant.agentSessionState,

@@ -59,6 +59,7 @@ function causePhrase(cause) {
     case TURN_INTERRUPTION_CAUSES.CONNECTION: return "the connection to the AI was lost";
     case TURN_INTERRUPTION_CAUSES.OVERLOADED: return "the AI service was overloaded";
     case TURN_INTERRUPTION_CAUSES.FAILED: return "the AI's error";
+    case TURN_INTERRUPTION_CAUSES.SIGN_IN: return "the AI account was signed out";
     default: return "Vibe64 restarted";
   }
 }
@@ -122,8 +123,9 @@ function turnInterruptionHeadline(entry, clock) {
  * The red entry's second line: resumed, or why not.
  * @param {{ cause: string, at: string, outcome: string, error?: string, goal?: boolean, resumeAt?: string,
  *   newConnection?: boolean }} entry newConnection: resumed on the AI account connected now, which changed since it ran
- *   outcome: resumed, resuming, loop, stopped, sign-in, usage-limit, not-resumed, uncertain or failed (a resume that
- *   could not be sent)
+ *   outcome: resumed, resuming, loop, stopped, account (signed out, or its AI account can't be used: Vibe64 continues
+ *   it once one is set), sign-in (before that), usage-limit, not-resumed, uncertain or failed (a resume that could not
+ *   be sent)
  * @param {(at: string) => string} clock
  */
 function turnInterruptionOutcomeLine(entry, clock) {
@@ -138,7 +140,12 @@ function turnInterruptionOutcomeLine(entry, clock) {
     }
     case "loop": return `Not resumed: stopped: ${causeRepeatedPhrase(entry.cause)}. Choose ${control} to try again.`;
     case "stopped": return "Not resumed: you stopped this turn.";
+    // An entry written before Vibe64 continued such a turn by itself once an account is set ("account").
     case "sign-in": return `Not resumed: sign in to the AI account again in AI Accounts, then choose ${control}.`;
+    // Signed out, or refused by its AI account (error): Vibe64 continues it once an account its person can use is set.
+    case "account": return entry.error
+      ? `Not resumed yet: ${trimEnd(entry.error)}. Vibe64 continues it once an AI account you can use is set in AI Accounts.`
+      : "Not resumed yet: sign in to the AI account again in AI Accounts, and Vibe64 continues it.";
     case "usage-limit": return entry.goal
       ? "Not resumed now: Vibe64 continues the goal when the limit resets."
       : "Not resumed: choose Continue, or send a message, once the limit resets.";
@@ -168,6 +175,18 @@ function utcClock(at) {
   return Number.isNaN(date.getTime()) ? "" : `${date.toISOString().slice(11, 16)} UTC`;
 }
 
+/**
+ * The error of a request whose turn its AI account stopped, which its Continue control shows while it waits for an
+ * account: signed out, or refused with `error`.
+ * @param {string} cause
+ * @param {string} [error]
+ */
+function turnInterruptionAccountWait(cause, error = "") {
+  return cause === TURN_INTERRUPTION_CAUSES.SIGN_IN && !error
+    ? "Sign in to the AI account again in AI Accounts, and Vibe64 continues this turn."
+    : `${trimEnd(error)}. Vibe64 continues this turn once an AI account you can use is set in AI Accounts.`;
+}
+
 /** A Stopped request's error after the loop rule stopped resuming it, which its Continue control shows. */
 function turnInterruptionLoopError(cause) {
   return `Stopped: ${causeRepeatedPhrase(cause)}. Choose Continue to try again.`;
@@ -177,6 +196,7 @@ export {
   TURN_INTERRUPTION_CAUSES,
   TURN_RESUME_LOOP_LIMIT,
   TURN_RESUME_PLANNED_LOOP_LIMIT,
+  turnInterruptionAccountWait,
   turnInterruptionCarriedOn,
   turnInterruptionHeadline,
   turnInterruptionLines,

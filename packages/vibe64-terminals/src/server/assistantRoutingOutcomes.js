@@ -164,6 +164,7 @@ function createAssistantRoutingOutcomes({
   const interruptions = createAssistantRoutingInterruptions({
     routingState,
     records,
+    decisions,
     delivery,
     admission,
     exclusiveAfterWrites,
@@ -733,7 +734,8 @@ function createAssistantRoutingOutcomes({
     decideOwed,
     reconcile,
     stopUnrecovered,
-    resumeAfterPlannedRestart: interruptions.resumeAfterPlannedRestart
+    resumeAfterPlannedRestart: interruptions.resumeAfterPlannedRestart,
+    continueAfterAccountSet: interruptions.continueAfterAccountSet
   });
 }
 

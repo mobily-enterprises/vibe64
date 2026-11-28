@@ -1449,7 +1449,11 @@ Claude sign-in, sign-out and Remove AI never stop or wait on running chats,
 goals or Colleague answers; the account's new state shows as soon as Claude
 Code's own sign-in or sign-out finishes. Work in progress continues on the newly
 connected account, and after a sign-out its next request ends at once with a
-clear not-connected message instead of hanging.
+clear not-connected message instead of hanging. A chat turn the account stops
+anyway, signed out while it runs or switched to an account its person can't use
+yet, waits and says so; once an account they can use is set, it continues by
+itself, once, whatever it was doing. A chat that was idle at the change, or a
+turn the person stopped, is not continued.
 AI choices load while the session is open and remain visible during refresh,
 so opening the model menu does not restart its loading screen each time.
 Codex helper tasks accept the installed stable Codex version when it meets the

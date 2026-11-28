@@ -222,7 +222,8 @@ test("the AI engine dying mid-turn resumes it at once; a lost connection after a
 });
 
 for (const [name, error, outcome, line] of [
-  ["needs signing in", "Not logged in · Please run /login", "sign-in", /\nNot resumed: sign in to the AI account again in AI Accounts, then choose Continue\.$/u],
+  // It waits for the account: setting one continues it (assistantTurnAccountSet.test.js).
+  ["needs signing in", "Not logged in · Please run /login", "account", /\nNot resumed yet: sign in to the AI account again in AI Accounts, and Vibe64 continues it\.$/u],
   ["reached its usage limit", "Claude AI usage limit reached|1767225600", "usage-limit", /\nNot resumed: choose Continue, or send a message, once the limit resets\.$/u],
   ["reported another error", "Model refused the request.", "not-resumed", /\nNot resumed: choose Continue to try again\.$/u]
 ]) {

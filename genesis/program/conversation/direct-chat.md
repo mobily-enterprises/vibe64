@@ -1724,6 +1724,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/serviceGoalRecovery.js`
 - `packages/vibe64-terminals/src/server/serviceGoalInterruptions.js`
 - `packages/vibe64-terminals/src/server/serviceTurnRecovery.js`
+- `packages/vibe64-terminals/src/server/serviceTurnsAfterAccountSet.js`
+- `tests/server/assistantTurnAccountSet.test.js`
 - `packages/vibe64-terminals/src/server/turnInterruptions.js`
 - `packages/vibe64-terminals/src/shared/turnInterruptionText.js`
 - `src/components/studio/vibe64-session/Vibe64TurnInterruption.vue`
@@ -5618,8 +5620,8 @@ engine stopping, never an AI error: the person's Stop interrupts with nothing to
 say and marks the request stopped. The AI is told nothing when the turn
 completed, was cancelled or was a plain Stop. A crash, restart, update or
 engine stop resumes at once; a lost connection or overloaded service after
-`TURN_RESUME_BACKOFF_MS` (30 s, Continue resumes sooner); a sign-in, usage limit
-or other error is never resumed. The resume is a follow-up (`followup.resume`)
+`TURN_RESUME_BACKOFF_MS` (30 s, Continue resumes sooner); a usage limit or other
+error is never resumed. The resume is a follow-up (`followup.resume`)
 in the same conversation and engine session whose message leads with
 `resumeNoteForAi`. The request keeps its last nine interruptions
 (`interruptions`) for the loop rule (`nextTurnInterruptions`). A planned stop (an
@@ -5634,6 +5636,41 @@ The one backstop for planned stops: the tenth in a row
 turn (its goal recovery decides) and an AI task's turn (its runner decides) are
 never resumed here. A send left unsent is resent once, and one that may have
 reached the AI is inspected and never resent.
+
+A turn its AI account stopped waits for an account its person can use, and
+setting one continues it, once. Two ends mark it: a sign-out (`turnEnding`'s
+sign-in), whose resume is prepared and not sent; and a resume of any other
+interruption that the account refuses, which `resumeNow` checks before it writes
+"Resumed" (routing's `resolve`, as the person it ran for: an account not
+connected or signed out, or another person's), or that the engine's fence
+refuses because the account changed again before the send. `waitForAccount`
+marks the request's latest interruption with its prepared resume's message id
+(`awaitsAccount`), clears that interruption's `resumedAt` (it was not resumed,
+so the loop rule counts it only once it is), leaves the request waiting with its
+resume pending and an error saying so ("Sign in to the AI account again in AI
+Accounts, and Vibe64 continues this turn." or "<refusal>. Vibe64 continues this
+turn once an AI account you can use is set in AI Accounts."), and writes the red
+`account` entry once. `waitsForAccount`
+([assistantRoutingRequests.js](../../../packages/vibe64-terminals/src/server/assistantRoutingRequests.js))
+reads the mark: waiting, that resume still pending and never attempted, not
+stopped, cancelled or owed. A Continue, a new message or a Stop leaves nothing
+marked, and a chat that was idle when the account changed never had a mark,
+whatever its plan. An AI account set (vibe64-accounts' `aiAccountWasSet`: a
+sign-in or account connected now, an API key saved, an OpenCode provider
+connected; never GitHub, a sign-out or a removal) starts
+`continueTurnsAfterAccountSet`
+([serviceTurnsAfterAccountSet.js](../../../packages/vibe64-terminals/src/server/serviceTurnsAfterAccountSet.js)),
+tracked as shutdown work: every open session's Main chat and temporary chat
+(never an AI task's) whose saved request waits for an account is told, as its
+sender, to `continueAfterAccountSet`. Under the session's lock routing reads the
+request again; one still marked loses its mark, takes `resumedAt` now and goes
+through `resumeNow` with the entry "Resumed after …, with the AI account
+connected now.", the same resume whatever the request was doing, a plan's step
+or a plain request; one whose account its person still can't use is marked
+again, its entry unchanged. A second event, a second pass or another server
+finds the request sent and does nothing. A goal's turn is not marked (its goal's
+own account change continues a Codex goal); a sign-out that ends a turn after its
+account was already set again waits for the next account set or Continue.
 
 Each decision writes one system message in the chat's history, its id
 `vibe64-turn-interrupted:<interruption>:<outcome>` so a second writer adds

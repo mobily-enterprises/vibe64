@@ -182,6 +182,7 @@ function createAssistantRouting({
     reconcile: outcomes.reconcile,
     stopUnrecovered: outcomes.stopUnrecovered,
     resumeAfterPlannedRestart: outcomes.resumeAfterPlannedRestart,
+    continueAfterAccountSet: outcomes.continueAfterAccountSet,
     close: admission.close
   });
 }
