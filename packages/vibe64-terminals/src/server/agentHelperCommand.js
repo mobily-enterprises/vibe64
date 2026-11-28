@@ -2,12 +2,14 @@ import path from "node:path";
 import { resolveStudioAppRoot } from "@local/vibe64-core/server/studioRoots";
 import { shellQuote } from "@local/vibe64-execution/server";
 
+import { SERVICES_GROUP_NAME, SERVICES_GROUP_SUMMARY } from "./agentServicesCommand.js";
 import { writeExecutableFileIfChanged } from "./writeExecutableFileIfChanged.js";
 
 /** @typedef {import("@jskit-ai/kernel/server/types").RuntimeEnv} RuntimeEnv */
 
 // vibe64-helper's own groups, as its help lists them. A host's groups (helperCommandGroups.js) follow them there and
-// never take one of these names.
+// never take one of these names. Most run their own command beside vibe64-helper (vibe64-<group>); services runs, as
+// a host's groups do, through the session command's group route.
 const VIBE64_HELPER_GROUPS = Object.freeze([
   ["preview", "Preview lifecycle, opening a page in the Preview pane, browser inspection, screenshots and logs"],
   ["playwright", "Managed project browser test suites"],
@@ -17,6 +19,7 @@ const VIBE64_HELPER_GROUPS = Object.freeze([
   ["github", "GitHub view refresh"],
   ["pages", "Publish, update and list pages everyone on the project can open"],
   ["session", "Session status, Update, Save, setup retry, rename, and listing and messaging project sessions"],
+  [SERVICES_GROUP_NAME, SERVICES_GROUP_SUMMARY],
   ["plan", "Read and maintain the current plan and archived plans"],
   ["need-help", "Ask for help with what this session can't fix itself, read the answer, clear it"],
   ["training", "Validate, bundle and pin local teaching content"],
@@ -36,15 +39,20 @@ function helperUsage(hostGroups) {
 
 /**
  * Writes a session's vibe64 and vibe64-helper commands into its wrapper directory.
- * @param {{ wrapperHostDir?: string, env: RuntimeEnv, hostGroups?: { name: string, summary: string }[] }} options env
- *   locates the Studio app the commands run; hostGroups are a host's own groups, which run through its caller
- *   (HELPER_GROUP_CLIENT_NAME, written with the session command)
+ * @param {{ wrapperHostDir?: string, env: RuntimeEnv, sessionGroups?: { name: string, summary: string }[] }} options
+ *   env locates the Studio app the commands run; sessionGroups are the groups the session command serves
+ *   (vibe64-helper's services and a host's own), which run through its caller (HELPER_GROUP_CLIENT_NAME, written with
+ *   the session command). Without the session command services is unavailable.
  */
-async function prepareAgentHelperCommand({ wrapperHostDir = "", env, hostGroups = [] }) {
+async function prepareAgentHelperCommand({ wrapperHostDir = "", env, sessionGroups = [] }) {
   const directory = String(wrapperHostDir || "").trim();
   if (!directory) {
     return { ok: false };
   }
+  const servedNames = sessionGroups.map(({ name }) => name);
+  const hostGroups = sessionGroups.filter(({ name }) => !VIBE64_HELPER_GROUP_NAMES.includes(name));
+  // Its own groups with a command beside it, and its own groups the session command does not serve here, which say so.
+  const commandNames = VIBE64_HELPER_GROUP_NAMES.filter((name) => !servedNames.includes(name));
   const run = `exec ${shellQuote(process.execPath)} ${shellQuote(path.join(resolveStudioAppRoot({ env }), "bin", "run.js"))}`;
   await writeExecutableFileIfChanged(path.join(directory, "vibe64"), `#!/bin/sh
 if [ "\${1-}" = spec ]; then
@@ -78,11 +86,11 @@ case "\${1-}" in
     printf '%s\\n' ${shellQuote(helperUsage(hostGroups))}
     exit 0
     ;;
-  ${VIBE64_HELPER_GROUP_NAMES.join("|")})
+  ${commandNames.join("|")})
     command_group=$1
     shift
     ;;
-${hostGroups.length ? `  ${hostGroups.map(({ name }) => name).join("|")})
+${servedNames.length ? `  ${servedNames.join("|")})
     case "$0" in */*) exec "\${0%/*}/${HELPER_GROUP_CLIENT_NAME}" "$@" ;; esac
     exec ./${HELPER_GROUP_CLIENT_NAME} "$@"
     ;;

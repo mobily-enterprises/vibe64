@@ -764,6 +764,41 @@ The caller never starts a process of its own, so a group starts no process
 outside managed execution: a host whose work needs one runs it through its own
 managed execution.
 
+`vibe64-helper services` is one of `vibe64-helper`'s own groups that this same
+listener serves (`agentServicesCommand.js`, which `serviceCommandServices.js`
+gives `createHelperGroupRunner` before the host's groups, so
+`prepareAgentHelperCommand` points it at the group client rather than a
+`vibe64-services` executable, and without a session command it says it is
+unavailable). It lets the session's AI control the servers a host runs for its
+project, for its development or with `--staging` its Staging: `list`,
+`logs <service> [--lines N]` (newest first, at most 2000),
+`restart|stop|start <service>`, and on the session's own databases
+`db sessions`, `db locks`, `db end <id>` and `db restart` (`--service` names the
+database server when the project uses more than one), each output cut at
+256 KiB. The AI never gets a database login: the host reads and ends
+connections itself. Words it does not take are refused with its usage (exit 2)
+before the host is asked; a host's refusal prints its message (exit 1). The
+host's part is the terminals feature's optional
+`vibe64.terminals.service-control` token (`serviceControl.js`: `listServices`,
+`readServiceLogs`, `controlService`, `listDatabaseSessions`,
+`listDatabaseLocks`, `endDatabaseConnection`, each given the session, project,
+person, turn, source, target and signal), checked when it is received, which
+the terminals feature hands `createService`. It acts only on the project's own
+services and the session's own databases, runs each privileged step itself, and
+records each action with the session, service and time where its people see
+it. A server every project shares (`shared` in `list`, a database server) is
+restarted or stopped only while the session's Need help is raised: the group
+reads the flag from the Need help slot (`state.slots.needHelp`), refuses before
+asking the host when it is not raised, gives the host `needHelp` (which refuses
+without it too), and adds what was done to the session's Need help for the
+person. Without a host, `NO_SERVICE_CONTROL` lists none and says why: Vibe64
+runs no project server itself, a project's database server is the person's own,
+and its App Services run in Preview. The session's instructions name the
+command's help and its one safety rule; the help says when to use it (a lock
+that never clears: find and end the holder; a restart only as the last resort),
+as does `docs/colleague-usage/project-services.md`.
+`tests/server/agentServicesCommand.unit.test.js` covers the group.
+
 An agent's shell command runs at most `AGENT_SESSION_COMMAND_TIMEOUT_MS`, 30
 minutes, which catches a hung command, and its stop ends every process it
 started. So nothing long-lived runs through one: the session's database server

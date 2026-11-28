@@ -7,6 +7,9 @@ import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
 import { createAgentPagesCommandService } from "./agentPagesCommand.js";
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createAgentSessionCommandService } from "./agentSessionCommand.js";
+import { createServicesCommandGroup } from "./agentServicesCommand.js";
+import { NO_HELPER_COMMAND_GROUPS } from "./helperCommandGroups.js";
+import { NO_SERVICE_CONTROL } from "./serviceControl.js";
 import { createCodexGitCommandService } from "./codexGitCommand.js";
 import { createOutputTargetTerminalController } from "./outputTargetTerminal.js";
 import { previewStartedBefore } from "./outputTargetLaunchStart.js";
@@ -47,6 +50,8 @@ import { sessionTerminalAdmissionFailure } from "./serviceSessionTerminals.js";
  * @param {RunVibe64Command} dependencies.runCodexGitGatewayCommand
  * @param {SavedEnvValueLinks} dependencies.savedEnvValueLinks
  * @param {import("./types.js").HelperCommandGroup[]} dependencies.helperCommandGroups a host's own vibe64-helper groups, or none
+ * @param {import("./types.js").ServiceControl} dependencies.serviceControl the host's control of the servers it runs for a
+ *   project, which vibe64-helper services calls, or NO_SERVICE_CONTROL
  * @param {ServiceAssistant["sendAgentMessage"]} dependencies.sendAgentMessage
  * @param {ReturnType<typeof import("./mainChatNote.js").createMainChatNote>} dependencies.noteMainChat Vibe64's note to
  *   Main chat's running turn
@@ -70,6 +75,7 @@ function createServiceCommandServices({
   runCodexGitGatewayCommand,
   savedEnvValueLinks,
   helperCommandGroups,
+  serviceControl,
   sendAgentMessage,
   noteMainChat,
   sessionAccess,
@@ -212,7 +218,16 @@ function createServiceCommandServices({
     },
     handPlanToSenior: (sessionId, input, options) => routingHandoffs().handPlanToSenior(sessionId, input, options),
     handActionOn: (sessionId, input, options) => routingHandoffs().handActionOn(sessionId, input, options),
-    helperCommandGroups,
+    // vibe64-helper's services group, on the host's control of the servers it runs and the session's Need help, which a
+    // shared database server's restart or stop needs; then the host's own groups.
+    helperCommandGroups: [
+      createServicesCommandGroup({
+        serviceControl: serviceControl ?? NO_SERVICE_CONTROL,
+        readNeedHelp: () => state.slots.needHelp,
+        logger
+      }),
+      ...(helperCommandGroups ?? NO_HELPER_COMMAND_GROUPS)
+    ],
     logger,
     publishSessionChanged: publishAgentSessionChanged,
     project

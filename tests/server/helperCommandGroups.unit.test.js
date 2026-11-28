@@ -23,8 +23,8 @@ import { Vibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/serv
 // output back as it comes, and the caller exits with its status, or runs its own command itself when the host says so.
 // Without a host, vibe64-helper is exactly its own groups.
 
-const PUBLIC_GROUPS = ["preview", "playwright", "env", "staging", "database", "github", "pages", "session", "plan",
-  "need-help", "training", "spec"];
+const PUBLIC_GROUPS = ["preview", "playwright", "env", "staging", "database", "github", "pages", "session", "services",
+  "plan", "need-help", "training", "spec"];
 // vibe64-helper --help with no host groups.
 const OWN_HELP = `Usage: vibe64-helper <group> [arguments]
 
@@ -37,6 +37,7 @@ Groups:
   github       GitHub view refresh
   pages        Publish, update and list pages everyone on the project can open
   session      Session status, Update, Save, setup retry, rename, and listing and messaging project sessions
+  services     The project's servers: state, logs, restart, stop, start, and its database connections and locks
   plan         Read and maintain the current plan and archived plans
   need-help    Ask for help with what this session can't fix itself, read the answer, clear it
   training     Validate, bundle and pin local teaching content
@@ -124,7 +125,7 @@ async function fixture(t, groups) {
   await service.bindSession(sessionId, { wrapperHostDir });
   const prepared = await prepareAgentSessionCommand({ commandService: service, sessionId, wrapperHostDir });
   assert.equal(prepared.ok, true);
-  assert.deepEqual(await prepareAgentHelperCommand({ env: process.env, wrapperHostDir, hostGroups: service.helperGroups }), { ok: true });
+  assert.deepEqual(await prepareAgentHelperCommand({ env: process.env, wrapperHostDir, sessionGroups: service.helperGroups }), { ok: true });
   const env = { ...process.env, ...prepared.env, PATH: [wrapperHostDir, process.env.PATH].join(path.delimiter) };
   const helper = (args, options = {}) => {
     const caller = run(path.join(wrapperHostDir, "vibe64-helper"), args, { cwd: sourceRoot, env, ...options });

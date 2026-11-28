@@ -238,9 +238,9 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
     throw commandBoundaryError(unavailable.name);
   }
   const hostWrapperDir = toText(git.hostWrapperDir);
-  // A host's own vibe64-helper groups run through the session command, so they are listed only beside it.
-  const hostGroups = agentSessionCommand ? agentSessionCommand.helperGroups : NO_HELPER_COMMAND_GROUPS;
-  const helper = await prepareHelperCommand({ wrapperHostDir: hostWrapperDir, env, hostGroups });
+  // vibe64-helper's services and a host's own groups run through the session command, so they are listed only beside it.
+  const sessionGroups = agentSessionCommand ? agentSessionCommand.helperGroups : NO_HELPER_COMMAND_GROUPS;
+  const helper = await prepareHelperCommand({ wrapperHostDir: hostWrapperDir, env, sessionGroups });
   if (helper?.ok !== true) {
     throw commandBoundaryError("helper");
   }

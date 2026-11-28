@@ -59,6 +59,11 @@ test("helper help lists its fixed groups and invalid groups cannot select anothe
   const staging = await run(helper, ["staging", "status"], { env: { ...process.env, PATH: root } });
   assert.equal(staging.code, 127);
   assert.match(staging.stderr, /staging is unavailable in this session/u);
+  // services runs through the session command, so without it the group says it is unavailable.
+  assert.match((await run(helper, ["--help"])).stdout.toString(), / {2}services +The project's servers/u);
+  const services = await run(helper, ["services", "list"], { env: { ...process.env, PATH: root } });
+  assert.equal(services.code, 127);
+  assert.match(services.stderr, /services is unavailable in this session/u);
 });
 
 test("the staging group is the session's Env command asked for staging, with every argument kept", async (t) => {

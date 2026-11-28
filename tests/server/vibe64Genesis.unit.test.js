@@ -309,6 +309,10 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   assert.match(session, /never start `mariadbd`, `mysqld` or `postgres` yourself/u);
   assert.match(session, /`TEST_DB_NAME` for `jskit test --databases` \(`npm test`\) and `BROWSER_TEST_DB_NAME` for browser workers: each test file or worker gets its own copy, made from one schema snapshot and dropped when the run ends/u);
   assert.match(session, /a worker or queue as an App Service declared for Preview/u);
+  // The project's servers the host runs: one pointer to their command's help, and its one safety rule.
+  assert.match(session, /`vibe64-helper services --help`: the project's database server and cache, their logs, and ending what holds a lock that never clears/u);
+  assert.match(session, /a server every project shares restarts only while Need help is raised\./u);
+  assert.doesNotMatch(session, /services sql|as the database server's administrator/u);
   assert.match(session, /refers to a saved key, account or accounts hub, run `vibe64-helper env saved`/u);
   assert.match(session, /vibe64-helper database refresh/u);
   assert.match(session, /vibe64-helper github refresh/u);
