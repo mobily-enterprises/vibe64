@@ -219,6 +219,23 @@ test("a release whose check fails on the machine is switched back by its host: t
   assert.deepEqual(app.lastFailure, { code: "check_failed", message: "The check exited with status 1. Its output's last line: database unreachable", step: "check", at: AT.toISOString() });
 });
 
+test("a machine whose host agent takes no prebuilt release yet is refused in mobilynet's words, a refusal never sent again", async (t) => {
+  const { standIn, adapter, vps, key, projectId } = machineWorld();
+  standIn.faults.hostNotUpdated = true;
+  const release = prebuiltRelease({ key: key.fingerprint });
+  const error = await refusedRelease(adapter.releasePrebuilt({
+    vps, app: "shop", manifest: release.manifest, signature: key.sign(release.manifest), output: outputFile(folderFor(t), release)
+  }));
+  // mobilynet's machinesErrors.js hostNotUpdated: the release waits for mobilynet to update the machine's server, which
+  // sending the output again doesn't hasten.
+  assert.deepEqual([error.status, error.code, error.message, error.retryable],
+    [409, "host_not_updated", "Its server runs an older host agent, which does this once MobilyNet updates it.", false]);
+  settle(standIn);
+  const app = await adapter.readVpsApp({ vps, app: "shop" });
+  assert.deepEqual([app.version, app.wantedVersion], [OLD_VERSION, null]);
+  assert.deepEqual(standIn.releases(projectId, "shop"), []);
+});
+
 test("the adapter reads a prebuilt manifest's key, output and declaration as mobilynet names them, and refuses one that isn't mobilynet's", () => {
   const { adapter, key } = machineWorld();
   const release = prebuiltRelease({ key: key.fingerprint });

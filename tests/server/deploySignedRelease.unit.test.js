@@ -196,6 +196,19 @@ test("a release mobilynet doesn't answer is sent again until it does, the same o
   assert.equal(writes(standIn).length, 1);
 });
 
+test("a release to a machine whose host agent takes no prebuilt release yet is sent once and fails in mobilynet's words", async (t) => {
+  const { standIn, vps, key, releases, kept, parts } = signedWorld(t);
+  await signedRelease({ ...parts, record: null, start: { commit: COMMIT, target: { vps, app: "shop" }, key: key.fingerprint } });
+  standIn.faults.hostNotUpdated = true;
+  const ended = await signedRelease({ ...parts, record: kept.record, signature: key.sign(releases[0].manifest) });
+  const words = "mobilynet refused the release: Its server runs an older host agent, which does this once MobilyNet updates it.";
+  assert.deepEqual([ended.outcome, ended.message], ["failed", words]);
+  assert.deepEqual([kept.record.releases.at(-1).state, kept.record.releases.at(-1).message], ["failed", words]);
+  // One upload of the output, never repeated while the machine's server can't take it.
+  assert.deepEqual(writes(standIn), [["POST", `/v1/vps/${vps}/apps/shop/releases`, 409, { upload: releases[0].outputSha256, release: "prebuilt" }]]);
+  assert.equal(standIn.machines.app(vps, "shop").version, OLD_VERSION);
+});
+
 test("a signed release starts only for the Stack's line, one of the project's release keys and an app of releases a machine runs, and fails a build whose files aren't the release", async (t) => {
   const { standIn, vps, key, builds, kept, parts } = signedWorld(t);
   const target = { vps, app: "shop" };
