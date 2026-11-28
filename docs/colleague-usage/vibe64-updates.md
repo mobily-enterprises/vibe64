@@ -13,8 +13,10 @@ banner appears across the top of the page:
 One update is one notice. After a restart the host announced (see the Planned
 restarts guide), the green message after the restart says it instead: it ends
 with **Reload to get the latest version.** and has **Reload** beside
-**Dismiss**. A host's own page without the editor's top banner shows the same
-sentence in the shell's banner, with **Reload** and a close button.
+**Dismiss**. A page without the editor's top banner (a host's own page, or
+while Learning holds the page) shows the same sentence in the shell's banner,
+with **Reload** and a close button, and it moves back to the top banner when
+you return to the editor.
 
 - **A plain reload is enough.** Choosing **Reload**, the browser's reload
   button or opening Vibe64 again loads the new version. You never need a hard

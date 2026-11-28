@@ -1,14 +1,13 @@
 import { createDefaultErrorPolicy } from "@jskit-ai/shell-web/client/error";
 import { editorReconnect, UPDATING_MESSAGE } from "./lib/vibe64EditorReconnect.js";
 import {
+  attachClientUpdateOffer,
   createClientUpdatePresenter,
-  routeClientUpdateOffer,
-  watchClientUpdateOffer
+  routeClientUpdateOffer
 } from "./lib/vibe64ClientUpdateOffer.js";
 
 const ERROR_RUNTIME_LOG_UNSUBSCRIBE_KEY = "__vibe64JskitErrorRuntimeLogUnsubscribe";
 const UPDATING_NOTICE_UNSUBSCRIBE_KEY = "__vibe64UpdatingNoticeUnsubscribe";
-const CLIENT_UPDATE_OFFER_UNSUBSCRIBE_KEY = "__vibe64ClientUpdateOfferUnsubscribe";
 
 /**
  * A reported error's cause, as the console shows it.
@@ -108,26 +107,15 @@ function installUpdatingNotice(runtime) {
 }
 
 /**
- * JSKIT's offer to reload after an update goes to the editor's top banner while one is on the page, which shows one
- * notice for the update (src/lib/vibe64ClientUpdateOffer.js).
- * @param {import("@jskit-ai/shell-web/client/types").ShellErrorRuntime} runtime
- */
-function installClientUpdateOffer(runtime) {
-  const previousUnsubscribe = globalThis[CLIENT_UPDATE_OFFER_UNSUBSCRIBE_KEY];
-  if (typeof previousUnsubscribe === "function") {
-    previousUnsubscribe();
-  }
-  globalThis[CLIENT_UPDATE_OFFER_UNSUBSCRIBE_KEY] = watchClientUpdateOffer(runtime);
-}
-
-/**
  * The app's error presentation, which shell-web reads with its error toolkit.
  * @param {{ runtime: import("@jskit-ai/shell-web/client/types").ShellErrorRuntime }} toolkit
  */
 export default function configureVibe64ErrorRuntime({ runtime }) {
   installJskitErrorConsoleTrail(runtime);
   installUpdatingNotice(runtime);
-  installClientUpdateOffer(runtime);
+  // JSKIT's offer to reload after an update is the editor's, shown as one notice for the update
+  // (src/lib/vibe64ClientUpdateOffer.js).
+  attachClientUpdateOffer(runtime);
 
   return Object.freeze({
     defaultPresenterId: "material.snackbar",
