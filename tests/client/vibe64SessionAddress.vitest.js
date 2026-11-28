@@ -1,4 +1,4 @@
-import { computed, createRenderer, defineComponent, reactive, ref, watch } from "vue";
+import { computed, createRenderer, defineComponent, effectScope, reactive, ref, watch } from "vue";
 import { createMemoryHistory, createRouter, useRoute, useRouter } from "vue-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { projectSlugFromRoute } from "../../src/lib/vibe64ProjectScope.js";
@@ -47,7 +47,7 @@ function sessionView(sessionId) {
  * The project page's session selection and its address, as the session collection wires them, with a host's
  * Colleague navigation and each session's view when conversationQuery is set.
  */
-async function mountPage(start, { before = "", sessions = ["s1", "s2"], conversationQuery = false } = {}) {
+async function mountPage(start, { before = "", sessions = ["s1", "s2"], conversationQuery = false, project = null } = {}) {
   const router = createRouter({
     history: browserLikeHistory(),
     routes: [
@@ -64,11 +64,17 @@ async function mountPage(start, { before = "", sessions = ["s1", "s2"], conversa
   const Root = defineComponent({
     setup() {
       const route = useRoute();
-      const projectSlug = computed(() => projectSlugFromRoute(route));
-      const selection = useVibe64SessionSelection({ projectSlug, rememberedId: () => "", route });
-      useVibe64SessionAddress({
-        projectSlug, renewal: page.renewal, route, router: useRouter(), selectedSessionId: selection.selectedId, sessions: list
+      const projectSlug = project || computed(() => projectSlugFromRoute(route));
+      // The project page's own scope: the page closes, while the app and its router stay.
+      const pageScope = effectScope();
+      const selection = pageScope.run(() => {
+        const pageSelection = useVibe64SessionSelection({ projectSlug, rememberedId: () => "", route });
+        useVibe64SessionAddress({
+          projectSlug, renewal: page.renewal, route, router: useRouter(), selectedSessionId: pageSelection.selectedId, sessions: list
+        });
+        return pageSelection;
       });
+      page.close = () => pageScope.stop();
       page.selection = selection;
       if (conversationQuery) {
         useVibe64ColleagueNavigation({ conversationQuery: true });
@@ -186,6 +192,31 @@ describe("the project page's address", () => {
     await settle();
     expect(page.selection.selectedId.value).toBe("s2");
     expect(page.route.value.query).toEqual({ session: "s2" });
+  });
+
+  it.each(["the page closes", "the project changes"])("cancels a change still pending when %s", async (change) => {
+    const project = ref("demo");
+    const page = await mountPage("/app/project/demo?session=s1", { project });
+    let started = () => {};
+    let release = () => {};
+    const pending = new Promise(resolve => { started = resolve; });
+    const held = new Promise(resolve => { release = resolve; });
+    const failures = [];
+    page.router.beforeEach(async (to) => {
+      if (to.query.session === "s2") { started(); await held; }
+    });
+    page.router.afterEach((to, _from, failure) => {
+      if (to.query.session === "s2") failures.push(failure);
+    });
+    page.selection.select("s2");
+    await pending;
+    if (change === "the page closes") page.close();
+    else project.value = "shop";
+    release();
+    await settle();
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toBeTruthy();
+    expect(page.route.value.query).toEqual({ session: "s1" });
   });
 
   it("keeps an address without a session without one", async () => {
