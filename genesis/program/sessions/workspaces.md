@@ -122,6 +122,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/composables/useVibe64SessionData.js`
 - `src/composables/useVibe64SessionCreation.js`
 - `src/composables/useVibe64SelectedSessionRenewal.js`
+- `src/composables/useVibe64SessionAddress.js`
 - `src/composables/useVibe64CurrentSessionPublication.js`
 - `src/lib/vibe64SessionListLookup.js`
 - `src/composables/useVibe64SessionDialogs.js`
@@ -135,6 +136,8 @@ that turn without dropping either half. No saved history is rewritten.
 - `tests/client/vibe64SessionSelection.vitest.js`
 - `tests/client/vibe64SessionCreation.vitest.js`
 - `tests/client/useVibe64SessionData.vitest.js`
+- `tests/client/vibe64SessionAddress.vitest.js`
+- `tests/e2e/session-address.spec.ts`
 - `tests/client/useVibe64SessionDialogs.vitest.js`
 - `tests/client/vibe64SessionArchiveState.vitest.js`
 
@@ -264,6 +267,20 @@ Session URL selection initializes the current session and follows subsequent
 navigation. Available-session reconciliation preserves a newer explicit tab
 selection instead of repeatedly restoring the session from the earlier URL.
 
+The address names the session on screen (`useVibe64SessionAddress.js`), so a
+reload, a copied link or the address opened again shows it. The session
+collection is the address's one writer of `?session=`: whenever its selection
+moves to another listed session (a tab, a new session once listed, the session
+before an archived one, the fallback for a session that has gone or belongs to
+another project, a renewal's successor), an address naming a different session
+is replaced (never pushed, as Colleague's write-back of the chat is) with the
+shown one, without the previous session's `?conversation=` and `?chat=`; when
+the page shows none, the address loses its session. An address that moves (a
+link, Back, a navigation) leads instead and the selection follows it. An address
+without a session keeps none: the project opens the last opened session. A host
+that keeps the conversation in the address writes the shown session's
+chat once the address names that session.
+
 Each person's last opened session per project is server state owned by Sessions
 (`lastOpenedSession.js`): one small JSON record per person under the project's
 runtime state (`last-opened-sessions/<sha256 of uid or username>.json`; the
@@ -284,16 +301,9 @@ readers in the tab (Env, preview identities); it no longer restores the project'
 session, and no runtime mounts before the list names the selected session.
 
 The session collection's existing completed-renewal reconciliation selects the
-exact unique `renewed_from` successor, then replaces only the predecessor URL's
-`session` query. It retains the path, hash and all other query fields. This owner
-also handles a successor already selected by refresh: selection may deactivate
-the predecessor runtime host before its dialog callback, so the host does not
-own this URL synchronization. Ordinary tab selection still leaves the URL
-unchanged. A temporary router guard checks the same confirmed renewal and exact
-unique successor, current Working selection, project/API, original predecessor
-URL and collection lifetime before committing navigation; it is always removed
-on settlement. A newer explicit selection, project or route, disposal, ambiguous
-or unconfirmed renewal cannot retarget the link. The original runtime-host
+exact unique `renewed_from` successor; the address then names it as it names
+any selection. While the renewal is running, failed or unconfirmed, the
+selection, and so the address, keeps the predecessor. The original runtime-host
 renewal selection callback and controller fences are unchanged.
 
 The mounted runtime respects an explicitly empty navigation projection in both

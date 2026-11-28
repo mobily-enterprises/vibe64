@@ -113,10 +113,14 @@ session's own working branch, `vibe64/<session id>`, not where Save goes. The
 same way. Reading the details changes nothing; it is the person's step, on
 desktop and mobile alike.
 
-A project link can initially select the session named in its URL. You can then
-select another tab; session-list refreshes preserve that choice. Following a
-different session link selects its named session. A session being archived is
-temporarily unavailable for selection.
+A project link opens the session named in its address. The address always
+names the session on screen: selecting another tab, starting a new session or
+archiving the one shown changes its `session` part (and drops the previous
+session's chat), so a reload, a copied link or the address opened again shows
+the session you were looking at. These changes replace the address, so the
+browser's **Back** leaves the project rather than stepping through sessions.
+Following a different session link selects its named session. A session being
+archived is temporarily unavailable for selection.
 
 Vibe64 remembers the session you last opened in each project, per person.
 Opening the project without a session in its address (project list, bookmark,
@@ -128,11 +132,11 @@ archived or no longer open, the project opens its usual session (the last tab)
 without an error. Practice projects work the same way.
 
 A link whose session is not one of this project's open sessions (another
-project's session, or one that has since been archived) loses its `session`
-part once the session list loads, and the project opens your remembered session
-or its usual session instead; no chat, Preview or other session work starts for
-the unknown session. Switching projects always starts the next project from its
-own sessions, never the previous project's.
+project's session, or one that has since been archived) opens your remembered
+session or the project's usual session instead once the session list loads, and
+the address then names that session; no chat, Preview or other session work
+starts for the unknown session. Switching projects always starts the next
+project from its own sessions, never the previous project's.
 
 The session header gives its room to session names first, then **Save**, which
 never leaves the header. The other actions follow in priority order: **Temporary

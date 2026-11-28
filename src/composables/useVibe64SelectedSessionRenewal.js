@@ -1,29 +1,21 @@
-import { computed, onScopeDispose } from "vue";
+import { computed } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
-import { selectedSessionIdFromRoute } from "@/composables/useVibe64SessionSelection.js";
 import {
   VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
   VIBE64_SURFACE_ID,
   vibe64SessionPath,
   vibe64SessionQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
-import { renewedSuccessorSessionId } from "@/lib/vibe64SessionListLookup.js";
-import {
-  vibe64SessionDebugError,
-  vibe64SessionDebugLog
-} from "@/lib/vibe64SessionDebugLog.js";
 import { mountedSessionRealtimeShouldRefresh } from "@/lib/vibe64MountedSessionState.js";
 
 /**
  * Follows the renewal behind the selected session: the renewal of a selected session that left the
- * list, or of the session the selected one was renewed from. Once that renewal has completed and its
- * successor is selected, the address moves from the predecessor to the successor.
+ * list, or of the session the selected one was renewed from. The session collection selects the
+ * successor once that renewal has completed, and the address follows the selection
+ * (useVibe64SessionAddress).
  * @param {{
- *   availableSessions: import("vue").ComputedRef<Array<{ sessionId: string }>>,
  *   projectSlug: import("vue").Ref<string>,
- *   route: import("vue-router").RouteLocationNormalizedLoaded,
- *   router: import("vue-router").Router,
  *   selectedListSession: import("vue").ComputedRef<{ metadata?: { renewed_from?: string } } | null>,
  *   selectedSessionId: import("vue").Ref<string>,
  *   selectedSessionMissing: import("vue").ComputedRef<boolean>,
@@ -32,20 +24,13 @@ import { mountedSessionRealtimeShouldRefresh } from "@/lib/vibe64MountedSessionS
  * }} options
  */
 function useVibe64SelectedSessionRenewal({
-  availableSessions,
   projectSlug,
-  route,
-  router,
   selectedListSession,
   selectedSessionId,
   selectedSessionMissing,
   sessionList,
   sessionsApiPath
 }) {
-  let disposed = false;
-  onScopeDispose(() => {
-    disposed = true;
-  });
   const selectionRenewalPredecessorId = computed(() => {
     const selectedId = String(selectedSessionId.value || "").trim();
     if (!selectedId || sessionList.pages.length < 1 || String(sessionList.loadError || "").trim()) {
@@ -96,55 +81,9 @@ function useVibe64SelectedSessionRenewal({
     requestRecoveryLabel: "Selected session renewal"
   });
 
-  let pendingRenewalNavigation = null;
-  function syncRenewalSuccessorUrl(predecessorId, successorId) {
-    if (selectedSessionIdFromRoute(route) !== predecessorId) return;
-    const capturedProject = String(projectSlug.value || "").trim();
-    const capturedApiPath = sessionsApiPath.value;
-    const predecessorUrl = route.fullPath;
-    if (pendingRenewalNavigation?.predecessorUrl === predecessorUrl &&
-      pendingRenewalNavigation?.successorId === successorId) return;
-    const sameRenewal = () => {
-      const renewal = selectionRenewalResource.data.value?.renewal;
-      return !disposed &&
-        String(projectSlug.value || "").trim() === capturedProject && sessionsApiPath.value === capturedApiPath &&
-        selectedSessionId.value === successorId &&
-        !selectionRenewalResource.loadError?.value && !selectionRenewalResource.isInitialLoading?.value &&
-        !selectionRenewalResource.isLoading?.value && renewal?.status === "completed" &&
-        String(renewal.sessionId || "").trim() === predecessorId &&
-        String(renewal.successor?.sessionId || "").trim() === successorId &&
-        renewedSuccessorSessionId({ predecessorSessionId: predecessorId, sessions: availableSessions.value }) === successorId;
-    };
-    if (!sameRenewal()) return;
-    const target = { path: route.path, hash: route.hash, query: { ...route.query, session: successorId } };
-    const targetUrl = router.resolve(target).fullPath;
-    const navigation = { predecessorUrl, successorId };
-    const removeGuard = router.beforeResolve((to) => {
-      if (to.fullPath === targetUrl && (!sameRenewal() || route.fullPath !== predecessorUrl)) return false;
-    });
-    pendingRenewalNavigation = navigation;
-    // Reconciliation has already selected the successor. The predecessor host
-    // may be inactive now, so the collection owner also owns its replacement URL.
-    void (async () => {
-      try {
-        await router.replace(target);
-      } catch (error) {
-        if (sameRenewal()) {
-          vibe64SessionDebugLog("client.sessionData.renewalNavigation.error", {
-            error: vibe64SessionDebugError(error), sessionId: successorId
-          });
-        }
-      } finally {
-        removeGuard();
-        if (pendingRenewalNavigation === navigation) pendingRenewalNavigation = null;
-      }
-    })();
-  }
-
   return {
     selectionRenewalPredecessorId,
-    selectionRenewalResource,
-    syncRenewalSuccessorUrl
+    selectionRenewalResource
   };
 }
 
