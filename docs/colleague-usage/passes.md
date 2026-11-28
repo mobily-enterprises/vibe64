@@ -12,9 +12,11 @@ the runs it offers; Vibe64 lists them and suggests one now and then.
 In main chat, passes always run as part of a plan: the plan's last section,
 **Passes**, lists them, one checklist item each, and the plan is the only list.
 A plan's steps are **Implementation**, **Senior review**, **Passes** and
-**Completed**: once Senior has reviewed the plan, each pass in its Passes
-section runs in its own turn, in the plan's order, and after the last one
-Vibe64 completes and archives the plan. A pass you start with no plan open
+**Completed**. Senior's review runs the plan's **Review** in the same turn
+while Review is its next pass, so the plan's changes are reviewed once (see
+[A plan's steps](plan-steps.md#a-plans-steps)); then each other pass in its
+Passes section runs in its own turn, in the plan's order, and after the last
+one Vibe64 completes and archives the plan. A pass you start with no plan open
 gets a small plan of its own, which runs at once.
 
 ## Open the Passes list
@@ -128,8 +130,10 @@ While a plan with passes is open, the list starts with **This plan's passes**:
 one line with each pass and its state, such as **Review ✓ · Security pass ✓ ·
 Data pass: needs you · Quality pass · Deslop**. A state is **✓** (done),
 **running**, **needs you** (it asked you questions), **paused** (you stopped
-it), **can't run** (the chat says why) or **waiting**. Until Senior has reviewed
-the plan, the list says **These run once Senior has reviewed the plan.**
+it), **can't run** (the chat says why) or **waiting**. While Senior's review
+runs the plan's Review, Review shows **running**. Until Senior has reviewed
+the plan, the list says **These run once Senior has reviewed the plan; a Review
+at the top runs within that review.**
 
 Once the plan is at its passes:
 
@@ -176,8 +180,9 @@ it.
 
 Senior's review and every pass end one of two ways:
 
-- **Done**: everything within its scope is fixed and proven. It ticks its item,
-  and the next pass starts in a new turn.
+- **Done**: everything within its scope is fixed and proven. It ticks its item
+  (Senior's review that runs the Review pass ticks the plan's items and the
+  Review item), and the next pass starts in a new turn.
 - **Needs you**: numbered questions, each with a recommended answer, in the
   chat and in the plan's Progress. The plan waits: **Waiting for your answer.
   Reply in chat to continue.** Your reply goes straight back to that pass, on
@@ -192,10 +197,12 @@ the recommended answer and records the choice instead of waiting.
 **Stop** pauses the plan at that pass. **Continue** in the list, or **Resume**
 in the chat, runs it again from the plan.
 
-The last pass (or Senior's review, for a plan without passes) is the plan's
+The last pass (or Senior's review, for a plan without passes or whose only
+pass is the Review it runs) is the plan's
 finishing step: first it fixes whatever Progress still holds that the session
 can fix. After it, Vibe64 completes and archives the plan, and its reply is the
-plan's one closing message: a line per step saying what it fixed, the choices
+plan's one closing message: a line per step (Senior's review with the Review
+it ran as one line, then each other pass) saying what it fixed, the choices
 made for you, and the Leftovers, each with its reason. It never offers to make a
 plan for them. Then, with **Automatically save changes** on, **Save** runs, and
 Vibe64 asks you once: **Run the full test suite?**, with **Yes** and **No**

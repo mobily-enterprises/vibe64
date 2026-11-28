@@ -345,7 +345,7 @@ test("workflow instructions delegate outcomes to the admitted agent and retain r
   assert.match(prompt, /continue, handoff, wait, or complete/);
   assert.match(prompt, /During Senior's review of a plan, handoff returns substantial necessary rework to Junior/);
   assert.match(prompt, /explicit Stop/iu);
-  assert.match(prompt, /first verify every item outside its Passes section and full-tick it; when the plan has Passes items, leave it active/);
+  assert.match(prompt, /first verify every item outside its Passes section and full-tick it, and, when your review runs the plan's Review pass, full-tick that Review item too; when the plan has Passes items, leave it active/);
   assert.match(prompt, /Do not archive the plan: once your turn ends, Vibe64 runs the plan's Passes items, each in its own turn, then completes and archives the plan/);
   assert.match(prompt, /Never start Deslop, a UI pass or another pass on your own/);
   // A direct chat's agent ends its own work; only a plan Senior has reviewed runs its passes.

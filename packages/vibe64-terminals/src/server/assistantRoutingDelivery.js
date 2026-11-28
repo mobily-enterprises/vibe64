@@ -13,6 +13,7 @@ import {
 import {
   assistantModeLabel,
   assistantPlanPass,
+  assistantPlanReviewPass,
   assistantModePrompt,
   assistantWorkflowInstructions,
   assistantGoalIsActive,
@@ -20,9 +21,9 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantTaskPurpose, uiPassRequest } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 import {
-  ASSISTANT_PLAN_COMPLETION_MESSAGE,
   assistantPassInstructions,
-  assistantPlanCompletionFollows
+  assistantPlanCompletionFollows,
+  assistantPlanReviewMessage
 } from "@local/vibe64-runtime/shared/assistantFinishing";
 import {
   WHOLE_CHECKS_LABEL,
@@ -30,7 +31,7 @@ import {
   assistantRunsWholeChecks,
   assistantWholeChecksInstructions
 } from "@local/vibe64-runtime/shared/assistantWholeChecks";
-import { workPlanPassItems } from "../shared/assistantWorkPlan.js";
+import { workPlanLastPass } from "../shared/assistantWorkPlan.js";
 import {
   failure,
   activeMessage,
@@ -136,8 +137,9 @@ function createAssistantRoutingDelivery({
     const store = context.runtime.store;
     context = { ...context, vibe64User: state.submittedBy };
     const modelRole = assistantWorkflowRole(state);
-    // A plan's pass is its own Senior turn on that pass's purpose.
+    // A plan's pass is its own Senior turn on that pass's purpose; Senior's review of a plan may run its Review pass too.
     const pass = assistantPlanPass(state);
+    const reviewPass = assistantPlanReviewPass(state);
     const taskPurpose = assistantTaskPurpose(pass?.id || state.task);
     let role = state.stage === "review" && modelRole === "senior" ? "review" : modelRole;
     if (pass) role = taskPurpose;
@@ -146,7 +148,7 @@ function createAssistantRoutingDelivery({
     // The person's Yes to the whole-project checks once a plan is finished: Senior runs them once, in its own turn.
     const checks = !planCheck && assistantRunsWholeChecks(state);
     let followupLabel = state.stage === "planning" ? "Continue planning" : "Continue implementation";
-    if (state.stage === "review") followupLabel = `${assistantModeLabel(modelRole)} review`;
+    if (state.stage === "review") followupLabel = `${assistantModeLabel(modelRole)} review${reviewPass ? ` and ${reviewPass.title} pass` : ""}`;
     if (pass) followupLabel = pass.title;
     if (checks) followupLabel = WHOLE_CHECKS_LABEL;
     if (planCheck) followupLabel = PLAN_CHECK_LABEL;
@@ -276,9 +278,14 @@ function createAssistantRoutingDelivery({
     // Genesis recognises it: after the person's reply when the pass was waiting for one.
     const person = Boolean(pass) && !followup && state.passReply === true;
     if (pass) request = person ? `${input.message}\n\n${pass.request}` : pass.request;
-    // The person's reply to Senior's review of the plan that waited for them: the reply, then that review's request.
+    // The plan, read once for what a pass or Senior's review running one is told: whether it is the plan's last pass.
+    const passPlan = pass || reviewPass ? await readWorkPlan(context) : null;
+    const lastPass = (item) => Boolean(passPlan) && workPlanLastPass(passPlan.text, item);
+    // The person's reply to Senior's review of the plan that waited for them: the reply, then that review's request,
+    // and Genesis's request for the Review pass it runs last, where Genesis recognises it.
     if (state.reviewReply && !followup && !pass && !planCheck) {
-      request = `${input.message}\n\n[Vibe64: the message above is the person's reply to your review of the plan, which waited for them. Continue that review with it.]\n\n${ASSISTANT_PLAN_COMPLETION_MESSAGE}`;
+      request = `${input.message}\n\n[Vibe64: the message above is the person's reply to your review of the plan, which waited for them. Continue that review with it.]\n\n` +
+        assistantPlanReviewMessage(reviewPass, { last: reviewPass ? lastPass(reviewPass.item) : false }) + (reviewPass ? `\n\n${reviewPass.request}` : "");
     }
     // Passes the person asked for that can't start yet: Senior says so, and runs nothing.
     if (state.planPassNote && !pass && !planCheck) request = `[Vibe64: ${state.planPassNote} Tell the person so in a sentence or two; run no pass and change nothing.]\n\n${request}`;
@@ -286,30 +293,36 @@ function createAssistantRoutingDelivery({
     if (state.wholeChecks?.status === "offered" && !followup && !pass && !planCheck) request = `[Vibe64: ${WHOLE_CHECKS_OFFERED_NOTE}]\n\n${request}`;
     let passInstructions = "";
     if (pass) {
-      const plan = await readWorkPlan(context);
-      const others = plan ? workPlanPassItems(plan.text).filter((item) => item.text !== pass.item) : [];
-      passInstructions = assistantPassInstructions(pass, { last: others.every((item) => item.checked), person }) +
+      passInstructions = assistantPassInstructions(pass, { last: !passPlan || lastPass(pass.item), person }) +
         (state.planPassNote && !followup ? ` ${state.planPassNote}` : "");
     }
     let intent = taskPurpose || (state.stage === "review" ? "review" : state.mode === "auto" || state.planPassNote ? state.reason : "");
     // The plan check only manages the plan: planning's instructions, its note the request.
     if (planCheck) intent = "planning";
     if (checks) intent = "checks";
+    // A workflow turn's outcome instructions follow its request, except where Genesis's request must stay the
+    // message's last paragraph: a plan's pass and the whole-project checks carry their own, and Senior's review
+    // running the plan's Review pass gets them before its request.
+    const outcomeInstructions = !pass && !checks && !planCheck && (state.workflow || autoOutcome)
+      ? assistantWorkflowInstructions(state, { autoSave: savesAutomatically(context.session.metadata) }) : "";
+    const planInstructions = includePlanInstructions
+      ? workPlanInstructions(role, {
+        autoOutcome, auto: state.mode === "auto", passTitles: await passTitlesFor(context, role), passesRun: Boolean(state.afterPlan)
+      }) : "";
     let message = assistantModePrompt(role, request, {
       intent,
       // Auto's Junior leaves browser checks to Senior's check of the plan it implemented.
       browserReview: assistantPlanCompletionFollows(state),
       // Auto's Senior hands rework to Junior; a direct chat's own agent does it in its workflow.
       rework: state.mode === "auto" ? "junior" : state.workflow ? "self" : "report",
-      // A pass covers the connected repositories the app is built from as it does this one.
-      connected: taskPurpose ? connectedCopyNames(context.session) : [],
+      // A pass covers the connected repositories the app is built from as it does this one, and so does the Review
+      // pass Senior's review of a plan runs.
+      connected: taskPurpose || reviewPass ? connectedCopyNames(context.session) : [],
+      runsPass: Boolean(reviewPass),
       planInstructions: pass ? passInstructions
         : checks
           ? assistantWholeChecksInstructions({ autoSave: savesAutomatically(context.session.metadata), passes: state.wholeChecks?.passes })
-          : includePlanInstructions
-            ? workPlanInstructions(role, {
-              autoOutcome, auto: state.mode === "auto", passTitles: await passTitlesFor(context, role), passesRun: Boolean(state.afterPlan)
-            }) : ""
+          : reviewPass ? [planInstructions, outcomeInstructions].filter(Boolean).join("\n") : planInstructions
     });
     // A turn that starts while a planned restart is near hears about it first, as the turns running when it came did.
     const restartWarning = plannedRestart().warning();
@@ -318,16 +331,15 @@ function createAssistantRoutingDelivery({
       plannedRestart().noteTold({ sessionId, conversationId: context.routingConversationId || "", sessionName: context.session.sessionName });
     }
     // A pass renders its own Genesis task, and a review Genesis's review task. Senior's
-    // check of a plan Junior implemented is not a pass: it renders no task of its own.
+    // check of a plan Junior implemented is not a pass: it renders no task of its own, unless it runs the
+    // plan's Review pass, whose task it renders as that pass's own turn would.
     let genesisTask = taskPurpose ? pass?.id || state.task : "";
     if (!genesisTask && state.stage === "review" &&
         !((followup || state.reviewReply) && (state.mode === "auto" || state.planReview) && state.planInvolved)) genesisTask = "review";
+    if (reviewPass) genesisTask = reviewPass.id;
     // The plan check renders no task and reports no outcome: the request settles as the turn before it would have.
     if (planCheck) genesisTask = "";
-    // A plan's pass, and the whole-project checks, get their outcome instructions before their request.
-    if (!pass && !checks && !planCheck && (state.workflow || autoOutcome)) {
-      message += "\n\n" + assistantWorkflowInstructions(state, { autoSave: savesAutomatically(context.session.metadata) });
-    }
+    if (outcomeInstructions && !reviewPass) message += "\n\n" + outcomeInstructions;
     // What a turn that may tick an active plan starts from, read while its selection is prepared: its plan check
     // compares the plan and the source with it when the turn ends. Main chat only.
     const planCheckStarting = routingState.allowAuto ? planCheckStart(context, state).catch(() => null) : null;

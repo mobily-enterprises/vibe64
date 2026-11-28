@@ -1,3 +1,5 @@
+import { AFTER_PLAN_PASS_TITLES, PLAN_REVIEW_PASS } from "@local/vibe64-runtime/shared/assistantFinishing";
+
 const PASSES_HEADING = /^## Passes\s*$/iu;
 
 /**
@@ -7,7 +9,8 @@ const PASSES_HEADING = /^## Passes\s*$/iu;
  * Senior's review. `built` is true for a built or proven item, `checked`
  * only for a proven one. Every line of the plan's `## Passes` section, its
  * heading too, has `passes: true`: that section's items are the passes the plan
- * runs after Senior's review, one turn each.
+ * runs, one turn each after Senior's review, except a Review the plan reaches
+ * first, which runs in Senior's review turn (workPlanReviewPassItem).
  */
 function parseWorkPlanLines(text, options = {}) {
   const { markTechnicalDetails = false } = options;
@@ -69,8 +72,31 @@ function workPlanPassItems(text) {
 }
 
 /**
+ * The Passes item Senior's review of the plan runs in the same turn: the plan's next pass (its first Passes item not
+ * ticked) when it names the Review pass, by Genesis's title, or null. The plan's review step is that review and this
+ * pass, one Senior turn, Done once every item outside Passes and this item are ticked; every other pass runs after it,
+ * in its own turn. A plan whose Passes has no Review next (none, or Review later in the list) is reviewed alone.
+ * @param {string} text the plan's text
+ * @returns {ReturnType<typeof workPlanPassItems>[number] | null}
+ */
+function workPlanReviewPassItem(text) {
+  const next = workPlanPassItems(text).find((item) => !item.checked);
+  return next?.title.toLowerCase() === AFTER_PLAN_PASS_TITLES[PLAN_REVIEW_PASS].toLowerCase() ? next : null;
+}
+
+/**
+ * Whether a plan's Passes item is its last one left: every other Passes item is ticked.
+ * @param {string} text the plan's text
+ * @param {string} item the Passes item's text
+ */
+function workPlanLastPass(text, item) {
+  return workPlanPassItems(text).every((entry) => entry.text === item || entry.checked);
+}
+
+/**
  * Whether an active plan has reached its Passes step: it has pass items and
- * every item outside Passes is proven (- [x]).
+ * every item outside Passes is proven (- [x]). A Review it reaches first is
+ * still Senior review's (workPlanReviewPassItem).
  * @param {{ status?: string, text?: string } | null} plan
  */
 function workPlanAtPasses(plan) {
@@ -113,12 +139,14 @@ function withWorkPlanPassesUnticked(text, chosen) {
 /**
  * Where a plan is, read from the plan itself: implementing its first item not
  * built yet (- [ ]), Senior's review once every item outside Passes is built,
- * the first Passes item not ticked once every other item is proven, or
- * completed. Null for a plan with no checklist items.
+ * with the plan's Review pass while that is its next pass (workPlanReviewPassItem),
+ * the first Passes item not ticked once every other item is proven and Senior's
+ * review is done, or completed. Null for a plan with no checklist items.
  * @param {{ status?: string, text?: string } | null} plan
- * @returns {{ step: "implementation", item: number, items: number, title: string } | { step: "review" } |
+ * @returns {{ step: "implementation", item: number, items: number, title: string } |
+ *   { step: "review", pass?: { title: string, scope: string, item: number, items: number } } |
  *   { step: "pass", item: number, items: number, title: string, scope: string } | { step: "completed" } | null}
- *   a pass's scope is its Passes item's text after the title, such as "whole app"
+ *   a pass's scope is its Passes item's text after the title, such as "whole app"; the review's pass is the Review it runs
  */
 function workPlanStep(plan) {
   if (!plan || typeof plan.text !== "string") return null;
@@ -130,7 +158,10 @@ function workPlanStep(plan) {
   if (open >= 0) return { step: "implementation", item: open + 1, items: work.length, title: work[open].text };
   const passes = workPlanPassItems(plan.text);
   const pass = passes.findIndex((item) => !item.checked);
-  if (!work.every((entry) => entry.checked) || pass < 0) return { step: "review" };
+  const review = workPlanReviewPassItem(plan.text);
+  if (!work.every((entry) => entry.checked) || pass < 0 || review) {
+    return { step: "review", ...(review ? { pass: { title: review.title, scope: review.scope, item: pass + 1, items: passes.length } } : {}) };
+  }
   return { step: "pass", item: pass + 1, items: passes.length, title: passes[pass].title, scope: passes[pass].scope };
 }
 
@@ -210,10 +241,13 @@ function workPlanTitleInText(title) {
 /** A pass's title as the line names its place, "Security" for "Security pass". */
 const passName = (step) => workPlanTitleInText(step.title).replace(/ pass$/u, "");
 
+/** Senior's review as the line names it: with the Review pass it runs, "Senior review and Review pass", one step. */
+const reviewName = (step) => step.pass ? `Senior review and ${workPlanTitleInText(step.pass.title)} pass` : "Senior review";
+
 /** What a paused or waiting plan holds: the plan's change, the item, Senior's review, or the pass with its scope. */
 function waitingWork(step, request) {
   if (request.stage === "planning") return "changing the plan";
-  if (step.step === "review") return "Senior review";
+  if (step.step === "review") return reviewName(step);
   const title = workPlanTitleInText(step.title);
   if (step.step === "pass") return step.scope ? `${title} (${workPlanTitleInText(step.scope)})` : title;
   return `item ${step.item} of ${step.items}, ${title}`;
@@ -221,6 +255,8 @@ function waitingWork(step, request) {
 
 function workPlanStepLine(step, { questions, request, action }) {
   if (!step) return "";
+  // A Review a request already runs as its own pass (one decided before Senior's review ran it) is named as that pass.
+  if (step.step === "review" && step.pass && request?.stage === "pass") return workPlanStepLine({ step: "pass", ...step.pass }, { questions, request, action });
   if (step.step === "completed") return "Plan: completed";
   const waiting = request?.status === "waiting";
   if (waiting && request.awaitingAnswer || questions > 0) {
@@ -228,7 +264,7 @@ function workPlanStepLine(step, { questions, request, action }) {
   }
   // A step another turn came before is owed: it starts by itself once that turn ends (assistantRoutingOwedSteps.js).
   if (waiting && request.followup?.owed && !request.stopped) {
-    if (step.step === "review") return "Plan: Senior review starts when this answer ends";
+    if (step.step === "review") return `Plan: ${reviewName(step)} starts when this answer ends`;
     if (step.step === "pass") return `Plan: pass ${passName(step)} (${step.item} of ${step.items}) starts when this answer ends`;
     return `Plan: item ${step.item} of ${step.items}, ${workPlanTitleInText(step.title)}, starts when this answer ends`;
   }
@@ -249,7 +285,9 @@ function workPlanStepLine(step, { questions, request, action }) {
     return `${held}${/[!?…]$/u.test(held) ? "" : "."} ${next}`;
   }
   // Senior's review runs in Auto and a Senior chat; anywhere else nothing runs it until the person asks Senior.
-  if (step.step === "review") return request?.status === "working" ? "Plan: Senior review" : "Plan: ready for Senior review, ask Senior to start it";
+  if (step.step === "review") {
+    return request?.status === "working" ? `Plan: ${reviewName(step)}` : `Plan: ready for ${reviewName(step)}, ask Senior to start it`;
+  }
   if (step.step === "pass") return `Plan: pass ${passName(step)} (${step.item} of ${step.items})`;
   return `Plan: implementing item ${step.item} of ${step.items}, ${workPlanTitleInText(step.title)}`;
 }
@@ -258,6 +296,8 @@ export {
   parseWorkPlanLines,
   workPlanAtPasses,
   workPlanFreshness,
+  workPlanLastPass,
+  workPlanReviewPassItem,
   workPlanStatusLine,
   workPlanStep,
   workPlanTitleInText,

@@ -2,12 +2,23 @@
 // optionally followed by `: <scope>` in any words (none is the plan's changes). The plan is the only
 // list: the next pass is its first item not yet ticked, and a pass the person starts is added to the
 // open plan, or to a small plan of its own when none is open.
-import { AFTER_PLAN_PASS_TITLES, ASSISTANT_FINISHING_DEFAULTS, inAfterPlanOrder } from "@local/vibe64-runtime/shared/assistantFinishing";
-import { ASSISTANT_ROUTING_METADATA, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { AFTER_PLAN_PASS_TITLES, ASSISTANT_FINISHING_DEFAULTS, PLAN_REVIEW_PASS, inAfterPlanOrder } from "@local/vibe64-runtime/shared/assistantFinishing";
+import {
+  ASSISTANT_ROUTING_METADATA,
+  assistantPlanPass,
+  assistantPlanReviewPass,
+  assistantRoutingFromMetadata
+} from "@local/vibe64-runtime/shared/assistantRouting";
 import { uiPassScope } from "@local/vibe64-runtime/shared/assistantExplicitTask";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { sessionConnectedRoots } from "@local/vibe64-core/server/projectRepository";
-import { workPlanAtPasses, workPlanPassItems, withWorkPlanPasses, withWorkPlanPassesUnticked } from "../shared/assistantWorkPlan.js";
+import {
+  workPlanAtPasses,
+  workPlanPassItems,
+  workPlanReviewPassItem,
+  withWorkPlanPasses,
+  withWorkPlanPassesUnticked
+} from "../shared/assistantWorkPlan.js";
 import { manageWorkPlan, readWorkPlan } from "./assistantWorkPlan.js";
 import { afterPlanBase, rememberAfterPlanBase } from "./afterPlanBase.js";
 import { failure } from "./assistantRoutingRequests.js";
@@ -196,6 +207,25 @@ async function nextPlanPass(context, plan, listPasses) {
     return { title: items[index].title, item: items[index].text, last, problem: error.message };
   }
   return { ...await resolvePlanPass(items[index], listing, context.session), last };
+}
+
+/**
+ * The plan's review step: Senior's review of the plan, which runs the plan's Review pass in the same turn while
+ * that is the plan's next pass (workPlanReviewPassItem), so the plan's changes are reviewed once. Returns that pass,
+ * as the request records it (request.reviewPass), with Genesis's request for its Passes item, or null for a review
+ * that runs alone: no Review is next, the plan isn't active, or Genesis can't run it now (the plan then reaches it as
+ * a pass of its own, which waits with the reason, as any pass does). Every turn of the review step is prepared from
+ * it: Vibe64's follow-up (prepareFollowup) and the person's reply to a review that waited for them.
+ * @param {object} context the routing context, with the session
+ * @param {{ status: string, text: string } | null} plan the current plan
+ * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} listPasses
+ * @returns {Promise<{ id: string, title: string, item: string, request: string } | null>}
+ */
+async function planReviewPass(context, plan, listPasses) {
+  if (plan?.status !== "active" || !workPlanReviewPassItem(plan.text)) return null;
+  const next = await nextPlanPass(context, plan, listPasses);
+  if (next?.id !== PLAN_REVIEW_PASS || next.problem) return null;
+  return { id: next.id, title: next.title, item: next.item, request: next.request };
 }
 
 // Words naming a run at the end of a typed request.
@@ -430,8 +460,8 @@ async function applyPlanPasses(context, request, listing) {
 
 /**
  * The open plan's passes as the Passes list shows them: each Passes item, the pass it names and its
- * state now, read from the plan and the request running or waiting at that pass. Null without an
- * active plan with passes.
+ * state now, read from the plan and the request running or waiting at that pass, Senior's review of
+ * the plan included while it runs the plan's Review pass. Null without an active plan with passes.
  * @param {{ status: string, title: string, text: string } | null} plan
  * @param {object | null} request the saved routing request
  * @param {{ passes: { id: string, title: string }[] }} listing
@@ -440,7 +470,8 @@ function planPassesView(plan, request, listing) {
   if (plan?.status !== "active") return null;
   const items = workPlanPassItems(plan.text);
   if (!items.length) return null;
-  const at = request?.stage === "pass" && request.pass?.item ? request : null;
+  const running = assistantPlanPass(request) || assistantPlanReviewPass(request);
+  const at = running?.item ? { ...request, pass: running } : null;
   const state = (item) => {
     if (item.checked) return "done";
     if (at?.pass.item !== item.text || at.status === "complete") return "";
@@ -474,6 +505,7 @@ export {
   planPassListing,
   planPassRequest,
   planPassesView,
+  planReviewPass,
   readPassRequest,
   resolvePlanPass,
   withAfterPlanPasses

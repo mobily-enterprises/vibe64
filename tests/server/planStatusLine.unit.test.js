@@ -208,3 +208,26 @@ test("a plan behind its work never looks current: it says when it was last updat
   assert.equal(workPlanStatusLine({ step: "completed" }, { freshness: workPlanFreshness(current({ changedSince: { files: 3 } }), now) }),
     "Plan: completed");
 });
+
+test("Senior's review step holds the plan's Review while it is the plan's next pass: the line names them as one step", () => {
+  const review = ["- [ ] Review: the plan's changes", "- [ ] Security pass: the plan's changes"];
+  const reviewing = { step: "review", pass: { title: "Review", scope: "the plan's changes", item: 1, items: 2 } };
+  // Built, then proven: the review step lasts until its Review item is ticked too.
+  assert.deepEqual(workPlanStep(plan(["- [~] One thread per contact"], review)), reviewing);
+  assert.deepEqual(workPlanStep(plan(["- [x] One thread per contact"], review)), reviewing);
+  assert.deepEqual(workPlanStep(plan(["- [x] One thread per contact"], review.map((line) => line.replace("- [ ] Review", "- [x] Review")))),
+    { step: "pass", item: 2, items: 2, title: "Security pass", scope: "the plan's changes" });
+  // A plan whose Review is not its next pass, or that has none, is reviewed alone.
+  assert.deepEqual(workPlanStep(plan(["- [~] One thread per contact"], [review[1], review[0]])), { step: "review" });
+  assert.deepEqual(workPlanStep(plan(["- [~] One thread per contact"], [review[1]])), { step: "review" });
+  const working = { status: "working", stage: "review" };
+  assert.equal(workPlanStatusLine(reviewing, { request: working }), "Plan: Senior review and Review pass");
+  assert.equal(workPlanStatusLine(reviewing, { request: null }), "Plan: ready for Senior review and Review pass, ask Senior to start it");
+  assert.equal(workPlanStatusLine(reviewing, { request: { status: "waiting", stage: "review", followup: { owed: true } } }),
+    "Plan: Senior review and Review pass starts when this answer ends");
+  assert.equal(workPlanStatusLine(reviewing, { request: { status: "waiting", stage: "review", stopped: true },
+    action: action("Continue review") }),
+  "Paused: Senior review and Review pass. Continue review to resume");
+  // A Review a request already runs as its own pass, decided before Senior's review ran it, is named as that pass.
+  assert.equal(workPlanStatusLine(reviewing, { request: { status: "working", stage: "pass" } }), "Plan: pass Review (1 of 2)");
+});

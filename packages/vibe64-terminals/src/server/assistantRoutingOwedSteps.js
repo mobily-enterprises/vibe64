@@ -30,7 +30,10 @@ const OWED_STEPS = Object.freeze({
   review: "Senior's review",
   pass: "The plan's next pass"
 });
-const owedStep = (state) => `${OWED_STEPS[state.stage] || "The next step"} starts by itself once the current turn ends.`;
+// Senior's review running the plan's Review pass is one step, named as one.
+const owedName = (state) => state.stage === "review" && state.reviewPass ? `Senior's review and ${state.reviewPass.title} pass`
+  : OWED_STEPS[state.stage] || "The next step";
+const owedStep = (state) => `${owedName(state)} starts by itself once the current turn ends.`;
 const HELD_FOR_PERSON = "A message came after Vibe64 decided this step, so it waits for you: Continue takes it.";
 const HELD_FOR_QUESTION = "The last answer asks something, so this step waits for you: Continue takes it.";
 const PLAN_CHANGED = "The plan changed before this step started. Read it and send a new request.";

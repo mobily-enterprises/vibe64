@@ -10,8 +10,9 @@ import { passesInMessage, planPassesView } from "../../packages/vibe64-terminals
 import { workPlanPassItems } from "../../packages/vibe64-terminals/src/shared/assistantWorkPlan.js";
 
 // A plan's passes, through the real routing service: the plan's last section, ## Passes, lists
-// them; once Senior has reviewed the plan, each unticked Passes item runs in its own Senior turn,
-// in the plan's order, and after the last Vibe64 completes and archives the plan and saves the work.
+// them; Senior's review of the plan runs a Review the plan reaches first in the same turn, then each
+// other unticked Passes item runs in its own Senior turn, in the plan's order, and after the last
+// Vibe64 completes and archives the plan and saves the work.
 
 const request = { messageId: "request-1", message: "Execute the plan", submissionKind: "send" };
 const end = (state, result = "completed") => ({ payload: { agentRun: { active: false, state: result, providerTurnId: state.turnId } } });
@@ -56,6 +57,11 @@ async function planChecked(f, role = "junior") {
 }
 /** Senior's review full-ticks the plan's own item. */
 const tickItems = async (f, role = "review") => writePlan(f, (await readWorkPlan(f.context)).text.replace("- [~] Required-name", "- [x] Required-name"), role);
+/** Senior's review that runs the plan's Review pass ticks its Passes item too. */
+async function tickReview(f) {
+  const { item } = f.state().reviewPass;
+  return writePlan(f, (await readWorkPlan(f.context)).text.replace(`- [ ] ${item}`, `- [x] ${item}`));
+}
 /** The running pass ticks its own Passes item, the only Plan change it may make. */
 async function tickPass(f) {
   const { item } = f.state().pass;
@@ -67,11 +73,8 @@ async function passDone(f) {
   await finish(f, "complete");
 }
 
-/**
- * Auto's work on the plan: Router sends it to Junior, who implements it and hands off; Senior
- * reviews it in its own turn, ticks its item and reports complete, so the plan reaches its passes.
- */
-async function implementAndReview(f, passes) {
+/** Auto's work on the plan: Router sends it to Junior, who implements it and hands off to Senior's review. */
+async function implement(f, passes) {
   await publishPlanFixture(f.context, planWith(passes));
   await f.service.send("session-1", request, f.context);
   assert.equal(f.sends[0].selection.modelId, f.assignments.junior.modelId);
@@ -81,7 +84,16 @@ async function implementAndReview(f, passes) {
   }
   await finish(f, "handoff");
   assert.equal(f.state().stage, "review");
+}
+
+/**
+ * Auto's work on the plan, then Senior's review in its own turn: it ticks the plan's item, and the
+ * Review item when it runs that pass, and reports complete, so the plan moves on to its other passes.
+ */
+async function implementAndReview(f, passes) {
+  await implement(f, passes);
   await tickItems(f);
+  if (f.state().reviewPass) await tickReview(f);
   await finish(f, "complete");
 }
 
@@ -97,29 +109,32 @@ test("Senior's review leaves a plan with passes active; each Passes item runs in
   await f.source.commit("Required-name validation");
   await planChecked(f);
   await finish(f, "handoff");
-  // Senior's review is not a pass; it verifies every item and runs none.
+  // Senior's review verifies every item and runs the plan's first pass, Review, in the same turn: one review.
+  const base = f.source.canonical;
   assert.equal(f.sends[1].selection.modelId, f.assignments.senior.modelId);
-  assert.match(f.sends[1].input.message, /Senior review of the plan: /u);
-  assert.equal(f.sends[1].input.displayMessage, "Senior reviews the plan.");
-  assert.ok(!f.sends[1].input.genesisTask, "it runs no pass");
-  // Done means every item outside Passes is proven: a built item is not.
+  assert.match(f.sends[1].input.message, /Senior review of the plan with its Review pass: /u);
+  assert.equal(f.sends[1].input.displayMessage, "Senior reviews the plan and runs its Review pass.");
+  assert.equal(f.sends[1].input.genesisTask, "review");
+  assert.equal(requestOf(f.sends[1]), since("Review", base), "Genesis's Review request, word for word, last");
+  // Done means every item outside Passes is proven and the Review item ticked: a built item is not, nor the items alone.
   await assert.rejects(reportOutcome(f, "complete", { involved: true }), { code: "vibe64_assistant_workflow_plan_incomplete" });
   await tickItems(f);
+  await assert.rejects(reportOutcome(f, "complete", { involved: true }), { code: "vibe64_assistant_workflow_review_pass_unticked" });
+  await tickReview(f);
   await finish(f, "complete");
   assert.equal((await readWorkPlan(f.context)).status, "active", "Senior leaves a plan with passes active");
 
-  const base = f.source.canonical;
-  const expected = [["review", since("Review", base)], ["security-pass", since("Security pass", base)],
+  const expected = [["security-pass", since("Security pass", base)],
     ["data-pass", since("Data pass", base, true)], ["ux-pass", "User experience pass the whole app."]];
   for (const [index, [id, message]] of expected.entries()) {
     const send = f.sends[2 + index];
-    assert.deepEqual([f.state().stage, f.state().pass.id, f.state().pass.item], ["pass", id, passes[index]]);
+    assert.deepEqual([f.state().stage, f.state().pass.id, f.state().pass.item], ["pass", id, passes[index + 1]]);
     assert.equal(f.state().passChain, undefined, "the plan is the only list");
     assert.equal(requestOf(send), message, `${id} runs its Passes item's request`);
     assert.equal(send.input.genesisTask, id);
     assert.equal(send.input.automaticGenesisTask, true);
     assert.equal(send.selection.modelId, f.assignments.senior.modelId, `${id} runs on Senior`);
-    assert.match(send.input.message, new RegExp(`the plan's Passes item “${passes[index].replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}”, and only that pass`, "u"));
+    assert.match(send.input.message, new RegExp(`the plan's Passes item “${passes[index + 1].replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}”, and only that pass`, "u"));
     assert.equal(/This is the plan's last pass/u.test(send.input.message), index === expected.length - 1, `${id}: only the last pass closes the plan`);
     assert.equal((await readWorkPlan(f.context)).status, "active", "the plan stays active while its passes run");
     assert.equal(saves.length, 0, "nothing is saved before the last pass ends");
@@ -127,14 +142,14 @@ test("Senior's review leaves a plan with passes active; each Passes item runs in
     if (index === 0) await assert.rejects(reportOutcome(f, "complete", { involved: true }), { code: "vibe64_assistant_workflow_pass_unticked" });
     await passDone(f);
   }
-  assert.equal(f.sends.length, 6, "one turn per Passes item");
+  assert.equal(f.sends.length, 5, "one turn per Passes item, Review in Senior's review");
   assert.equal(f.helperCalls(), 1, "Router classifies only the person's request");
   assert.equal(f.state().status, "complete");
   assert.equal(await readWorkPlan(f.context), null);
   assert.equal((await planHistory(f)).length, 1, "the plan is completed and archived after its last pass");
   assert.deepEqual(saves, [{ archived: 1, status: "complete" }], "and the work saved once, after that");
   assert.equal(f.metadata.after_plan_base, await f.source.head(), "the next plan's passes start from here");
-  assert.deepEqual(passNotices(f), passes.map((item) => `${item.slice(0, item.indexOf(":"))} started: the plan's next pass (${item})`));
+  assert.deepEqual(passNotices(f), passes.slice(1).map((item) => `${item.slice(0, item.indexOf(":"))} started: the plan's next pass (${item})`));
   const notices = noticeTexts(f);
   assert.ok(notices.indexOf(SAVE_STARTED) < notices.indexOf("Saved automatically."));
   // No pass ran the whole-project checks: once the plan is finished and saved, Vibe64 asks whether to run them.
@@ -243,21 +258,29 @@ test("a Passes item that names a pass Genesis doesn't have holds the plan at it,
   assert.equal(f.state().pass.item, "User experience pass: whole app");
 });
 
-test("a Passes item's scope in words of the plan's own runs its pass over those words, also on Continue after Stop; an item with no scope runs over the plan's changes", async (t) => {
+test("a Passes item's scope in words of the plan's own runs its pass over those words, in Senior's review too and on a retry after Stop, and on Continue after Stop; an item with no scope runs over the plan's changes", async (t) => {
   const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true });
   // whs2's Review item, as Senior wrote it: no Genesis run names this scope, so the pass reads it as written.
   const scope = "the changes since commit fa01419e (the Work groups plan and this plan)";
-  await implementAndReview(f, [`Review: ${scope}`, "Security pass", "Deslop: the billing screens, deeply"]);
-  assert.deepEqual([f.sends.length, f.sends[2].input.genesisTask, requestOf(f.sends[2])], [3, "review", `Run the Review on ${scope}.`]);
-  assert.deepEqual([f.state().stage, f.state().status, f.state().pass.item], ["pass", "working", `Review: ${scope}`]);
+  await implement(f, [`Review: ${scope}`, "Security pass", "Deslop: the billing screens, deeply"]);
+  // Senior's review runs the plan's Review over those words, in the same turn.
+  assert.deepEqual([f.sends.length, f.sends[1].input.genesisTask, requestOf(f.sends[1])], [2, "review", `Run the Review on ${scope}.`]);
+  assert.deepEqual([f.state().stage, f.state().status, f.state().reviewPass.item], ["review", "working", `Review: ${scope}`]);
+  const reviewing = f.state();
+  await f.service.stop("session-1", f.context);
+  await f.service.afterTurn("session-1", end(reviewing, "interrupted"), f.context);
+  await f.service.send("session-1", { messageId: reviewing.messageId, message: reviewing.input.message, reviewAction: "retry" }, f.context);
+  assert.deepEqual([f.sends.at(-1).input.genesisTask, requestOf(f.sends.at(-1)), f.state().stage], ["review", `Run the Review on ${scope}.`, "review"]);
+  await tickItems(f);
+  await tickReview(f);
+  await finish(f, "complete");
+  assert.deepEqual([f.sends.at(-1).input.genesisTask, requestOf(f.sends.at(-1))],
+    ["security-pass", since("Security pass", f.source.canonical)]);
   const stopped = f.state();
   await f.service.stop("session-1", f.context);
   await f.service.afterTurn("session-1", end(stopped, "interrupted"), f.context);
   await f.service.send("session-1", { messageId: "continue-1", message: "Continue the plan's passes.", passAction: "continue", submissionKind: "send" }, f.context);
-  assert.deepEqual([f.sends.at(-1).input.genesisTask, requestOf(f.sends.at(-1))], ["review", `Run the Review on ${scope}.`]);
-  await passDone(f);
-  assert.deepEqual([f.sends.at(-1).input.genesisTask, requestOf(f.sends.at(-1))],
-    ["security-pass", since("Security pass", f.source.canonical)]);
+  assert.deepEqual([f.sends.at(-1).input.genesisTask, requestOf(f.sends.at(-1))], ["security-pass", since("Security pass", f.source.canonical)]);
   await passDone(f);
   assert.deepEqual([f.sends.at(-1).input.genesisTask, requestOf(f.sends.at(-1))], ["deslop", "Run the Deslop on the billing screens, deeply."]);
 });
@@ -442,7 +465,7 @@ test("in Auto, Junior's full ticks still go to Senior's review before any pass",
   await tickItems(f, "junior");
   await finish(f, "handoff");
   assert.equal(f.state().stage, "review");
-  assert.match(f.sends[1].input.message, /Senior review of the plan: /u);
+  assert.match(f.sends[1].input.message, /Senior review of the plan with its Review pass: /u);
 });
 
 test("no pass runs without a plan, with a plan without passes, or with a plan already at its passes or completed before the request", async (t) => {
@@ -467,7 +490,7 @@ test("no pass runs without a plan, with a plan without passes, or with a plan al
 /** A plan an earlier request's Senior review already brought to its passes: its item proven, no pass run yet. */
 const reviewedPlan = (passes) => planWith(passes).replace("- [~] Required-name", "- [x] Required-name");
 
-for (const route of ["Implement plan", "a typed request to continue"]) test(`a plan found at its passes runs them once Senior's review completes it again, unchanged (${route}), and is saved only after the last`, async (t) => {
+for (const route of ["Implement plan", "a typed request to continue"]) test(`a plan found at its passes runs them once Senior's review completes it again, its items unchanged and its Review run in that turn (${route}), and is saved only after the last`, async (t) => {
   const saves = [];
   const f = await fixture(t, { mode: "auto" }, { readyPlan: false, source: true, onPlanCompleted: async () => {
     saves.push((await planHistory(f)).length);
@@ -479,18 +502,19 @@ for (const route of ["Implement plan", "a typed request to continue"]) test(`a p
   await f.service.send("session-1", route === "Implement plan"
     ? { messageId: "implement-1", message: "Implement the saved plan. I authorize implementation within its agreed scope.", planRevision: plan.revision, submissionKind: "send" }
     : { messageId: "continue-1", message: "Continue the plan!", submissionKind: "send" }, f.context);
-  // Junior finds nothing left to build; Senior's review finds nothing new and reports complete, the plan unchanged.
+  // Junior finds nothing left to build; Senior's review finds nothing new in the items and runs the plan's Review,
+  // whose item it ticks, so the plan's first pass to start is Security.
   await finish(f, "handoff");
-  assert.equal(f.sends[1].input.displayMessage, "Senior reviews the plan.");
+  assert.equal(f.sends[1].input.displayMessage, "Senior reviews the plan and runs its Review pass.");
+  assert.equal(f.sends[1].input.genesisTask, "review");
+  assert.equal(requestOf(f.sends[1]), since("Review", f.source.canonical));
+  await assert.rejects(reportOutcome(f, "complete", { involved: true }), { code: "vibe64_assistant_workflow_review_pass_unticked" });
+  await tickReview(f);
   await finish(f, "complete");
-  assert.equal((await readWorkPlan(f.context)).revision, plan.revision, "the review changed nothing");
-  assert.deepEqual([f.state().stage, f.state().pass?.id, f.state().status], ["pass", "review", "working"], "the plan's first pass starts");
-  assert.equal(f.sends[2].input.genesisTask, "review");
-  assert.equal(requestOf(f.sends[2]), since("Review", f.source.canonical));
+  assert.deepEqual([f.state().stage, f.state().pass?.id, f.state().status], ["pass", "security-pass", "working"], "the plan's next pass starts");
+  assert.equal(requestOf(f.sends[2]), since("Security pass", f.source.canonical));
   assert.deepEqual(saves, [], "nothing is saved before the passes");
   assert.ok(!noticeTexts(f).includes(SAVE_STARTED));
-  await passDone(f);
-  assert.equal(f.state().pass.id, "security-pass");
   await passDone(f);
   assert.equal(await readWorkPlan(f.context), null);
   assert.deepEqual(saves, [1], "the plan is completed, archived and saved once, after its last pass");
@@ -543,7 +567,7 @@ test("\"Run the Review pass\" while the plan's Review is still to run is the pla
   }
 });
 
-test("a reply to Senior's review of the plan that waited for the person goes back to that review on Senior without Router; done, the plan runs its passes", async (t) => {
+test("a reply to Senior's review of the plan that waited for the person goes back to that review, with the Review pass it runs, on Senior without Router; done, the plan runs its other passes", async (t) => {
   const passes = ["Review: the plan's changes", "Security pass: the plan's changes"];
   const QUESTION = "The validation is built.\n\n[1] Keep blank names out of the export too?\nPossible answers:\n- Yes (recommended)\n- No";
   for (const asks of [true, false]) {
@@ -566,14 +590,18 @@ test("a reply to Senior's review of the plan that waited for the person goes bac
     assert.equal(f.helperCalls(), routed, `asks ${asks}: the reply is not routed`);
     const reply = f.sends.at(-1);
     assert.equal(reply.selection.modelId, f.assignments.senior.modelId);
-    assert.equal(reply.input.genesisTask, undefined, "Senior's review of the plan runs no Genesis task");
+    // The review it continues runs the plan's Review pass: Genesis's review task, its request last.
+    assert.deepEqual([reply.input.genesisTask, reply.input.automaticGenesisTask], ["review", true]);
+    assert.equal(requestOf(reply), since("Review", f.source.canonical));
     assert.ok(reply.input.message.includes("1: yes, keep them out.\n\n"), "the person's reply comes first");
-    assert.match(reply.input.message, /Senior review of the plan: /u);
-    assert.deepEqual([f.state().messageId, f.state().stage, f.state().reason, f.state().planInvolved], ["reply-1", "review", "review", true]);
-    // Senior ticks the plan's items and reports complete: the plan runs its passes.
+    assert.match(reply.input.message, /Senior review of the plan with its Review pass: /u);
+    assert.deepEqual([f.state().messageId, f.state().stage, f.state().reason, f.state().planInvolved, f.state().reviewPass?.item],
+      ["reply-1", "review", "review", true, passes[0]]);
+    // Senior ticks the plan's items and its Review item and reports complete: the plan runs its other passes.
     await tickItems(f);
+    await tickReview(f);
     await finish(f, "complete");
-    assert.deepEqual([f.state().stage, f.state().pass?.item, (await readWorkPlan(f.context)).status], ["pass", passes[0], "active"], `asks ${asks}`);
+    assert.deepEqual([f.state().stage, f.state().pass?.item, (await readWorkPlan(f.context)).status], ["pass", passes[1], "active"], `asks ${asks}`);
   }
 });
 

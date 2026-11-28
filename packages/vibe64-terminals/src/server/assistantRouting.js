@@ -93,7 +93,8 @@ function createAssistantRouting({
   const records = createAssistantRoutingRecords({
     routingState,
     agent,
-    publish
+    publish,
+    listPasses
   });
   const decisions = createAssistantRoutingDecisions({
     records,

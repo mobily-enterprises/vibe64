@@ -1590,6 +1590,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-core/src/server/stateUpgrades/20261123-passes-in-plans.js`
 - `tests/server/assistantPlanLifecycle.test.js`
 - `tests/server/assistantPlanPasses.test.js`
+- `tests/server/assistantPlanReviewStep.test.js`
 - `tests/server/assistantPlanImplementation.test.js`
 - `tests/server/assistantPlanWholeChecks.test.js`
 - `packages/vibe64-terminals/src/server/assistantWholeChecks.js`
@@ -2604,12 +2605,33 @@ Each workflow request records, at admission, the plan current then
 (generated purposes, temporary chats, lessons, Fix it, an unfinished goal)
 records none. A handoff after implementation ends the work, unless Auto's Junior
 implemented an involved plan that is still active
-(`assistantPlanCompletionFollows`): then Senior reviews the plan in its own turn
-(`ASSISTANT_PLAN_COMPLETION_MESSAGE`), which renders no Genesis task and runs no
-pass, reads the plan's changes against Plan and Progress, verifies every item
+(`assistantPlanCompletionFollows`): then Senior reviews the plan in its own turn,
+which reads the plan's changes against Plan and Progress, verifies every item
 outside Passes, runs the focused tests for what changed and no whole-project
 checks, and ends Done (every such item `- [x]`; it completes a plan without Passes items) or
-Needs you, or hands rework back to Junior. An item that names the whole run (a
+Needs you, or hands rework back to Junior. That turn is the plan's whole review
+step, and the plan's changes are reviewed once: when the plan's next unticked
+Passes item is its Review (`workPlanReviewPassItem`) and Genesis can run it,
+the review runs that pass in the same turn. One place decides it,
+`planReviewPass` (through `nextPlanPass`), each time the review's message is
+composed (`prepareFollowup`, and admission's `reviewReply`), and records it on
+the request (`reviewPass`, read through `assistantPlanReviewPass`, only at the
+review stage). Such a turn (`assistantPlanReviewMessage`, its display message
+"Senior reviews the plan and runs its Review pass.") renders Genesis's review
+task with Genesis's Review request word for word as its last paragraph, so
+Genesis's ledger and scope see that pass's run, covers the session's connected
+copies as a pass's turn does, and is told to full-tick the Review item too; its
+Done is refused until every item outside Passes and that Review item are
+`- [x]` (`refuseUnfinishedReview`: `vibe64_assistant_workflow_plan_incomplete`
+for open items, `vibe64_assistant_workflow_review_pass_unticked` for the Review
+item alone), and a turn that ends without reporting moves the plan on only on
+the same two ticks (`reviewPassTicked` in `planFinishedDuringRequest`). Every
+later pass then runs in its own turn. A plan with no Review next, or one Genesis
+can't run, keeps the review alone (`ASSISTANT_PLAN_COMPLETION_MESSAGE`, no
+Genesis task, no pass), and its Review, if any, runs later as its own pass. A
+request already in a Review pass goes on as that pass; one whose review was
+composed before this rule (no `reviewPass`) is validated as a review alone, so
+its plan's Review runs once more as its own pass. An item that names the whole run (a
 plan made before this rule) is never ticked on focused tests: the review
 rewrites it, as a plan change, into what it proves, records in Progress that the
 run is offered once the plan is finished, and reports continue, since the
@@ -2786,12 +2808,16 @@ Work without a plan is not reviewed, deslopped or UI-passed automatically: the
 person asks for those checks from Passes or by typing the request, and they run
 in a small plan of their own. The one automatic turn after implementation is
 Senior's review of the plan, and only when an involved plan is still active
-after Auto's Junior implemented it; it is not a pass and runs no pass.
+after Auto's Junior implemented it; it runs the plan's Review pass in the same
+turn while Review is the plan's next pass, and no other pass.
 
 While a plan is open, the chat shows one status line above the composer
 (`workPlanStatusLine`), read from the plan itself: the plan summary's `step`
-(`workPlanStep`: implementing the first item not built, Senior review, the next
-pass and its place among the plan's passes, or completed), unless the chat's
+(`workPlanStep`: implementing the first item not built, Senior review, with
+the plan's Review pass while that is its next pass ("Plan: Senior review and
+Review pass", one step, until the items and the Review item are ticked; a
+request already running that Review as its own pass reads as that pass), the
+next pass and its place among the plan's passes, or completed), unless the chat's
 routing request waits for the person's answer or shows questions (needs you,
 with their number), waits for Implement plan, or otherwise waits for Continue. A waiting
 line names the one workflow action the routing notice offers
@@ -2902,13 +2928,15 @@ goal keeps its own flow, and an item still open with a question waits for the
 person as before. Routing skips the wait for the person's answer for Vibe64's
 own handoff, which then runs as Junior's would: a Senior chat's plan already at
 its passes goes on to them (`planFinishedDuringRequest`); otherwise the review
-stage is Senior's review of the plan (`ASSISTANT_PLAN_COMPLETION_MESSAGE`, on
-Senior in a Senior chat too, which `planReview` marks, with no Genesis review
-task). It verifies and ticks every item, takes the question the turn asked as
+stage is Senior's review of the plan (on Senior in a Senior chat too, which
+`planReview` marks: `ASSISTANT_PLAN_COMPLETION_MESSAGE` with no Genesis review
+task, or, while the plan's next pass is its Review, `assistantPlanReviewMessage`
+running that pass in the same turn, as in Auto). It verifies and ticks every item, takes the question the turn asked as
 its own, and asks what can't be proven in the session as numbered Needs you
 questions with a recommended answer, in its reply and in Progress; whether to
 run the passes or save is never one. A Senior chat's review that ends without
-reporting moves on as its implementation turn would. A Junior chat runs no
+reporting moves on as its implementation turn would, once it ticked the Review
+item too when it ran that pass. A Junior chat runs no
 Senior turn, so its built plan waits for Senior.
 
 Every workflow turn's instructions (`assistantWorkflowInstructions`, composed
@@ -2935,7 +2963,8 @@ workflow outcome command only in Auto's turns that report an outcome
 (`autoOutcome`: planning, implementation and review), never in Auto
 conversation or direct chats. Every claim that Vibe64 runs a plan's passes is
 true where it is made: the guidance says they run once Senior's review ends with
-every item outside Passes ticked and reports complete; a direct chat's outcome
+every item outside Passes ticked, and the Review item when it ran that pass,
+and reports complete; a direct chat's outcome
 instructions tell only a Senior chat's agent in Main chat's own requests
 (`afterPlan`) that its turn starts them, and Junior and Custom chats that theirs
 never do; and a goal's or lesson's request, which never starts them
@@ -3793,7 +3822,10 @@ plan's pass or Auto's Senior review of a plan that waits for them (a question,
 or a reported wait): admission's `waitingForReply` sends it straight back to
 that step on Senior. A review reply (`reviewReply`) is Senior's review of the
 plan with the person's message first and the review's own request after it, and
-renders no Genesis review task; its complete moves the plan on to its passes.
+renders no Genesis review task, unless the review runs the plan's Review pass
+(`planReviewPass`, decided again at admission): then Genesis's Review request
+follows last and the turn renders that pass's task. Its complete moves the plan
+on to its passes.
 Numbered question labels and their suggested choices use the shared inline
 Markdown renderer, preserving bold text, code, and links without interpreting
 raw HTML. Their file links use the same source-editor navigation as prose.
@@ -5152,7 +5184,8 @@ sends replaces it like any unsent handoff, and nothing starts the step afterward
 The turn end itself is never lost to a busy lock: in Main chat, `exclusiveAtTurnEnd` queues again for the session's
 lock after the usual wait, until it runs or routing closes, as `exclusiveAfterWrites` already did behind a Save or
 Update, so no page has to reconcile the session for the request's next step to start. The chat's plan line reads
-"Plan: Senior review starts when this answer ends" (or the item or pass) for an owed step that is not stopped.
+"Plan: Senior review starts when this answer ends" (or the item or pass; "Senior review and Review pass" for a
+review that runs the plan's Review, as the owed notice names it too) for an owed step that is not stopped.
 Focused evidence: `assistantPlanReviewOvertaken.test.js`, `planStatusLine.unit.test.js`.
 
 ## Source-less learning uses the same native Main owners

@@ -237,6 +237,12 @@ const assistantWorkflowRole = (request) => request.stage === "pass" && request.m
  */
 const assistantPlanPass = (request) => request?.stage === "pass" && request.pass || null;
 /**
+ * The Review pass Senior's review of the plan runs in the same turn (stage review): its Genesis id and title, its
+ * Passes item and Genesis's request for it, decided when the review is prepared (planReviewPass); null for a review
+ * that runs alone, and for any other turn.
+ */
+const assistantPlanReviewPass = (request) => request?.stage === "review" && request.reviewPass || null;
+/**
  * The routed message and its automatic follow-up, the turns this request sent.
  */
 const assistantWorkflowMessageIds = (request) => [request?.messageId, request?.followup?.messageId].filter(Boolean);
@@ -405,14 +411,16 @@ function connectedPassScope(names) {
  * @param {string} mode the role that works
  * @param {string} message
  * @param {{ planInstructions?: string, intent?: string, browserReview?: boolean, rework?: "junior" | "self" | "report",
- *   connected?: string[] }} [options]
+ *   connected?: string[], runsPass?: boolean }} [options]
  *   rework: where a review sends substantial rework. Auto's review hands it back to Junior,
  *   a direct chat's review (one upgraded in flight) returns to its own implementation, and a review outside
  *   a workflow reports it. connected: the names of the session's connected copies, which a pass's scope takes in.
+ *   runsPass: a turn of another role that runs a pass too (Senior's review of a plan running its Review pass), whose
+ *   scope takes them in as the pass's own turn's does.
  */
 function assistantModePrompt(mode, message, options = {}) {
   let { planInstructions = "", intent = "", browserReview = false } = options;
-  const { rework = "junior", connected = [] } = options;
+  const { rework = "junior", connected = [], runsPass = false } = options;
   const direct = "Work directly from the user's request and conversation, answering questions or implementing changes as requested. You may edit application files when requested. Make ordinary local choices using established project patterns, ask about unresolved scope or design decisions, preserve unrelated work, and verify changes with relevant checks.";
   const instructions = {
     custom: direct,
@@ -484,11 +492,11 @@ function assistantModePrompt(mode, message, options = {}) {
         "If work remains, lead with Implementation incomplete and name the exact blocker and unfinished scope; never open with Done for partial implementation. " +
         (mode === "senior"
           ? "When this request implements a plan, verify every item outside its Passes section and full-tick it; then, when the plan has Passes items, leave it active and report complete with the plan's revisions: Vibe64 then runs them; otherwise complete the plan yourself with the plan helper. Leave it active with the gaps in Progress while any remain. "
-          : "When this request implements a plan, leave the plan active: Senior reviews it in its own turn after yours; do not request permission for that turn. ") +
-        "The plan's Passes section lists the passes Vibe64 runs after Senior's review, each in its own turn; never start a pass on your own in this turn.";
+          : "When this request implements a plan, leave the plan active: Senior reviews it in its own turn after yours, running the plan's Review pass in that turn when Review is its next pass; do not request permission for that turn. ") +
+        "The plan's Passes section lists the passes Vibe64 runs, each in its own turn after Senior's review (a Review first in the list runs in Senior's review turn); never start a pass on your own in this turn.";
       break;
   }
-  if (PASS_TURNS.includes(intent || mode) && connected.length) instruction += ` ${connectedPassScope(connected)}`;
+  if ((PASS_TURNS.includes(intent || mode) || runsPass) && connected.length) instruction += ` ${connectedPassScope(connected)}`;
   if (!planInstructions && intent !== "conversation") {
     planInstructions = "This direct request is independent of the current Auto plan unless the user explicitly refers to it. Senior may use vibe64-helper plan to manage it; Junior may update Progress and existing checklist ticks after reading both documents, never change scope or mark the plan completed.";
   }
@@ -546,9 +554,9 @@ function assistantWorkflowInstructions(state, { autoSave = false } = {}) {
     `Auto workflow stage: ${state.stage}. The workflow remains Working until an explicit outcome is processed; a native turn ending does not finish the task.`,
     "Use vibe64-helper plan read to obtain workflow.messageId, workflow.turnId, workflow.stage and BOTH Plan and Progress. This read works even without a plan. Read all pages when a plan is involved.",
     "Before your final response, report one outcome through vibe64-helper plan outcome with JSON on stdin: {messageId, turnId, stage, decision, explanation, progress, expectedRevision, expectedProgressRevision}. Use the exact workflow identity from the read. decision is continue, handoff, wait, or complete; explanation names concrete evidence or the exact blocker; progress is true only for actual new work or verification. Supply paired revisions only for the plan involved in this task; leave unrelated plans unchanged. The outcome only informs Vibe64: the person sees your final response, never your reasoning or tool calls, so put your complete reply, including any question, in your final response.",
-    "continue keeps this stage and agent when authorised work remains. handoff from implementation reports the requested work finished: when Junior implemented an involved plan, Senior then reviews the plan in its own turn; otherwise the work ends there. During Senior's review of a plan, handoff returns substantial necessary rework to Junior. If explicitly selected Junior is reviewing, handoff requests Senior verification. Senior must save the technical plan and evidence for rework before handoff, preserving the agreed outcome and completed work. A changed product requirement needs the person's decision.",
+    "continue keeps this stage and agent when authorised work remains. handoff from implementation reports the requested work finished: when Junior implemented an involved plan, Senior then reviews the plan in its own turn, which also runs the plan's Review pass when Review is its next pass; otherwise the work ends there. During Senior's review of a plan, handoff returns substantial necessary rework to Junior. If explicitly selected Junior is reviewing, handoff requests Senior verification. Senior must save the technical plan and evidence for rework before handoff, preserving the agreed outcome and completed work. A changed product requirement needs the person's decision.",
     "wait retains this stage for a real blocker, a required user decision, or an explicit pause. A clarification or status question is not a stop: incorporate it and continue. An explicit Stop remains respected. A finished planning-only request waits for authorisation to execute; it must not start implementation itself. A final reply that asks the person a numbered question always waits for their answer, whatever outcome you report.",
-    "complete is Senior-only. When a plan is involved, first verify every item outside its Passes section and full-tick it; when the plan has Passes items, leave it active, otherwise explicitly complete it using the plan helper; then report complete with the returned revisions. Without a plan, complete finishes a review or work that changed no files; finished implementation that changed files reports handoff. Do not archive the plan: once your turn ends, Vibe64 runs the plan's Passes items, each in its own turn, then completes and archives the plan.",
+    "complete is Senior-only. When a plan is involved, first verify every item outside its Passes section and full-tick it, and, when your review runs the plan's Review pass, full-tick that Review item too; when the plan has Passes items, leave it active, otherwise explicitly complete it using the plan helper; then report complete with the returned revisions. Without a plan, complete finishes a review or work that changed no files; finished implementation that changed files reports handoff. Do not archive the plan: once your turn ends, Vibe64 runs the plan's Passes items, each in its own turn, then completes and archives the plan.",
     "For incomplete implementation use continue, not handoff. Browser and visual checks assigned to Senior are an expected handoff. During Senior's check, unfinished checks use continue; necessary implementation rework uses handoff; genuine blockers use wait. Do not ask the person to request the next authorised stage. Never start Deslop, a UI pass or another pass on your own: Vibe64 runs the plan's Passes items, and the passes the person asks for join the plan's Passes.",
     ...(state.stage === "implementation" ? [
       "Implement a plan's items in the plan's order: do one earlier only when the plan says another item depends on it, and record why in Progress. The plan stays in Implementation until every item outside its Passes is built: report handoff only then, and Vibe64 refuses it before. " +
@@ -614,11 +622,13 @@ function assistantRoutingStatusLabel(request) {
   const selection = request.assignments?.[assistantWorkflowRole(request)];
   const recipient = selection ? vibe64AssistantSelectionLabel(selection) : "";
   const pass = assistantPlanPass(request);
+  const reviewPass = assistantPlanReviewPass(request);
   // A direct chat's turn may only answer, so it is named by its agent until it finishes.
   const stage = pass ? pass.title : assistantRunsWholeChecks(request) ? WHOLE_CHECKS_LABEL : (request.mode === "auto" || request.stage === "review") && {
     planning: "Planning",
     implementation: "Implementing",
-    review: "Reviewing"
+    // Senior's review of the plan running its Review pass is one step, named as one.
+    review: reviewPass ? `Reviewing the plan and its ${reviewPass.title} pass` : "Reviewing"
   }[request.stage] || assistantModeLabel(request.resolvedMode);
   if (request.delivery === "uncertain") return `Delivery unconfirmed · ${recipient}`;
   if (request.status === "waiting") return request.stopped ? "Paused at your request." : `${stage} waiting · ${recipient}`;
@@ -678,6 +688,7 @@ export {
   assistantWorkflowStateIsSupported,
   assistantWorkflowRole,
   assistantPlanPass,
+  assistantPlanReviewPass,
   assistantWorkflowMessageIds,
   routingError,
   upgradeRequired,

@@ -3,6 +3,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { readWorkPlan } from "./assistantWorkPlan.js";
+import { workPlanLastPass } from "../shared/assistantWorkPlan.js";
 import {
   assistantModeLabel,
   assistantPlanPass,
@@ -11,10 +12,11 @@ import {
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantRunsWholeChecks } from "@local/vibe64-runtime/shared/assistantWholeChecks";
 import {
-  ASSISTANT_PLAN_COMPLETION_MESSAGE,
-  ASSISTANT_SENIOR_VERIFICATION_MESSAGE
+  ASSISTANT_SENIOR_VERIFICATION_MESSAGE,
+  assistantPlanReviewMessage
 } from "@local/vibe64-runtime/shared/assistantFinishing";
 import { STATE_KEY, failure, usesWorkPlan, followupConversation } from "./assistantRoutingRequests.js";
+import { planReviewPass } from "./planPasses.js";
 import { ASSISTANT_PLAN_CHANGE_MESSAGE, ASSISTANT_PLAN_HANDOFF_MESSAGE } from "./assistantPlanHandoff.js";
 
 /** @typedef {import("./types.js").SessionAgentManager} SessionAgentManager */
@@ -28,11 +30,14 @@ import { ASSISTANT_PLAN_CHANGE_MESSAGE, ASSISTANT_PLAN_HANDOFF_MESSAGE } from ".
  * @param {AssistantRoutingState} dependencies.routingState
  * @param {SessionAgentManager} dependencies.agent
  * @param {PublishSessionChanged} dependencies.publish
+ * @param {typeof import("@local/vibe64-genesis/server").listGenesisPasses} dependencies.listPasses The passes Genesis
+ *   offers for the session's source, read when Senior's review of a plan is prepared, for the Review pass it runs.
  */
 function createAssistantRoutingRecords({
   routingState,
   agent,
-  publish
+  publish,
+  listPasses
 }) {
   function mark(messageId, stage) {
     const timing = routingState.timings.get(messageId);
@@ -122,7 +127,9 @@ function createAssistantRoutingRecords({
 
   /**
    * The request's next automatic turn: a plan's pass sends Genesis's request for its Passes item,
-   * word for word, so Genesis recognises it as that pass's run;
+   * word for word, so Genesis recognises it as that pass's run, and so does Senior's review of a plan
+   * for the Review pass it runs in the same turn (planReviewPass, decided again each time the review
+   * is prepared), as the message's last paragraph;
    * Senior's planning turn after a plan handoff writes the plan from the request and the conversation;
    * every other stage continues the request's own work.
    */
@@ -135,9 +142,15 @@ function createAssistantRoutingRecords({
     // Auto's Senior reviews a plan Junior implemented, and a Senior chat's its own built plan; without one it verifies
     // a review.
     const checksPlan = stage === "review" && (state.mode === "auto" || state.planReview === true) && state.planInvolved;
+    const reviewPass = checksPlan ? await planReviewPass(context, plan, listPasses) : null;
+    if (reviewPass) state.reviewPass = reviewPass;
+    else delete state.reviewPass;
     let displayMessage = stage === "planning" ? "Continue planning." : "Continue implementation.";
     if (handoff) displayMessage = handoff.implementing ? "Senior changes the plan." : "Senior makes the plan.";
-    if (stage === "review") displayMessage = checksPlan ? "Senior reviews the plan." : `Continue ${reviewer} review.`;
+    if (stage === "review") {
+      displayMessage = !checksPlan ? `Continue ${reviewer} review.`
+        : reviewPass ? `Senior reviews the plan and runs its ${reviewPass.title} pass.` : "Senior reviews the plan.";
+    }
     let lead = "Continue the authorised work from its current state; preserve completed work and do not reduce scope.";
     // Senior changed the plan being implemented: the implementation goes on from the plan as it now is.
     if (stage === "implementation" && state.resumeImplementation) {
@@ -149,18 +162,19 @@ function createAssistantRoutingRecords({
       lead = "Continue the full test suite from where the last turn stopped: it runs once in this request, never again, and what it found is fixed.";
     }
     if (handoff) lead = handoff.implementing ? ASSISTANT_PLAN_CHANGE_MESSAGE : ASSISTANT_PLAN_HANDOFF_MESSAGE;
-    if (stage === "review") lead = checksPlan ? ASSISTANT_PLAN_COMPLETION_MESSAGE : ASSISTANT_SENIOR_VERIFICATION_MESSAGE;
+    const last = Boolean(reviewPass) && workPlanLastPass(plan.text, reviewPass.item);
+    if (stage === "review") lead = checksPlan ? assistantPlanReviewMessage(reviewPass, { last }) : ASSISTANT_SENIOR_VERIFICATION_MESSAGE;
     const previous = handoff
       ? `The previous turn (${assistantModeLabel(handoff.role)}) handed this request to Senior and wrote no plan.`
       : `Previous outcome: ${state.outcome?.explanation || "The previous turn was interrupted or ended without a valid outcome."}`;
     const message = pass ? pass.request : [lead, `Original request: ${state.input.message}`,
-      `Accepted steering: ${JSON.stringify(state.steering || [])}`, previous].join("\n\n");
+      `Accepted steering: ${JSON.stringify(state.steering || [])}`, previous, ...(reviewPass ? [reviewPass.request] : [])].join("\n\n");
     state.followup = {
       messageId: randomUUID(),
       planRevision: plan?.revision || null,
       ...await followupConversation(context.runtime.store, context.session.sessionId),
       // A turn resumed after an interruption leads with Vibe64's note of what interrupted it; a pass's own
-      // request stays the message's last paragraph.
+      // request, the Review pass's in Senior's review too, stays the message's last paragraph.
       displayMessage: pass ? pass.request : resumeNote ? "Continue after the interruption." : displayMessage,
       message: resumeNote ? `${resumeNote}\n\n${message}` : message,
       ...(resumeNote ? { resume: true } : {})

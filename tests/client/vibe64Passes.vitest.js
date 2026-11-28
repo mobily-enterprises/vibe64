@@ -301,8 +301,8 @@ it("Main chat's Passes tick the passes each new plan's Passes start with: Review
   const menu = mount(Vibe64PassesMenu, { passes: state, session: mainChat(), sessionsApiPath: "/api/sessions" });
   expect(menu.afterPlanShown).toBe(true);
   expect(menu.afterPlanChangeable).toBe(true);
-  expect(menu.AFTER_PLAN_NOTE).toBe("After a plan: each new plan's Passes section starts with the ticked passes, which check the plan's changes, " +
-    "each in its own turn, once Senior has reviewed the plan. To change one plan's passes, change that plan.");
+  expect(menu.AFTER_PLAN_NOTE).toBe("After a plan: each new plan's Passes section starts with the ticked passes, which check the plan's changes: " +
+    "Review in Senior's review of the plan, the others each in its own turn after it. To change one plan's passes, change that plan.");
   expect(menu.afterPlan).toEqual(["review", "security-pass", "data-pass", "quality-pass", "ui-pass", "deslop"]);
   // The mandatory pair is ticked and can't be unticked: its tick is disabled, and nothing is sent.
   expect(["review", "security-pass"].filter(menu.mandatory)).toEqual(["review", "security-pass"]);

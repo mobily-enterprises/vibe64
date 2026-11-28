@@ -2,7 +2,7 @@ import { parseWorkPlanLines, workPlanAtPasses, workPlanPassItems, workPlanScope,
 import { readWorkPlan, manageWorkPlan } from "./assistantWorkPlan.js";
 import { rememberAfterPlanBase } from "./afterPlanBase.js";
 import { nextPlanPass } from "./planPasses.js";
-import { assistantRoutingOutcomeNotice, assistantWorkflowRole } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantPlanReviewPass, assistantRoutingOutcomeNotice, assistantWorkflowRole } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
   assistantAutoSaveNotice,
   assistantPlanCompletionFollows,
@@ -43,16 +43,30 @@ const readablePlan = context => readWorkPlan(context).catch(() => null);
  * only for the agreed plan with every item outside Passes proven), so a plan an earlier review
  * left at its passes moves on too. A turn that only replies leaves a plan found there as it is: the
  * person may have stopped its passes. Only Senior's review brings a plan to its passes: Junior's
- * ticks leave it for that review.
+ * ticks leave it for that review, and a review that runs the plan's Review pass brings it there only
+ * once that pass's item is ticked too (reviewPassTicked).
  * @param {object} request the saved routing request
  * @param {{ status: string, revision: string, text: string } | null} plan the current plan
  */
 function planFinishedDuringRequest(request, plan) {
+  const atPasses = workPlanAtPasses(plan) && reviewPassTicked(request, plan);
   const reviewed = request?.planInvolved === true && request.outcome?.decision === "complete" &&
-    request.outcome.turnId === request.turnId && workPlanAtPasses(plan);
+    request.outcome.turnId === request.turnId && atPasses;
   return Boolean(request?.afterPlan) && Boolean(plan) &&
-    (plan.status === "completed" || workPlanAtPasses(plan) && assistantWorkflowRole(request) === "senior") &&
+    (plan.status === "completed" || atPasses && assistantWorkflowRole(request) === "senior") &&
     (reviewed || request.afterPlan.planAtAdmission?.revision !== plan.revision);
+}
+
+/**
+ * Whether Senior's review that runs the plan's Review pass in the same turn (request.reviewPass) has full-ticked that
+ * pass's Passes item; true for any other request. With every item outside Passes proven, it is what makes that review
+ * Done: one rule for a reported complete (refuseUnfinishedReview) and a turn that moves the plan on without one.
+ * @param {object} request the saved routing request
+ * @param {{ text: string } | null} plan the current plan
+ */
+function reviewPassTicked(request, plan) {
+  const reviewPass = assistantPlanReviewPass(request);
+  return !reviewPass || workPlanPassItems(plan?.text || "").some((item) => item.text === reviewPass.item && item.checked);
 }
 
 /**
@@ -73,6 +87,37 @@ function refusePlanningOutcome(state, input) {
     throw failure(message, "vibe64_assistant_workflow_planning_plan_at_passes");
   }
   throw failure("Planning alone does not authorise implementation or plan completion.", "vibe64_assistant_workflow_planning_outcome_refused");
+}
+
+/**
+ * Refuses Senior's complete on a plan its review step hasn't finished: the review is Done once every item of the exact
+ * agreed plan outside Passes is full-ticked (and a plan without Passes items completed), and, when it runs the plan's
+ * Review pass in the same turn (request.reviewPass), once that pass's Passes item is ticked too. Each refusal names
+ * what is still open.
+ * @param {object} state the saved routing request
+ * @param {{ status: string, text: string }} plan the current plan
+ */
+function refuseUnfinishedReview(state, plan) {
+  const scope = (text) => workPlanScope(text, { passes: false });
+  const reviewed = (plan.status === "completed" || workPlanAtPasses(plan)) && !(state.workPlan && scope(plan.text) !== scope(state.workPlan.text));
+  const reviewPass = assistantPlanReviewPass(state);
+  const passTicked = reviewPassTicked(state, plan);
+  if (reviewed && passTicked) return;
+  if (!reviewPass) {
+    const message = "Senior must verify and full-tick every item of the exact agreed plan outside its Passes, " +
+      "and explicitly complete a plan that has no Passes items, before completing the workflow.";
+    throw failure(message, "vibe64_assistant_workflow_plan_incomplete");
+  }
+  const item = `its Passes item “${reviewPass.item}”`;
+  if (!reviewed) {
+    const message = `This review runs the plan's ${reviewPass.title} pass too, and is Done once both are ticked: verify and full-tick ` +
+      `every item of the exact agreed plan outside its Passes${passTicked ? "" : `, and ${item} once everything in the pass's scope is fixed and proven`}, ` +
+      "then report complete.";
+    throw failure(message, "vibe64_assistant_workflow_plan_incomplete");
+  }
+  const message = `Every item outside the plan's Passes is proven, but this review runs the plan's ${reviewPass.title} pass too: ` +
+    `full-tick ${item} (- [x] ${reviewPass.item}) once everything in its scope is fixed and proven, then report complete.`;
+  throw failure(message, "vibe64_assistant_workflow_review_pass_unticked");
 }
 
 /**
@@ -190,15 +235,9 @@ function createAssistantRoutingOutcomes({
           "then report complete.";
         throw failure(message, "vibe64_assistant_workflow_pass_unticked");
       }
-      // Senior's review is Done once every item outside Passes is ticked: a plan with passes then
-      // moves on to them, and one without is completed by Senior.
-      const scope = (text) => workPlanScope(text, { passes: false });
-      if (!pass && involvesPlan && input.decision === "complete" && (!(plan.status === "completed" || workPlanAtPasses(plan)) ||
-          state.workPlan && scope(plan.text) !== scope(state.workPlan.text))) {
-        const message = "Senior must verify and full-tick every item of the exact agreed plan outside its Passes, " +
-          "and explicitly complete a plan that has no Passes items, before completing the workflow.";
-        throw failure(message, "vibe64_assistant_workflow_plan_incomplete");
-      }
+      // Senior's review is Done once every item outside Passes is ticked, and the Review item when it runs that pass:
+      // a plan with passes then moves on to the next, and one without is completed by Senior.
+      if (!pass && involvesPlan && input.decision === "complete") refuseUnfinishedReview(state, plan);
       if (involvesPlan && input.decision !== "complete" && plan.status !== "active") {
         throw failure("The involved plan is no longer active.", "vibe64_assistant_workflow_plan_inactive");
       }
@@ -334,7 +373,7 @@ function createAssistantRoutingOutcomes({
     }
     // The passes are this request's workflow, whatever its own turn was.
     Object.assign(state, { workflow: true, stage: "pass", planInvolved: true, steps: 0, stalledTurns: 0 });
-    for (const field of ["outcome", "awaitingAnswer", "passReply", "error"]) delete state[field];
+    for (const field of ["outcome", "awaitingAnswer", "passReply", "reviewPass", "error"]) delete state[field];
     state.pass = { id: next.id, title: next.title, item: next.item, request: next.request };
     if (next.problem) {
       state.pass = { title: next.title, item: next.item };

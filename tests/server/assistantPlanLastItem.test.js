@@ -40,7 +40,7 @@ function assertSeniorReview(f, sent, label) {
   assert.equal(f.sends.length, sent, `${label}: Senior's review follows`);
   const review = f.sends.at(-1);
   assert.equal(review.selection.modelId, f.assignments.senior.modelId, `${label}: on Senior`);
-  assert.match(review.input.message, /Senior review of the plan:/u);
+  assert.match(review.input.message, /Senior review of the plan(?: with its Review pass)?:/u);
   assert.match(review.input.message, /Verify EVERY checklist item outside the plan's Passes section/u);
   assert.match(review.input.message, /Each item whose proof can't run in this session .* ends as Needs you: a numbered question with a recommended answer, in your final reply and in Progress/u);
   assert.match(review.input.message, /Whether to run the passes, save or run the whole-project checks is never one: Vibe64 runs the passes, saves, and asks the person about the whole-project checks itself/u);
@@ -103,12 +103,13 @@ test("a question while an item is still open waits for the person's answer, as b
 
 // The same 09:45 case in a Senior chat, where it happened: Senior's turn half-ticked the last item, whose proof can't
 // run in the session, and asked whether to run the passes or save. Senior's review of the plan follows in the same
-// chat, as Auto's would, and once it full-ticks the items the plan's passes run.
+// chat, as Auto's would, and runs the plan's one pass, Review, in that turn: once it full-ticks the items and the
+// Review item, the plan is completed.
 const SENIOR_PLAN = "Status: active\n# Contact threads\n\nGroup each contact's messages into one thread.\n\n" +
   "- [x] Store contact threads\n- [x] List a contact's threads\n- [x] Reply in a thread\n- [ ] Move old messages into threads\n\n" +
   "## Technical details\nsrc/threads.js holds the store; src/migrate.js moves old messages.\n\n## Passes\n\n- [ ] Review: the plan's changes\n";
 
-test("in a Senior chat, every item built and the turn asking whether to run the passes or save, waiting or reporting nothing: Senior's review of the plan follows, then the passes", async (t) => {
+test("in a Senior chat, every item built and the turn asking whether to run the passes or save, waiting or reporting nothing: Senior's review of the plan follows, running the plan's Review pass", async (t) => {
   for (const ending of ["asks the person", "reports wait", "reports nothing"]) {
     const f = await fixture(t, { mode: "senior" }, { readyPlan: false, source: true });
     await publishPlanFixture(f.context, SENIOR_PLAN);
@@ -125,16 +126,20 @@ test("in a Senior chat, every item built and the turn asking whether to run the 
     if (ending === "reports wait") await reportOutcome(f, "wait", { involved: true, explanation: "Should I run the passes before saving, or save now?" });
     await f.service.afterTurn("session-1", end(f.state()), f.context);
     assertSeniorReview(f, 2, `Senior chat, ${ending}`);
-    assert.equal(f.sends[1].input.displayMessage, "Senior reviews the plan.");
-    assert.ok(!f.sends[1].input.genesisTask, "Senior's review of the plan is not Genesis's review task");
-    // Senior's review proves the last item and reports Done: the plan's passes run.
-    await plan({ operation: "write", text: (await readWorkPlan(f.context)).text.replace("- [~] Move", "- [x] Move"), ...await revisions() });
+    assert.equal(f.sends[1].input.displayMessage, "Senior reviews the plan and runs its Review pass.");
+    // The plan's one pass is Review: Senior's review runs it in the same turn, as Genesis's review task.
+    assert.equal(f.sends[1].input.genesisTask, "review");
+    assert.match(f.sends[1].input.message, /Review is the plan's last pass, so this step is the plan's last\. Before it ends Done/u);
+    // Senior's review proves the last item and the Review pass and reports Done: the plan is completed, no pass follows.
+    await plan({ operation: "write", text: (await readWorkPlan(f.context)).text.replace("- [~] Move", "- [x] Move")
+      .replace("- [ ] Review", "- [x] Review"), ...await revisions() });
     await reportOutcome(f, "complete", { involved: true });
-    f.tail = [{ user: { messageId: f.state().followup.messageId, text: "Senior reviews the plan." },
+    f.tail = [{ user: { messageId: f.state().followup.messageId, text: f.state().followup.displayMessage },
       assistant: { text: "Every item is proven." }, messages: [{ role: "assistant", text: "Every item is proven." }] }];
     await f.service.afterTurn("session-1", end(f.state()), f.context);
-    assert.equal(f.state().stage, "pass", `Senior chat, ${ending}: the passes follow`);
-    assert.equal(f.sends.length, 3);
+    assert.equal(f.state().status, "complete", `Senior chat, ${ending}: the plan is completed`);
+    assert.equal(await readWorkPlan(f.context), null, "and archived");
+    assert.equal(f.sends.length, 2, "no second review turn");
     // Senior was told to half-tick such an item and leave its question to the review, and never to ask about the
     // passes or Save.
     assert.match(f.sends[0].input.message, /An item built whose remaining proof can't run in this session \(a real phone, a suite only CI runs\) is half-ticked \(- \[~\]\) with what is unproven and why in Progress; never end your turn asking about it/u);

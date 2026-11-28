@@ -26,8 +26,9 @@ When you want those checks, ask for them: from the Passes list (**Review**,
 request in chat, such as **Deslop**, **UI pass** or **Run the Security and Data
 passes**. With a plan, Auto adds Senior's review of it: when Junior has
 implemented the plan and it is still active, Senior reviews it (see [When work
-is finished](#when-work-is-finished)). That review is not a pass and runs none;
-the plan's passes follow it.
+is finished](#when-work-is-finished)). That review also runs the plan's
+**Review** pass while Review is the plan's next pass, as one step, and no other
+pass; the plan's other passes follow it.
 
 Each chat keeps its own choices, so changing one chat's never changes
 another's.
@@ -76,13 +77,15 @@ desktop and mobile.
   plan's changes against the plan, verifies every item outside Passes, runs the
   focused tests for what changed, fixes what it finds within the plan, and
   either ticks every item (**Done**) or asks you numbered questions (**Needs
-  you**), or hands substantial rework back to Junior. No step of a plan runs the
+  you**), or hands substantial rework back to Junior. While **Review** is the
+  plan's next pass, the same turn runs it and ticks its item too, so the plan's
+  changes are reviewed once. No step of a plan runs the
   full test suite. A **Senior**
   chat reviews its own plan. A **Junior** or **Custom** chat never completes a
   plan: its work ends after its own turn, saved as usual, with the plan left
   active for Senior.
-- **Once Senior has reviewed the plan**: each item in its **Passes** section
-  runs in its own Senior turn, in the plan's order; after the last, Vibe64
+- **Once Senior has reviewed the plan**: each other item in its **Passes**
+  section runs in its own Senior turn, in the plan's order; after the last, Vibe64
   completes and archives the plan and **Save** runs last. A plan without passes
   is completed by Senior's review. See [A plan's passes](passes.md#a-plans-passes).
 - **Once the plan is finished**: Vibe64 asks you once: **Run the full test

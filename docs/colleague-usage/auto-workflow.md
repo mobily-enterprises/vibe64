@@ -68,11 +68,12 @@ outcomes:
   explicit pause. A status question or clarification is incorporated into the
   ongoing work; it does not abandon review.
 - **Complete** is available only to Senior. Senior's review is done once every
-  item outside the plan's Passes section is proven: a plan with passes then
-  moves on to them, each in its own Senior turn (see [A plan's
-  passes](passes.md#a-plans-passes)), and after the last one Vibe64 completes
-  and archives the plan and saves the work; Senior completes a plan without
-  passes itself.
+  item outside the plan's Passes section is proven and, when the review ran the
+  plan's Review pass (it does while Review is the plan's next pass), the Review
+  item is ticked too: a plan with passes then moves on to the others, each in
+  its own Senior turn (see [A plan's passes](passes.md#a-plans-passes)), and
+  after the last one Vibe64 completes and archives the plan and saves the work;
+  Senior completes a plan without passes itself.
 
 Once you approve a plan, it runs to the end. Junior works its items in the
 plan's order, doing one earlier only when the plan says another depends on it,
@@ -94,8 +95,9 @@ starts a fresh allowance of automatic steps. The line above the message box
 says where the plan is; see [The plan's status line](plan-steps.md#the-plans-status-line).
 
 After implementation, Auto adds Senior's review only in one case: Junior
-implemented an involved plan and that plan is still active. That review is not a
-pass and runs none; the plan's own Passes section holds its passes. Work done
+implemented an involved plan and that plan is still active. That review runs
+the plan's Review pass in the same turn while Review is the plan's next pass,
+and no other pass; the plan's own Passes section holds its passes. Work done
 without a plan is not reviewed, deslopped or UI-passed automatically: it ends
 with its implementation, saved when Automatically save changes is on. Ask for
 those checks when you want them, from [Passes](passes.md) or by typing them in
@@ -116,7 +118,8 @@ nothing. Your reply is a new request that Router routes as usual, so answering
 A reply to a plan's pass that asked you questions goes straight back to that
 pass instead, on Senior, without Router. So does a reply to Senior's review of a
 plan that asked you questions or waited for you: the review goes on with your
-answer, and once it finds every item done, the plan's passes run. At Planning with an active saved plan,
+answer (and with the Review pass it runs), and once it finds every item done,
+the plan's other passes run. At Planning with an active saved plan,
 **Implement plan** remains available.
 
 The agent's concrete explanation appears as an ordinary **Status** message in
@@ -178,8 +181,9 @@ Another turn can come before an automatic step, such as Senior's review of a
 built plan: a message from another session gets its answer, or a turn is still
 running, or a question or approval is pending when the step is ready. The step
 is then not dropped. The notice says, for example, **Senior's review starts by
-itself once the current turn ends**, and the plan's line says **Plan: Senior
-review starts when this answer ends**. When that turn ends, Vibe64 decides the
+itself once the current turn ends** (**Senior's review and Review pass starts
+by itself …** when the review runs the plan's Review), and the plan's line says
+**Plan: Senior review starts when this answer ends**. When that turn ends, Vibe64 decides the
 step again from the conversation and plan as they are then and starts it, with
 no page open. If the server restarted first, it does so as it starts up again.
 The step waits for you instead when:
@@ -209,11 +213,13 @@ continuation through its existing actions. An explanation or offer alone does no
 authorise another turn. Colleague's watches treat Waiting as needing attention.
 
 In Auto, only Senior reviews a plan, even when both roles use the same model.
-When Junior implemented it, Senior reviews it in a turn of its own, which runs no
-pass. Junior's implementation turns before it end by saying what changed and
+When Junior implemented it, Senior reviews it in a turn of its own, which also
+runs the plan's Review pass while Review is its next pass (**Senior reviews the
+plan and runs its Review pass.**), so the plan's changes are reviewed once, and
+runs no other pass. Junior's implementation turns before it end by saying what changed and
 what was checked, without asking you to try or publish the work; see [How each
 turn ends](chat-settings.md#how-each-turn-ends). Once Senior has reviewed the
-plan, each item in its Passes section runs in its own Senior turn, over the
+plan, each other item in its Passes section runs in its own Senior turn, over the
 plan's changes, with a notice such as **Security pass started: the plan's next
 pass (Security pass: the plan's changes)**; after the last one the plan is
 completed and archived and **Automatically save changes** runs **Save**. A new

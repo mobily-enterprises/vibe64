@@ -1,6 +1,6 @@
 import { readWorkPlan } from "./assistantWorkPlan.js";
 import { workPlanAtPasses } from "../shared/assistantWorkPlan.js";
-import { applyPlanPasses, listSessionPasses, nextPlanPass, passesListedNote, readPassRequest } from "./planPasses.js";
+import { applyPlanPasses, listSessionPasses, nextPlanPass, passesListedNote, planReviewPass, readPassRequest } from "./planPasses.js";
 import { sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import {
   assistantRoutingRequestCanBeReplaced,
@@ -532,9 +532,10 @@ function createAssistantRoutingAdmission({
         if (hasPlanRevision && (!plan || plan.status !== "active" || plan.revision !== input.planRevision)) {
           throw failure("The active plan changed. Read the current plan before sending your request.", "vibe64_assistant_routing_plan_changed");
         }
-        // The reply to Senior's waiting review of the active plan: that review, with the reply.
+        // The reply to Senior's waiting review of the active plan: that review, with the reply and its Review pass (planReviewPass).
         const reviewReply = waitingReview && mode === "auto" && finishes && !planPass && !planPassNote && !wholeChecks.runs &&
           !hasPlanRevision && plan?.status === "active";
+        const reviewPass = reviewReply ? await planReviewPass(context, plan, listPasses) : null;
         let resolvedMode = mode;
         if (explicitTask || planPass || planPassNote || wholeChecks.runs || reviewReply) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
         else if (mode === "auto") resolvedMode = "";
@@ -563,6 +564,7 @@ function createAssistantRoutingAdmission({
           ...(planPass ? { pass: planPass } : {}),
           ...(answering ? { passReply: true } : {}),
           ...(reviewReply ? { reviewReply: true } : {}),
+          ...(reviewPass ? { reviewPass } : {}),
           ...(planPassNote ? { planPassNote } : {}),
           reason: explicitTask || planPass || reviewReply ? "review" : planPassNote ? "conversation" : wholeChecks.runs ? "implementation" : "",
           afterPlan: finishes && !wholeChecks.runs

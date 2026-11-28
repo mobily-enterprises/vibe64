@@ -205,7 +205,9 @@ a pass is stopped, needs you or can't run, the plan stays current and active at
 that pass, and nothing is saved automatically.
 
 Senior's review of a plan runs only when Junior implemented it in Auto and the
-plan is still active afterwards; it is not a pass and runs no pass. Work done
+plan is still active afterwards, or in a Senior chat on its own built plan; it
+runs the plan's Review pass in the same turn while Review is the plan's next
+pass, and no other pass. Work done
 without a plan is not reviewed, deslopped or UI-passed automatically: ask for
 those from [Passes](passes.md) or by typing the request in chat, and they run in
 a small plan of their own.

@@ -201,11 +201,12 @@ const runDate = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 // A deep run reads every file: say what that costs.
 const DEEP_NOTE = "Deep reads every file: it takes much longer and uses far more of your AI's allowance.";
 const SERIES_NOTE = "Tick passes and choose one run for all of them. They join the plan's Passes and run one after another, each in its own turn.";
-const AFTER_PLAN_NOTE = "After a plan: each new plan's Passes section starts with the ticked passes, which check the plan's changes, " +
-  "each in its own turn, once Senior has reviewed the plan. To change one plan's passes, change that plan.";
+const AFTER_PLAN_NOTE = "After a plan: each new plan's Passes section starts with the ticked passes, which check the plan's changes: " +
+  "Review in Senior's review of the plan, the others each in its own turn after it. To change one plan's passes, change that plan.";
 const RUN_NOTE = "A run starts a small plan of its own with that pass, which runs at once.";
 const RUN_IN_PLAN_NOTE = "A run joins this plan's Passes.";
-const PLAN_PENDING_NOTE = "These run once Senior has reviewed the plan.";
+// Senior's review of the plan runs the plan's Review in the same turn while it is the plan's next pass.
+const PLAN_PENDING_NOTE = "These run once Senior has reviewed the plan; a Review at the top runs within that review.";
 const STATE_WORDS = Object.freeze({ done: " ✓", running: ": running", "needs-you": ": needs you", paused: ": paused", blocked: ": can't run", waiting: ": waiting" });
 // The runs several passes can share, in the order the list offers them.
 const SERIES_RUNS = Object.freeze([
