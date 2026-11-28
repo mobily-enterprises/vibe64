@@ -332,13 +332,12 @@ const chatHold = computed(() => {
 });
 const routingMode = computed(() => assistantRoutingFromMetadata(props.session?.metadata)?.mode || "");
 // While a plan is open, one line says where it is: read from the plan itself, with the chat's waiting request and
-// questions, what holds the chat (a paused plan says the person's request is running), the workflow action its
-// notice offers (named as the notice names it, and whether it can be pressed now), and how many files changed since
-// the plan was last brought up to date when any did.
+// questions, the workflow action its notice offers (named as the notice names it, and whether it can be pressed now,
+// which depends on what holds the chat), and how many files changed since the plan was last brought up to date when
+// any did.
 const planStatusLine = computed(() => workPlanStatusLine(workPlanViewer.value?.step || null, {
   questions: agentActive.value ? 0 : numberedQuestions.value.length,
   request: routingRequest.value,
-  busy: chatHold.value,
   action: assistantRoutingNotice(routingRequest.value, { mode: routingMode.value, selection: props.session?.assistantSelection,
     busy: chatHold.value, pendingAction: routingActionSending.value }).action,
   freshness: workPlanViewer.value?.freshness || null

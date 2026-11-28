@@ -2780,15 +2780,19 @@ While a plan is open, the chat shows one status line above the composer
 (`workPlanStep`: implementing the first item not built, Senior review, the next
 pass and its place among the plan's passes, or completed), unless the chat's
 routing request waits for the person's answer or shows questions (needs you,
-with their number), waits for Implement plan, or is otherwise paused. A waiting
+with their number), waits for Implement plan, or otherwise waits for Continue. A waiting
 line names the one workflow action the routing notice offers
 (`assistantRoutingNotice`, which both read so they cannot disagree) by its exact
-label. A paused line first says what is paused: the item ("Paused: item 2 of 6,
-Replies join their thread"), Senior review, changing the plan, or the pass with
-its Passes item's scope (the step's `scope`: "Paused: UI pass (whole app)").
-While the assistant's turn holds the chat (`busy`, the chat's hold the notice
-also takes), the person's own request is what runs, and the line says so ("Your
-request is running now"). Then the action: "Continue implementation to resume"
+label. Only a stopped request (the person's Stop) reads as paused; any other
+waits ("Waiting: …"), with its reason in the notice's Details. Either line first
+says what waits: the item ("Paused: item 2 of 6, Replies join their thread"),
+Senior review, changing the plan, or the pass with its Passes item's scope (the
+step's `scope`: "Waiting: UI pass (whole app)"). It never says whose turn runs
+meanwhile: a message the person sends replaces a waiting request, or joins the
+running turn as a steer, so a turn running beside one is not a request of
+theirs. A title its author ended with a full stop keeps one where the line goes
+on after it (`workPlanTitleInText`), as does the completed plan's archive
+notice. Then the action: "Continue implementation to resume"
 (or "Plan: ready, Implement plan to start") only while that button can be
 pressed; while an answer, a message being sent or a spoken message holds it,
 "Continue implementation is available when this answer ends" (or "once your

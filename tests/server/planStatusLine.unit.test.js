@@ -46,11 +46,12 @@ test("the chat's status line says where the plan is, or that it needs the person
   assert.equal(workPlanStatusLine(implementing, { questions: 1, request: waiting({ stopped: true }) }), "Plan: needs you (1 question)");
   assert.equal(workPlanStatusLine({ step: "pass", item: 2, items: 3, title: "Security pass" },
     { request: waiting({ stage: "pass", awaitingAnswer: true }) }), "Plan: needs you");
-  // A plan Senior planned waits for Implement plan; anything else waiting is paused, named by the action the chat offers.
+  // A plan Senior planned waits for Implement plan; anything else waits for the action the chat offers, by its name, and
+  // only a stopped one is paused.
   assert.equal(workPlanStatusLine(workPlanStep(plan(["- [ ] One thread per contact"])),
     { request: waiting({ stage: "planning" }), action: action("Implement plan") }), "Plan: ready, Implement plan to start");
   assert.equal(workPlanStatusLine(implementing, { request: waiting({ stage: "planning", resumeImplementation: true }),
-    action: action("Continue planning") }), "Paused: changing the plan. Continue planning to resume");
+    action: action("Continue planning") }), "Waiting: changing the plan. Continue planning to resume");
   assert.equal(workPlanStatusLine(implementing, { request: waiting({ stopped: true }), action: action("Continue implementation") }),
     "Paused: item 2 of 3, Replies join their thread. Continue implementation to resume");
   assert.equal(workPlanStatusLine({ step: "completed" }, { request: waiting({}) }), "Plan: completed");
@@ -77,40 +78,40 @@ function action(label, fields = {}) {
   return { kind, label, enabled: true, waits: "", progress: "", ...fields };
 }
 
-test("a paused plan's line never tells the person to press an action they can't press, and names it as its button does", () => {
+test("a waiting plan's line never tells the person to press an action they can't press, and names it as its button does", () => {
   const implementing = workPlanStep(plan(work, passes));
-  const paused = { status: "waiting", stage: "implementation", delivery: "pending", followup: { messageId: "followup" } };
+  const waiting = { status: "waiting", stage: "implementation", delivery: "pending", followup: { messageId: "followup" } };
   // Seen on 25 Nov 2026: the plan's implementation paused while the assistant answered a question; the line said
   // "Plan: paused, Continue to resume" above a greyed-out Continue implementation.
-  assert.equal(workPlanStatusLine(implementing, { request: paused, busy: "turn",
+  assert.equal(workPlanStatusLine(implementing, { request: waiting,
     action: action("Continue implementation", { enabled: false, waits: "available when this answer ends" }) }),
-  "Paused: item 2 of 3, Replies join their thread. Your request is running now. Continue implementation is available when this answer ends");
-  assert.equal(workPlanStatusLine(implementing, { request: paused, busy: "message",
+  "Waiting: item 2 of 3, Replies join their thread. Continue implementation is available when this answer ends");
+  assert.equal(workPlanStatusLine(implementing, { request: waiting,
     action: action("Continue implementation", { enabled: false, waits: "available once your message is sent" }) }),
-  "Paused: item 2 of 3, Replies join their thread. Continue implementation is available once your message is sent");
+  "Waiting: item 2 of 3, Replies join their thread. Continue implementation is available once your message is sent");
   // Pressable, the line names the button exactly; pressed, it says the button's own progress.
-  assert.equal(workPlanStatusLine(implementing, { request: paused, action: action("Continue implementation") }),
-    "Paused: item 2 of 3, Replies join their thread. Continue implementation to resume");
-  assert.equal(workPlanStatusLine(implementing, { request: paused, action: action("Continue implementation", { enabled: false, progress: "Continuing…" }) }),
-    "Paused: item 2 of 3, Replies join their thread. Continuing…");
+  assert.equal(workPlanStatusLine(implementing, { request: waiting, action: action("Continue implementation") }),
+    "Waiting: item 2 of 3, Replies join their thread. Continue implementation to resume");
+  assert.equal(workPlanStatusLine(implementing, { request: waiting, action: action("Continue implementation", { enabled: false, progress: "Continuing…" }) }),
+    "Waiting: item 2 of 3, Replies join their thread. Continuing…");
   assert.equal(workPlanStatusLine({ step: "pass", item: 2, items: 3, title: "Security pass", scope: "the plan's changes" },
-    { request: { ...paused, stage: "pass" }, action: action("Continue the passes") }),
-  "Paused: Security pass (the plan's changes). Continue the passes to resume");
-  assert.equal(workPlanStatusLine(implementing, { request: { ...paused, delivery: "uncertain" }, action: action("Check delivery") }),
-    "Paused: item 2 of 3, Replies join their thread. Check delivery to resume");
+    { request: { ...waiting, stage: "pass" }, action: action("Continue the passes") }),
+  "Waiting: Security pass (the plan's changes). Continue the passes to resume");
+  assert.equal(workPlanStatusLine(implementing, { request: { ...waiting, delivery: "uncertain" }, action: action("Check delivery") }),
+    "Waiting: item 2 of 3, Replies join their thread. Check delivery to resume");
   // A plan waiting for Implement plan says so the same way while a turn holds it.
-  assert.equal(workPlanStatusLine(workPlanStep(plan(["- [ ] One thread per contact"])), { request: { ...paused, stage: "planning" },
+  assert.equal(workPlanStatusLine(workPlanStep(plan(["- [ ] One thread per contact"])), { request: { ...waiting, stage: "planning" },
     action: action("Implement plan", { enabled: false, waits: "available when this answer ends" }) }),
   "Plan: ready · Implement plan is available when this answer ends");
   // With no action on offer (a stopped request with nothing to resume, say), a message moves the plan on.
-  assert.equal(workPlanStatusLine(implementing, { request: { ...paused, stopped: true, followup: null } }),
+  assert.equal(workPlanStatusLine(implementing, { request: { ...waiting, stopped: true, followup: null } }),
     "Paused: item 2 of 3, Replies join their thread. Send a message to go on");
-  assert.equal(workPlanStatusLine(workPlanStep(plan(["- [ ] One thread per contact"])), { request: { ...paused, stage: "planning" } }),
-    "Paused: changing the plan. Send a message to go on");
+  assert.equal(workPlanStatusLine(workPlanStep(plan(["- [ ] One thread per contact"])), { request: { ...waiting, stage: "planning" } }),
+    "Waiting: changing the plan. Send a message to go on");
   // Behind its work, the count follows.
-  assert.equal(workPlanStatusLine(implementing, { request: paused, busy: "turn", freshness: { behind: true, changed: "2 files changed since" },
+  assert.equal(workPlanStatusLine(implementing, { request: waiting, freshness: { behind: true, changed: "2 files changed since" },
     action: action("Continue implementation", { enabled: false, waits: "available when this answer ends" }) }),
-  "Paused: item 2 of 3, Replies join their thread. Your request is running now. Continue implementation is available when this answer ends · " +
+  "Waiting: item 2 of 3, Replies join their thread. Continue implementation is available when this answer ends · " +
     "2 files changed since the plan's last update");
 });
 
@@ -156,30 +157,29 @@ test("a title its author ended with a full stop keeps one stop in every line tha
     action: action("Continue implementation") }), "Waiting: item 2 of 3, Why does sign-in fail? Continue implementation to resume");
 });
 
-test("a paused plan names what is paused: the pass and its scope, while the person's own request runs", () => {
+test("a waiting plan names what waits: the pass and its scope, while a turn runs too", () => {
   // Seen on 26 Nov 2026: "Plan: paused" while the person's request ran, with nothing saying it was the UI pass over
   // the whole app that waited.
   const ui = workPlanStep(plan(["- [x] One thread per contact"], ["- [ ] UI pass: whole app", "- [ ] Deslop: whole app"]));
   assert.deepEqual(ui, { step: "pass", item: 1, items: 2, title: "UI pass", scope: "whole app" });
-  const paused = { status: "waiting", stage: "pass", delivery: "pending", followup: { messageId: "followup" } };
+  const waiting = { status: "waiting", stage: "pass", delivery: "pending", followup: { messageId: "followup" } };
   const held = action("Continue the passes", { enabled: false, waits: "available when this answer ends" });
-  assert.equal(workPlanStatusLine(ui, { request: paused, busy: "turn", action: held }),
-    "Paused: UI pass (whole app). Your request is running now. Continue the passes is available when this answer ends");
-  assert.equal(workPlanStatusLine(ui, { request: paused, action: action("Continue the passes") }),
-    "Paused: UI pass (whole app). Continue the passes to resume");
+  assert.equal(workPlanStatusLine(ui, { request: waiting, action: held }),
+    "Waiting: UI pass (whole app). Continue the passes is available when this answer ends");
+  assert.equal(workPlanStatusLine(ui, { request: waiting, action: action("Continue the passes") }),
+    "Waiting: UI pass (whole app). Continue the passes to resume");
   // A section pass names its section; a pass item with no scope, its title alone.
   const section = workPlanStep(plan(["- [x] One thread per contact"], ["- [ ] Security pass: this section of the app: Billing"]));
-  assert.equal(workPlanStatusLine(section, { request: paused, busy: "turn", action: held }),
-    "Paused: Security pass (this section of the app: Billing). Your request is running now. " +
-    "Continue the passes is available when this answer ends");
+  assert.equal(workPlanStatusLine(section, { request: waiting, action: held }),
+    "Waiting: Security pass (this section of the app: Billing). Continue the passes is available when this answer ends");
   assert.equal(workPlanStatusLine({ step: "pass", item: 1, items: 1, title: "Visual identity", scope: "" },
-    { request: paused, action: action("Continue the passes") }), "Paused: Visual identity. Continue the passes to resume");
-  // The person's message being sent is not a running request; the button's own reason says when it can be pressed.
-  assert.equal(workPlanStatusLine(ui, { request: paused, busy: "message",
+    { request: waiting, action: action("Continue the passes") }), "Waiting: Visual identity. Continue the passes to resume");
+  // While the person's message is sent, the button's own reason says when it can be pressed.
+  assert.equal(workPlanStatusLine(ui, { request: waiting,
     action: action("Continue the passes", { enabled: false, waits: "available once your message is sent" }) }),
-  "Paused: UI pass (whole app). Continue the passes is available once your message is sent");
-  // A plan that is not paused keeps its own line.
-  assert.equal(workPlanStatusLine(ui, { request: { status: "working", stage: "pass" }, busy: "turn" }), "Plan: pass UI (1 of 2)");
+  "Waiting: UI pass (whole app). Continue the passes is available once your message is sent");
+  // A plan that is not waiting keeps its own line.
+  assert.equal(workPlanStatusLine(ui, { request: { status: "working", stage: "pass" } }), "Plan: pass UI (1 of 2)");
 });
 
 test("a plan behind its work never looks current: it says when it was last updated and how many files changed since", () => {

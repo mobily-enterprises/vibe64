@@ -1,4 +1,4 @@
-import { parseWorkPlanLines, workPlanAtPasses, workPlanPassItems, workPlanScope, workPlanStep } from "../shared/assistantWorkPlan.js";
+import { parseWorkPlanLines, workPlanAtPasses, workPlanPassItems, workPlanScope, workPlanStep, workPlanTitleInText } from "../shared/assistantWorkPlan.js";
 import { readWorkPlan, manageWorkPlan } from "./assistantWorkPlan.js";
 import { rememberAfterPlanBase } from "./afterPlanBase.js";
 import { nextPlanPass } from "./planPasses.js";
@@ -303,7 +303,7 @@ function createAssistantRoutingOutcomes({
     }
     await records.writeNotice(context, state, {
       messageId: `assistant-plan-archived:${state.turnId}`,
-      text: `Completed plan archived: ${plan.title}.\n\n[View plan history](#vibe64-plan-history)`
+      text: `Completed plan archived: ${workPlanTitleInText(plan.title)}.\n\n[View plan history](#vibe64-plan-history)`
     });
     await publish(context.session.sessionId, {
       reason: "work-plan-changed",

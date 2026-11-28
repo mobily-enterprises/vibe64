@@ -42,8 +42,8 @@ asking in chat), it runs to the end on its own; only a question for you or
   **Automatically save changes** is on. Then it asks you once: **Run the full
   test suite?**; see [The full test suite](full-test-suite.md).
 
-**Continue** resumes a paused plan from the plan as it now is, including after
-items changed while it was paused.
+**Continue** resumes a paused or waiting plan from the plan as it now is,
+including after items changed while it waited.
 
 ### The plan's status line
 
@@ -58,9 +58,10 @@ from the plan itself each time it changes:
 | **Plan: Senior review starts when this answer ends** | Another answer came before the plan's next step (here Senior's review; also **Plan: item 2 of 6, Replies join their thread, starts when this answer ends** or a pass): it starts by itself once that answer ends (see [Auto workflow](auto-workflow.md)) |
 | **Plan: pass Security (3 of 6)** | The plan is at its third pass of six |
 | **Plan: needs you (2 questions)** | The chat waits for your answers |
-| **Paused: item 2 of 6, Replies join their thread. Continue implementation to resume** | Paused; the line says what is paused (the item, **Senior review**, **changing the plan**, or a pass with its scope, such as **Paused: UI pass (whole app)**) and names the button above it, such as **Continue review**, **Continue the passes** or **Check delivery** |
-| **Paused: UI pass (whole app). Your request is running now. Continue the passes is available when this answer ends** | Paused while the assistant answers your own request; the button stays greyed out, with that reason beside it, until the answer ends |
-| **Paused: Senior review. Send a message to go on** | Paused with no button to resume it; your next message moves it on |
+| **Paused: item 2 of 6, Replies join their thread. Continue implementation to resume** | You stopped it (**Stop**); the line says what is paused (the item, **Senior review**, **changing the plan**, or a pass with its scope, such as **Paused: UI pass (whole app)**) and names the button above it, such as **Continue review**, **Continue the passes** or **Check delivery** |
+| **Waiting: item 2 of 6, Replies join their thread. Continue implementation to resume** | Nobody stopped it, but its next step didn't start; the notice above it says why (**Details**). It doesn't go on by itself: press the button the line names |
+| **Waiting: UI pass (whole app). Continue the passes is available when this answer ends** | The same while an answer is still running, which may be the assistant still working; the button stays greyed out, with that reason beside it, until the answer ends, and the plan still doesn't go on by itself after it |
+| **Paused: Senior review. Send a message to go on** | Paused (or **Waiting**) with no button to resume it; your next message moves it on |
 | **Plan: ready, Implement plan to start** | Senior made the plan; it waits for your go-ahead (during an answer: **Plan: ready · Implement plan is available when this answer ends**) |
 | **Plan: completed** | The plan is completed and not yet archived |
 

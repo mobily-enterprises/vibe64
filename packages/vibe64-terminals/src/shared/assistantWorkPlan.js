@@ -170,39 +170,56 @@ function workPlanFreshness(current, now = Date.now()) {
  * The chat's one line saying where an open plan is: its step, unless the chat's
  * request is waiting: for the person's answer (or questions the chat shows), for
  * another turn to end before its next step starts by itself, for Implement plan
- * before a planned plan starts, or paused. A paused plan says what is paused
- * (the item, Senior review, or the pass with its scope, such as "Paused: UI pass
- * (whole app)"), that the person's request is running while a turn holds the
- * chat, and names the workflow action the chat offers (`action`, the notice's
+ * before a planned plan starts, or for Continue. A stopped request (the person's
+ * Stop) pauses the plan ("Paused: …"); one that waits for Continue for any other
+ * reason, which the notice's Details give, says "Waiting: …". Either says what waits (the item,
+ * Senior review, or the pass with its scope, such as "Paused: UI pass (whole
+ * app)") and names the workflow action the chat offers (`action`, the notice's
  * own) by its exact label: what to press when it can be pressed, when it
  * becomes available while other work holds it, or that it is starting; with no
- * action, a message moves it on. A plan behind its work says so: how many files
- * changed since its last update.
+ * action, a message moves it on. It never says whose turn runs meanwhile: a
+ * message the person sends replaces a waiting request, or joins the running turn
+ * as a steer, so the turn running beside one is not a request of theirs. A plan
+ * behind its work says so: how many files changed since its last update.
  * @param {ReturnType<typeof workPlanStep>} step
  * @param {{ questions?: number, request?: { status?: string, stage?: string | null, awaitingAnswer?: boolean,
  *   resumeImplementation?: boolean, stopped?: boolean, followup?: { owed?: boolean } } | null,
- *   freshness?: ReturnType<typeof workPlanFreshness>, busy?: "" | "turn" | "message" | "voice",
+ *   freshness?: ReturnType<typeof workPlanFreshness>,
  *   action?: { kind: string, label: string, enabled: boolean, waits: string, progress: string } | null }} [state]
- *   questions: the questions the chat offers answers for; freshness: the plan's; busy: what holds the chat (the
- *   assistant's turn, the person's message being sent, or their spoken message), as the notice takes it; action: the
- *   workflow action the chat's notice offers for the request (assistantRoutingNotice's), null when it offers none
+ *   questions: the questions the chat offers answers for; freshness: the plan's; action: the workflow action the
+ *   chat's notice offers for the request (assistantRoutingNotice's, which says when other work holds it), null when it
+ *   offers none
  */
-function workPlanStatusLine(step, { questions = 0, request = null, freshness = null, busy = "", action = null } = {}) {
-  const line = workPlanStepLine(step, { questions, request, busy, action });
+function workPlanStatusLine(step, { questions = 0, request = null, freshness = null, action = null } = {}) {
+  const line = workPlanStepLine(step, { questions, request, action });
   if (!line || step.step === "completed" || !freshness?.behind) return line;
   // No minutes here: the line is a live status, read out again whenever it changes.
   return `${line} · ${freshness.changed.replace(/ since$/u, " since the plan's last update")}`;
 }
 
-/** What a paused plan has paused: the plan's change, the item, Senior's review, or the pass with its scope. */
-function pausedWork(step, request) {
-  if (request.stage === "planning") return "changing the plan";
-  if (step.step === "review") return "Senior review";
-  if (step.step === "pass") return step.scope ? `${step.title} (${step.scope})` : step.title;
-  return `item ${step.item} of ${step.items}, ${step.title}`;
+/**
+ * A plan's, item's or pass's title (or a pass's scope) where words follow it: without the full stop, or spaces, its
+ * author may have ended it with, so what follows keeps one stop ("… on the test machine. Continue …", never
+ * "machine.. Continue").
+ * @param {string} title
+ */
+function workPlanTitleInText(title) {
+  return String(title || "").replace(/[.\s]+$/u, "");
 }
 
-function workPlanStepLine(step, { questions, request, busy, action }) {
+/** A pass's title as the line names its place, "Security" for "Security pass". */
+const passName = (step) => workPlanTitleInText(step.title).replace(/ pass$/u, "");
+
+/** What a paused or waiting plan holds: the plan's change, the item, Senior's review, or the pass with its scope. */
+function waitingWork(step, request) {
+  if (request.stage === "planning") return "changing the plan";
+  if (step.step === "review") return "Senior review";
+  const title = workPlanTitleInText(step.title);
+  if (step.step === "pass") return step.scope ? `${title} (${workPlanTitleInText(step.scope)})` : title;
+  return `item ${step.item} of ${step.items}, ${title}`;
+}
+
+function workPlanStepLine(step, { questions, request, action }) {
   if (!step) return "";
   if (step.step === "completed") return "Plan: completed";
   const waiting = request?.status === "waiting";
@@ -212,8 +229,8 @@ function workPlanStepLine(step, { questions, request, busy, action }) {
   // A step another turn came before is owed: it starts by itself once that turn ends (assistantRoutingOwedSteps.js).
   if (waiting && request.followup?.owed && !request.stopped) {
     if (step.step === "review") return "Plan: Senior review starts when this answer ends";
-    if (step.step === "pass") return `Plan: pass ${step.title.replace(/ pass$/u, "")} (${step.item} of ${step.items}) starts when this answer ends`;
-    return `Plan: item ${step.item} of ${step.items}, ${step.title}, starts when this answer ends`;
+    if (step.step === "pass") return `Plan: pass ${passName(step)} (${step.item} of ${step.items}) starts when this answer ends`;
+    return `Plan: item ${step.item} of ${step.items}, ${workPlanTitleInText(step.title)}, starts when this answer ends`;
   }
   if (waiting) {
     const ready = request.stage === "planning" && !request.resumeImplementation && step.step === "implementation" &&
@@ -226,14 +243,15 @@ function workPlanStepLine(step, { questions, request, busy, action }) {
     if (action?.enabled) next = `${action.label} to resume`;
     else if (action?.progress) next = action.progress;
     else if (action) next = `${action.label} is ${action.waits}`;
-    // The person's own request runs while the plan waits: the turn holding the chat is theirs.
-    return [`Paused: ${pausedWork(step, request)}`, busy === "turn" ? "Your request is running now" : "", next]
-      .filter(Boolean).join(". ");
+    // A stopped request (the person's Stop) is paused; any other waits, with the reason in the notice's Details.
+    const held = `${request.stopped ? "Paused" : "Waiting"}: ${waitingWork(step, request)}`;
+    // A title that ends with its own question or exclamation mark is a sentence already.
+    return `${held}${/[!?…]$/u.test(held) ? "" : "."} ${next}`;
   }
   // Senior's review runs in Auto and a Senior chat; anywhere else nothing runs it until the person asks Senior.
   if (step.step === "review") return request?.status === "working" ? "Plan: Senior review" : "Plan: ready for Senior review, ask Senior to start it";
-  if (step.step === "pass") return `Plan: pass ${step.title.replace(/ pass$/u, "")} (${step.item} of ${step.items})`;
-  return `Plan: implementing item ${step.item} of ${step.items}, ${step.title}`;
+  if (step.step === "pass") return `Plan: pass ${passName(step)} (${step.item} of ${step.items})`;
+  return `Plan: implementing item ${step.item} of ${step.items}, ${workPlanTitleInText(step.title)}`;
 }
 
 export {
@@ -242,6 +260,7 @@ export {
   workPlanFreshness,
   workPlanStatusLine,
   workPlanStep,
+  workPlanTitleInText,
   workPlanPassItems,
   workPlanScope,
   withWorkPlanPasses,
