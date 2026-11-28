@@ -30,6 +30,14 @@
             :class="`studio-ai-sessions__status-dot--${sessionItem.status}`"
           />
           <span class="studio-ai-sessions__tab-label">{{ sessionItem.archiving ? `${sessionTabLabel(sessionItem)} · Archiving…` : sessionTabLabel(sessionItem) }}</span>
+          <!-- A session that needs help says so on its tab; the icon opens its Need help without selecting the tab. -->
+          <v-btn
+            v-if="needHelp.presentation(sessionItem)" :class="`studio-ai-sessions__need-help text-${needHelp.presentation(sessionItem).color}`"
+            :aria-label="`${needHelp.presentation(sessionItem).label}: ${sessionTabLabel(sessionItem)}`" :title="needHelp.presentation(sessionItem).title"
+            data-vibe64-session-need-help icon size="x-small" variant="text" @click.stop="openNeedHelp(sessionItem)" @keydown.enter.space.stop
+          >
+            <v-icon icon="$support" size="14" />
+          </v-btn>
           <!-- The work-state icon is the tab's info button on every device: a click, tap, Enter or Space opens
                the session info without selecting the tab, whose own Enter and Space would select it instead. -->
           <v-btn
@@ -105,6 +113,12 @@
             >
               Rename session
             </v-btn>
+            <v-btn
+              v-if="toolbar.sessionsApiPath" variant="text" prepend-icon="$support"
+              :disabled="sessionItem.archiving || selectionArchived" @click.stop="openNeedHelp(sessionItem)"
+            >
+              {{ needHelp.presentation(sessionItem) ? "Open Need help" : "Ask for help" }}
+            </v-btn>
           </div>
         </v-tooltip>
       </v-chip>
@@ -143,16 +157,22 @@
       v-if="renamingSession" :session="renamingSession" :sessions-api-path="renamingSessionsApiPath"
       @close="renamingSession = null" @renamed="toolbar.refreshSessionData({ includeList: true, reason: 'session-renamed' })"
     />
+    <Vibe64NeedHelpDialog
+      v-if="needHelp.session.value" :session="needHelp.session.value" :sessions-api-path="needHelp.sessionsApiPath.value"
+      @close="needHelp.close()" @changed="toolbar.refreshSessionData({ includeList: true, reason: 'need-help-changed' })"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, inject, onMounted, ref, useId, watch } from "vue";
 import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
+import Vibe64NeedHelpDialog from "./Vibe64NeedHelpDialog.vue";
 import Vibe64RenameSessionDialog from "./Vibe64RenameSessionDialog.vue";
 import Vibe64SessionSaveTarget from "./Vibe64SessionSaveTarget.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import { vibe64SessionInfoFacts } from "@/lib/vibe64SessionInfo.js";
+import { useVibe64SessionsNeedHelp } from "@/composables/useVibe64SessionsNeedHelp.js";
 import { vibe64SessionSaveTarget } from "@/lib/vibe64SessionSaveTarget.js";
 import { vibe64SessionDisplayTitle, vibe64SessionStatusLabel } from "@/lib/vibe64SessionViewModel.js";
 import { VIBE64_SESSION_TOOLTIP_KEY } from "@/lib/vibe64SessionTooltip.js";
@@ -238,6 +258,12 @@ function renameSession(session) {
   renamingSession.value = { ...session };
 }
 
+function openNeedHelp(session) {
+  if (!needHelp.open(session, props.toolbar.sessionsApiPath)) return;
+  infoSessionId.value = "";
+  sessionTooltip.suppressedSessionId.value = session.sessionId;
+}
+
 function showProblemNotice(session) {
   infoSessionId.value = "";
   sessionTooltip.suppressedSessionId.value = session.sessionId;
@@ -262,6 +288,7 @@ function toggleSessionInfo(sessionId) {
 
 watch(() => props.toolbar.sessionsApiPath, () => {
   renamingSession.value = null;
+  needHelp.close();
 });
 
 watch(() => props.active, (active) => {
@@ -294,6 +321,7 @@ function sessionInfoFacts(sessionItem) {
       value: assistant?.label || selection.engineId
     },
     { key: "model", label: "Model", value: selection.modelId },
+    { key: "need-help", label: "Need help", value: needHelp.fact(sessionItem) },
     { key: "saved-work", label: "Work", value: repositoryWorkStateLabel(sessionItem) },
     { key: "work-problem", label: "Why", value: repositoryWorkStateProblem(sessionItem)?.message },
     { key: "work-next", label: "Next", value: repositoryWorkStateProblem(sessionItem)?.nextStep },
@@ -323,10 +351,12 @@ function sessionTabAriaLabel(sessionItem = {}) {
     return `${sessionTabLabel(sessionItem)}. Inactive. Archiving session.`;
   }
   const work = repositoryWorkStateDescription(sessionItem);
-  return `${sessionTabLabel(sessionItem)}. ${work}${work.endsWith(".") ? "" : "."}`;
+  const needHelpLabel = needHelp.presentation(sessionItem)?.label;
+  return `${sessionTabLabel(sessionItem)}.${needHelpLabel ? ` ${needHelpLabel}.` : ""} ${work}${work.endsWith(".") ? "" : "."}`;
 }
 
 const allSessions = computed(() => Array.isArray(props.toolbar.sessions) ? props.toolbar.sessions : []);
+const needHelp = useVibe64SessionsNeedHelp(allSessions);
 const archiveNow = ref(Date.now());
 const hasClosingSessions = computed(() => props.active && allSessions.value.some((session) => session.archiving));
 onMounted(() => {
@@ -403,6 +433,8 @@ const visibleSessions = computed(() => {
   min-width: 0;
   width: 100%;
 }
+
+.studio-ai-sessions__need-help { flex: 0 0 auto; }
 
 .studio-ai-sessions__tab {
   align-items: stretch;

@@ -10,6 +10,7 @@ import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planPassItemsCheck, planPassListing, withAfterPlanPasses } from "./planPasses.js";
 import { listGenesisPasses } from "@local/vibe64-genesis/server";
 import { planCommandSource } from "./agentPlanCommand.js";
+import { createAgentNeedHelpCommand, needHelpCommandSource } from "./needHelp/agentNeedHelpCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { readAgentSessionStatus } from "./agentSessionStatus.js";
 import { runAgentSessionSave } from "./agentSessionSave.js";
@@ -23,16 +24,9 @@ import { assertSessionTempRootFits } from "@local/vibe64-runtime/server/sessionT
 
 import { refuseUnreadFields } from "@local/vibe64-core/server/commandInput";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import {
-  logOperationalEvent
-} from "@local/vibe64-core/server/logging";
-import {
-  vibe64ErrorResponse,
-  vibe64StatusCode
-} from "@local/vibe64-core/server/serverResponses";
-import {
-  sessionSourcePath
-} from "@local/vibe64-core/server/sessionSourcePath";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { vibe64ErrorResponse, vibe64StatusCode } from "@local/vibe64-core/server/serverResponses";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   agentControlFilePath,
   runVibe64Command,
@@ -58,9 +52,7 @@ import {
   createSessionCommandServers,
   shortCommandHash
 } from "./unixJsonCommand.js";
-import {
-  writeExecutableFileIfChanged
-} from "./writeExecutableFileIfChanged.js";
+import { writeExecutableFileIfChanged } from "./writeExecutableFileIfChanged.js";
 import {
   AGENT_SESSION_COMMAND_CONTRACT_VERSION,
   AGENT_SESSION_COMMAND_TIMEOUT_MS,
@@ -102,6 +94,7 @@ import { commandDatabaseServerWatch } from "./agentCommandDatabaseServers.js";
 /** @typedef {import("@local/vibe64-core/server/types").PublishSessionChanged} PublishSessionChanged */
 /** @typedef {import("@local/vibe64-runtime/server/types").Vibe64SessionStore} Vibe64SessionStore */
 /** @typedef {import("./types.js").AgentSessionCommandService} AgentSessionCommandService */
+/** @typedef {import("./types.js").NeedHelpService} NeedHelpService */
 
 const AGENT_SESSION_COMMAND_REQUEST_MAX_BYTES = 4 * 1024 * 1024;
 // What plan outcome reads: the workflow identity a plan read returns, under the same names, and the outcome itself.
@@ -130,6 +123,7 @@ const commandServers = createSessionCommandServers({
     "/agent-session-command/update": controlRoute("updateSession"),
     "/agent-session-command/save": controlRoute("saveSession"),
     "/agent-session-command/plan": controlRoute("managePlan"),
+    "/agent-session-command/need-help": controlRoute("manageNeedHelp"),
     [HELPER_GROUP_ROUTE]: { handle: streamHelperGroup, token: "controlToken" },
     "/agent-session-command/run": {
       handle({ commandService, input, request, response }) {
@@ -180,6 +174,7 @@ const commandServers = createSessionCommandServers({
  * the destination it has now
  * @param {(sessionId: string, time: string) => boolean} dependencies.previewStartedBefore whether the session's
  * Preview runs in a process started before `time`
+ * @param {() => NeedHelpService | null} dependencies.readNeedHelp Need help, or null while Vibe64 starts or stops
  * @param {RuntimeLogger} dependencies.logger
  * @param {ProjectService} dependencies.project
  * @param {PublishSessionChanged} dependencies.publishSessionChanged
@@ -204,6 +199,7 @@ function createAgentSessionCommandService({
   updateSessionWork,
   saveSessionWork,
   previewStartedBefore,
+  readNeedHelp,
   logger,
   project,
   publishSessionChanged,
@@ -482,6 +478,8 @@ function createAgentSessionCommandService({
     });
   }
 
+  const manageNeedHelp = createAgentNeedHelpCommand({ readNeedHelp, runInSessionProject, requestActor });
+
   async function execute(input = {}, context = {}) {
     input.signal?.throwIfAborted();
     const command = decodedCommand(input.commandBase64);
@@ -682,6 +680,7 @@ function createAgentSessionCommandService({
     updateSession,
     saveSession,
     managePlan,
+    manageNeedHelp,
     run,
     summarizeTurnCommands: repeats.summarize,
     helperGroups: helperGroups.listing,
@@ -713,6 +712,7 @@ async function prepareAgentSessionCommand({
   const controlFilePath = agentControlFilePath(normalizedWrapperHostDir, "session");
   await Promise.all([
     writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-plan"), planCommandSource(SESSION_RENAME_CONTROL_ENV, controlFilePath)),
+    writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-need-help"), needHelpCommandSource(SESSION_RENAME_CONTROL_ENV, controlFilePath)),
     writeExecutableFileIfChanged(path.join(normalizedWrapperHostDir, "vibe64-session"), sessionRenameCommandSource(controlFilePath)),
     writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource()),
     writeExecutableFileIfChanged(runnerHostPath(normalizedWrapperHostDir), commandRunnerSource()),

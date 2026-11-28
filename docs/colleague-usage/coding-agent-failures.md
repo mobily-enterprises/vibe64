@@ -2,6 +2,11 @@
 
 For sending, steering and stopping, see [Direct coding agents and follow assignments](coding-agents.md). This topic covers what to do when an assistant cannot start, stops on its own or reports a failure.
 
+When the AI hits something it can't fix itself (the platform, a managed
+service, access it lacks), it raises **Need help** on the session instead of
+waiting, and carries on with what it can: see [Need help](need-help.md) to
+read, answer or clear it, or to raise it yourself.
+
 If Claude cannot initialize, inspect the failed request before selecting **Retry**.
 An initialization failure occurs before that request reaches Claude; it does not
 complete the requested work. Vibe64 keeps a bounded, credential-redacted startup

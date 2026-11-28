@@ -2,7 +2,7 @@
 
 /**
  * What other owners fill after construction: the source editor, plan
- * completion, session Save and Update and database tools providers, and the assistant runtime's functions.
+ * completion, session Save and Update, database tools and Need help providers, and the assistant runtime's functions.
  * @param {object} dependencies
  * @param {ServiceState} dependencies.state
  */
@@ -92,6 +92,17 @@ function createServiceHostSlots({ state }) {
   }
 
   /**
+   * Fills or, at its owner's shutdown, clears Need help, which `vibe64-helper need-help` raises, reads and clears.
+   * @param {object | null} service
+   */
+  function setNeedHelp(service) {
+    if (service !== null && typeof service !== "object") {
+      throw new TypeError("The Need help service must be an object or null.");
+    }
+    state.slots.needHelp = service;
+  }
+
+  /**
    * Fills or, at its owner's shutdown, clears the pages service the agent's pages command publishes through.
    * @param {object | null} provider
    */
@@ -108,6 +119,8 @@ function createServiceHostSlots({ state }) {
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     setDatabaseToolsProvider,
+    // readable-check: allow setter-seam - cycle: vibe64.need-help requires vibe64.terminals
+    setNeedHelp,
     // readable-check: allow setter-seam - cycle: vibe64.pages requires vibe64.terminals
     setPagesProvider,
     // readable-check: allow setter-seam - cycle: vibe64.sessions requires vibe64.terminals

@@ -24,7 +24,7 @@ import { Vibe64TerminalsFeature } from "../../packages/vibe64-terminals/src/serv
 // Without a host, vibe64-helper is exactly its own groups.
 
 const PUBLIC_GROUPS = ["preview", "playwright", "env", "staging", "database", "github", "pages", "session", "plan",
-  "training", "spec"];
+  "need-help", "training", "spec"];
 // vibe64-helper --help with no host groups.
 const OWN_HELP = `Usage: vibe64-helper <group> [arguments]
 
@@ -38,6 +38,7 @@ Groups:
   pages        Publish, update and list pages everyone on the project can open
   session      Session status, Update, Save, setup retry, rename, and listing and messaging project sessions
   plan         Read and maintain the current plan and archived plans
+  need-help    Ask for help with what this session can't fix itself, read the answer, clear it
   training     Validate, bundle and pin local teaching content
   spec         Exact Vibe64 contracts: Stack sections and command protocols
 

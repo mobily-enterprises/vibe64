@@ -46,6 +46,8 @@
     "./server/sessionWorkTasks": "./src/server/sessionWorkTasks.js",
     "./server/sessionRenewalHandover": "./src/server/sessionRenewalHandover.js",
     "./server/problemReportHost": "./src/server/problemReport/problemReportHost.js",
+    "./server/needHelpHost": "./src/server/needHelp/needHelpHost.js",
+    "./shared/needHelp": "./src/shared/needHelp.js",
     "./server/types": "./src/server/types.js"
   },
   "jskit": {
@@ -53,7 +55,8 @@
     "capabilities": {
       "provides": [
         "vibe64.terminals",
-        "vibe64.problem-reports"
+        "vibe64.problem-reports",
+        "vibe64.need-help"
       ],
       "requires": [
         "runtime.actions",
@@ -76,6 +79,10 @@
           {
             "entrypoint": "src/server/problemReport/ProblemReportFeature.js",
             "export": "ProblemReportFeature"
+          },
+          {
+            "entrypoint": "src/server/needHelp/NeedHelpFeature.js",
+            "export": "NeedHelpFeature"
           }
         ]
       },
@@ -101,7 +108,8 @@
         ],
         "capabilities": [
           "vibe64.terminals",
-          "vibe64.problem-reports"
+          "vibe64.problem-reports",
+          "vibe64.need-help"
         ]
       }
     }

@@ -18,6 +18,7 @@ import { registerRoutes as registerSystemGraphRoutes } from "../../packages/vibe
 import { registerUsageRoutes } from "../../packages/vibe64-system-graph/src/server/usageRoutes.js";
 import { registerRoutes as registerTerminalRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { registerProblemReportRoutes } from "../../packages/vibe64-terminals/src/server/problemReport/registerProblemReportRoutes.js";
+import { registerNeedHelpRoutes } from "../../packages/vibe64-terminals/src/server/needHelp/registerNeedHelpRoutes.js";
 import { registerTrainingRoutes } from "../../packages/vibe64-training/src/server/registerRoutes.js";
 import { registerTrainingVisualResourceRoutes } from "../../packages/vibe64-training/src/server/visualResourceRoutes.js";
 import { registerRoutes as registerUsageRecordingRoutes } from "../../packages/vibe64-usage-recording/src/server/registerRoutes.js";
@@ -42,6 +43,7 @@ DELETE /api/app/:slug/vibe64/sessions/:sessionId/agent-attachments/:attachmentId
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/agent-terminal/:terminalSessionId public app - vibe64.terminals.agent-terminal.close
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/ai-tasks/:taskId public app - vibe64.ai-tasks.close
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/files/:area/file public app 2097152 vibe64.source-editor.file-area.delete
+DELETE /api/app/:slug/vibe64/sessions/:sessionId/need-help public app - vibe64.sessions.need-help.clear
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/output-runs/:terminalSessionId/terminal public app - vibe64.terminals.output-terminal.close
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/source-editor/explanations/:explanationId public app 131072 vibe64.source-editor.explanation.delete
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations/:conversationId public app - vibe64.terminals.temporary-conversation.delete
@@ -280,6 +282,8 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/integrations/n8n/discovery public
 POST /api/app/:slug/vibe64/sessions/:sessionId/main-chat-approvals/:approvalId/approve public app - vibe64.sessions.main-chat-approvals.approve
 POST /api/app/:slug/vibe64/sessions/:sessionId/main-chat-approvals/:approvalId/decline public app - vibe64.sessions.main-chat-approvals.decline
 POST /api/app/:slug/vibe64/sessions/:sessionId/main-chat-approvals/:approvalId/withdraw public app - vibe64.sessions.main-chat-approvals.withdraw
+POST /api/app/:slug/vibe64/sessions/:sessionId/need-help public app 16384 vibe64.sessions.need-help.raise
+POST /api/app/:slug/vibe64/sessions/:sessionId/need-help/answer public app 16384 vibe64.sessions.need-help.answer
 POST /api/app/:slug/vibe64/sessions/:sessionId/output-runs public app - vibe64.terminals.output-target.start
 POST /api/app/:slug/vibe64/sessions/:sessionId/output-runs/:terminalSessionId/stop public app - vibe64.terminals.output-target.stop
 POST /api/app/:slug/vibe64/sessions/:sessionId/output-runs/open public app - vibe64.terminals.output-target.open
@@ -393,6 +397,7 @@ function routeTable(projectContext) {
   registerUsageRoutes(http, { localhostCheckBypassed, projectContext });
   registerTerminalRoutes(http, { fastify, localhostCheckBypassed, projectContext, terminals: {}, uploads: { readSingleMultipartFile() {} } });
   registerProblemReportRoutes(http, { localhostCheckBypassed, projectContext });
+  registerNeedHelpRoutes(http, { localhostCheckBypassed, projectContext });
   registerTrainingRoutes(http, { localhostCheckBypassed });
   registerTrainingVisualResourceRoutes(http, { localhostCheckBypassed });
   registerUsageRecordingRoutes(http, { localhostCheckBypassed, projectContext });

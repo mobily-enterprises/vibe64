@@ -476,13 +476,7 @@ function createService({
     sessionAgent,
     workspaceSetup
   });
-  const workInspection = createServiceSessionWorkInspection({
-    sessionAccess,
-    sessionWork,
-    codexGitCommand,
-    env,
-    project
-  });
+  const workInspection = createServiceSessionWorkInspection({ sessionAccess, sessionWork, codexGitCommand, env, project });
   const projectRuntime = createServiceProjectRuntime({
     sessionAccess,
     terminals,
@@ -559,6 +553,8 @@ function createService({
     setSessionUpdate: hostSlots.setSessionUpdate,
     // readable-check: allow setter-seam - cycle: vibe64.database-tools requires vibe64.terminals
     setDatabaseToolsProvider: hostSlots.setDatabaseToolsProvider,
+    // readable-check: allow setter-seam - cycle: vibe64.need-help requires vibe64.terminals
+    setNeedHelp: hostSlots.setNeedHelp,
     // readable-check: allow setter-seam - cycle: vibe64.pages requires vibe64.terminals
     setPagesProvider: hostSlots.setPagesProvider,
     prepareWorkspaceSetup: workspacePreparation.prepareWorkspaceSetup,

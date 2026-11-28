@@ -18,6 +18,7 @@ const VIBE64_HELPER_GROUPS = Object.freeze([
   ["pages", "Publish, update and list pages everyone on the project can open"],
   ["session", "Session status, Update, Save, setup retry, rename, and listing and messaging project sessions"],
   ["plan", "Read and maintain the current plan and archived plans"],
+  ["need-help", "Ask for help with what this session can't fix itself, read the answer, clear it"],
   ["training", "Validate, bundle and pin local teaching content"],
   ["spec", "Exact Vibe64 contracts: Stack sections and command protocols"]
 ]);
