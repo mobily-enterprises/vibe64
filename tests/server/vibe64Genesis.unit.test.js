@@ -455,6 +455,9 @@ test("Genesis accepts fully enabled main and temporary instructions with maximum
       assert.match(output, /Without --session, the pinned\/selected session receives it/u);
       assert.match(output, /first run `vibe64-helper session list-project <project>`/u);
       assert.match(output, /If exactly one other active session is listed, use it; ask only when several could be meant/u);
+      // 2026-11-28: an AI stuck on a database lock it couldn't clear asked for help in a file nobody read, three times.
+      assert.match(output, /outside your reach and you can't fix it yourself \(the platform, a managed service such as the project's database server, access you don't have\), raise Need help with `vibe64-helper need-help raise "what's wrong, what you tried, what you need"` instead of waiting or guessing, and tell the person in your reply; then keep working on whatever you can\./u);
+      assert.match(output, /a follow-up adds to the same flag\. Read the answer with `vibe64-helper need-help read`/u);
       // Both chats update a session that is behind before building on its old code; only the main chat, while
       // automatic save is on, saves its own finished stages, and tells the sessions it works with.
       assert.match(output, /When `repository\.updateFirst` says this session is behind, update it with `vibe64-helper session update` before building on the old code, at a point where you can deal with a conflict\./u);

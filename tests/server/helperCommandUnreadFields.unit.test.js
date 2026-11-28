@@ -20,6 +20,8 @@ const UNREAD = "comment";
 
 /** Sends a plan operation as `vibe64-helper plan <operation>` reaches the session command server. */
 const plan = (operation) => (f, input) => f.session.managePlan(f.sessionId, { operation, ...input });
+/** Sends a Need help operation as `vibe64-helper need-help <operation>` reaches the session command server. */
+const needHelp = (operation) => (f, input) => f.session.manageNeedHelp(f.sessionId, { operation, ...input });
 /** Calls a session command, as its route hands the agent's own fields to it. */
 const session = (name) => (f, input) => f.session[name](f.sessionId, input);
 /** `vibe64-helper inventory ...`, a host's own group, as the session control's route hands its fields over. */
@@ -65,6 +67,9 @@ const OPERATIONS = [
   { name: "session status", fields: [], send: session("sessionStatus") },
   { name: "session update", fields: ["reviewedConflictId"], send: session("updateSession") },
   { name: "session save", fields: [], send: session("saveSession") },
+  { name: "need-help raise", fields: ["text"], required: ["text"], base: { text: "The database is locked." }, send: needHelp("raise") },
+  { name: "need-help read", fields: [], send: needHelp("read") },
+  { name: "need-help clear", fields: [], send: needHelp("clear") },
   // A host's group refuses before its folder is checked or its run is called.
   { name: "inventory", fields: ["group", "args", "cwd"], required: ["args", "cwd", "group"],
     base: { group: "inventory", args: ["count"], cwd: "." }, send: hostGroup },
@@ -105,6 +110,7 @@ async function fixture(t) {
   handPlanToSenior: called("handPlanToSenior"), handActionOn: called("handActionOn"), retryWorkspaceSetup: called("retryWorkspaceSetup", { ok: true, state: {} }),
   updateSessionWork: called("updateSessionWork"), saveSessionWork: called("saveSessionWork"),
   previewStartedBefore: () => false,
+  readNeedHelp: () => ({ raise: called("needHelpRaise"), read: called("needHelpRead"), clear: called("needHelpClear") }),
   helperCommandGroups: [{ name: "inventory", summary: "Count the stock", help: "Usage: vibe64-helper inventory count", run: called("inventory", { exit: 0 }) }] });
   t.after(() => service.closeAllForSession(sessionId));
   await service.bindSession(sessionId, { wrapperHostDir: path.join(root, "commands") });

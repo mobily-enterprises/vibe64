@@ -11,7 +11,7 @@ import { createAgentDatabaseCommandService, prepareAgentDatabaseCommand } from "
 import { silentLogger } from "@jskit-ai/kernel/server/runtime/logger";
 import { endChildInput } from "./childInputTestHelpers.js";
 
-const HELPER_GROUPS = ["preview", "playwright", "env", "database", "github", "session"];
+const HELPER_GROUPS = ["preview", "playwright", "env", "database", "github", "session", "need-help"];
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64 helper's "));
