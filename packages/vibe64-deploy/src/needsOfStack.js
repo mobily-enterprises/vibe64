@@ -26,7 +26,8 @@ function problem(code, message) {
  *   a declared resource's one preferred alternative, its bindings checked for its kind; throws naming what is wrong
  * @param {(kind: string) => boolean} resourceRules.resourceKindIsDatabase
  * @returns {{ needs: object | null, problem: { code: string, message: string, line?: number,
- *   managedBy?: { name: string, url: string } } | null }} `managedBy` when the Stack says who deploys Production instead
+ *   managedBy?: { name: string, url: string }, signedRelease?: { name: string } } | null }} `managedBy` when the Stack
+ *   says who deploys Production instead, `signedRelease` when it releases Production as a signed release
  */
 function needsOfStack(deployment, { preferredAlternative, resourceKindIsDatabase }) {
   // The Stack says who deploys Production instead (its Deployment's `- Production: managed by` line): the engine never
@@ -41,6 +42,21 @@ function needsOfStack(deployment, { preferredAlternative, resourceKindIsDatabase
           + "Production line from genesis/stack.md's Deployment section (the coding agent can do this), Save, then deploy "
           + "to production."),
         managedBy: { name, url }
+      }
+    };
+  }
+  // The Stack releases Production as one signed release of an app a provider's machine already runs (its Deployment's
+  // `- Signed release` line): the signed release engine (signedRelease.js) releases it, and no Plan makes App Services.
+  if (deployment?.signedRelease) {
+    const { name } = deployment.signedRelease;
+    return {
+      needs: null,
+      problem: {
+        ...problem("production_signed_release", `genesis/stack.md releases this app's Production as one signed release (${name}) `
+          + "of an app a provider's machine already runs, so Vibe64 makes no App Services for it: build it, sign it and hand "
+          + "it over from the Production card. To deploy it as App Services instead, remove the Signed release line from "
+          + "genesis/stack.md's Deployment section (the coding agent can do this), Save, then deploy to production."),
+        signedRelease: { name }
       }
     };
   }

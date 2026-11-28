@@ -52,6 +52,14 @@ const PRODUCTION_MANAGER_NAME_MAX = 60;
 // Words of letters, digits and . & ' + ( ) _ - between single spaces, starting with a letter or digit.
 const PRODUCTION_MANAGER_NAME = /^[\p{L}\p{N}](?:[\p{L}\p{N}.&'+()_-]| (?! |$))*$/u;
 const PRODUCTION_MANAGER_URL_MAX = 2048;
+// A Production released as one signed prebuilt release of an app a provider's machine already runs: the release's name
+// (by the rule a Production manager's name follows) and the command that builds it at the saved commit, leaving
+// output.tar and manifest.json in the folder V64_RELEASE_DIR names, which the release key's holder signs where the key is.
+const SIGNED_RELEASE_PREFIX = "- Signed release";
+const SIGNED_RELEASE_LINE = /^- Signed release `([^`\r\n]+)`:[ \t]+(.+)$/u;
+// What the host gives the release's command: the saved commit, the folder it leaves the release in, and the release
+// key's fingerprint its manifest names.
+const SIGNED_RELEASE_ENVIRONMENT = Object.freeze(["V64_COMMIT", "V64_RELEASE_DIR", "V64_RELEASE_KEY"]);
 // RFC 3986's characters, so the address is shown and linked exactly as written.
 const URL_CHARACTERS = /^[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$/u;
 // What an application's own commands and service may do beyond an ordinary
@@ -87,6 +95,7 @@ const DEPLOYMENT_ENTRY_FORMS = Object.freeze([
   `${MACHINE_SETUP_PREFIX}\`path\``,
   `${INSTANCES_PREFIX}\`count\``,
   `${PRODUCTION_PREFIX}managed by \`name\` at \`https://address\``,
+  `${SIGNED_RELEASE_PREFIX} \`name\`: \`command\` \`argument\`...`,
   "- Ready when: `GET` `/path` returns `200`",
   `- ${DEPLOYMENT_STEP_ROLES.join("|")} \`label\`: \`command\` \`argument\`...`
 ]);
@@ -279,6 +288,40 @@ function productionManagedBy(source, deploymentPath, line) {
   return { name, url };
 }
 
+// `- Signed release `name`: `command` `argument`...`: the release's name and the command that builds it, a command as
+// a step's is, which serves nothing and sets none of the names the host gives it.
+function signedRelease(source, deploymentPath, line) {
+  const match = source.match(SIGNED_RELEASE_LINE);
+  if (!match) {
+    invalid(
+      deploymentPath,
+      "Deployment Signed release names the release and the command that builds it at the saved commit, such as "
+        + "`- Signed release `Control plane release`: `sh` `release/signed-release.sh``.",
+      line
+    );
+  }
+  const [, name, command] = match;
+  if (name.length > PRODUCTION_MANAGER_NAME_MAX || !PRODUCTION_MANAGER_NAME.test(name)) {
+    invalid(
+      deploymentPath,
+      `Deployment Signed release names the release in 1 to ${PRODUCTION_MANAGER_NAME_MAX} letters, digits, single spaces `
+        + `and . & ' + ( ) _ -, starting with a letter or digit, such as \`Control plane release\`; ${JSON.stringify(name)} isn't one.`,
+      line
+    );
+  }
+  const argv = processArguments(command, ERROR_CODE, deploymentPath, "Deployment Signed release command", line);
+  if (argv.some((value) => /\{(?:host|port)\}/u.test(value))) {
+    invalid(deploymentPath, "Deployment Signed release's command takes no {host} or {port} placeholders: it builds a release and serves nothing.", line);
+  }
+  const hostOwned = Object.keys(HOST_OWNED_ENVIRONMENT).find((owned) => argv.some((value) => value.startsWith(`${owned}=`)));
+  if (hostOwned) invalid(deploymentPath, HOST_OWNED_ENVIRONMENT[hostOwned], line);
+  const given = SIGNED_RELEASE_ENVIRONMENT.find((owned) => argv.some((value) => value.startsWith(`${owned}=`)));
+  if (given) {
+    invalid(deploymentPath, `Deployment Signed release never sets ${given}: the host gives the command ${SIGNED_RELEASE_ENVIRONMENT.slice(0, -1).join(", ")} and ${SIGNED_RELEASE_ENVIRONMENT.at(-1)}.`, line);
+  }
+  return { name, argv };
+}
+
 // An https address with its host right after `https://`, as written: a parser takes `https:///path` as the host `path`.
 function httpsAddress(value) {
   const scheme = "https://";
@@ -327,6 +370,7 @@ export {
   RESTORE_PATHS_PREFIX,
   SANDBOX_ALLOWS_PREFIX,
   SETUP_CODE_PREFIX,
+  SIGNED_RELEASE_PREFIX,
   STEP_LINE,
   STEP_ROLE_ORDER,
   VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES,
@@ -340,5 +384,6 @@ export {
   packages,
   productionManagedBy,
   sandboxAllowances,
-  setupCode
+  setupCode,
+  signedRelease
 };

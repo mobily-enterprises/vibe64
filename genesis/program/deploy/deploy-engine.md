@@ -27,10 +27,12 @@ mobilynet, Google Cloud and AWS.
 - `packages/vibe64-deploy/src/report.js`
 - `packages/vibe64-deploy/src/migrations.js`
 - `packages/vibe64-deploy/src/record.js`
+- `packages/vibe64-deploy/src/signedRelease.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/declaration.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/index.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/client.js`
 - `packages/vibe64-deploy/src/adapters/mobilynet/standIn.js`
+- `packages/vibe64-deploy/src/adapters/mobilynet/prebuilt.js`
 - `packages/vibe64-deploy/src/adapters/google/index.js`
 - `packages/vibe64-deploy/src/adapters/google/base.js`
 - `packages/vibe64-deploy/src/adapters/google/releases.js`
@@ -105,7 +107,10 @@ is refused before anything else, `production_managed_elsewhere`, naming that
 manager and its address; the problem carries them as `managedBy: { name, url }`,
 read from the Stack at each inspection, so a host's page shows them and links
 there without keeping a copy. The engine never deploys such a project, whatever
-else its Deployment says.
+else its Deployment says. A Deployment whose `- Signed release` line releases
+Production as a signed release is refused next, `production_signed_release`,
+the problem carrying `signedRelease: { name }`: no Plan makes App Services for
+it (A signed release, below).
 
 ## The package
 
@@ -1038,6 +1043,39 @@ password with them) and a bucket's `driver`. The stand-in answers a fresh
 hosted service's backups as on with nothing restorable yet, and as a test sets
 them (`hosted.setBackups`).
 
+The adapter also hands a machine's app one signed prebuilt release
+(`prebuilt.js`), as mobilynet's own tools do (`mn app release --prebuilt`, its
+`docs/self-hosting.md` B3): an output built elsewhere (`output.tar`, its
+`mobilynet.json` first, a build of `{ "output": ["."] }` alone), the manifest
+naming the output's SHA-256 and size, its declaration's SHA-256 and the release
+key's fingerprint (the SHA-256 of the key's SPKI DER, in hex), and the key's
+Ed25519 signature of `mobilynet-release-v1\n` and the manifest's bytes, made
+where the key is and pasted. `releasePrebuilt({ vps, app, output, manifest,
+signature })` (`POST /v1/vps/{id}/apps/{app}/releases`, `vps:manage`) sends a
+plain tar of `manifest.json`, `manifest.sig` (the signature, one line) and
+`output.tar`, in that order, each member as mn's `tarMember` writes it, the
+output streamed from its file, with `MobilyNet-Release: prebuilt` and the
+output's SHA-256 and no Idempotency-Key (the same output again answers the
+release it made); it answers `{ version, app }`, the app moving to the
+release. A release mobilynet refuses (`422`) is a `prebuilt_refused` error
+carrying mobilynet's `field` (`signature`, `manifest`, `upload`, `output`,
+`declaration` or one of its fields) and its words, never tried again.
+`readVpsApp({ vps, app })` reads a machine's app (null when the machine or the
+app is none of the project's), `listVpsApps()` every app of the project's
+releases on each machine not destroyed, `listReleaseKeys()` the project's
+release keys (each `vps:read`), and `readReleaseManifest(bytes)` a manifest's
+key, output and declaration. The stand-in (`standIn/machines.js`, and
+`releases.js` for the checks) keeps a project's machines, their apps and its
+release keys as a test adds them, checks a prebuilt release in mobilynet's
+order and words (the signature against each of the project's keys, the
+manifest's key, the header's SHA-256, the output's size and SHA-256, its
+declaration and its build), and moves the app to it over two steps, or, with
+its `switchBack` fault, switches the app back to the version it ran with the
+check's failure as its `lastFailure`; `hostNotUpdated` answers `409
+host_not_updated` in mobilynet's words, a refusal the client never tries again:
+the machine's server takes a prebuilt release once mobilynet updates it, which
+sending the output again doesn't hasten.
+
 ## The Google Cloud adapter
 
 `createGoogleAdapter()` answers the engine in Google Cloud's REST calls for one
@@ -1208,6 +1246,53 @@ environment. Its stand-in (`standIn.js` and `standIn/`) answers every call the
 adapter makes in AWS's three protocols and shapes, in memory, checking each
 request's signature (or the gateway's token), for the engine's tests.
 
+## A signed release
+
+`signedRelease()` (`signedRelease.js`, the export `./signed-release`) releases
+a Production the Stack's `- Signed release` line names, one call at a time,
+each going as far as it can: building, waiting for the signature, handing over
+or following. A release goes `building` → `signature` → `releasing` →
+`following` → `live`, or `failed`, or `replaced` by a new start while it waited
+for its signature; the record (`vibe64.signed-release-record.v1`, its newest 20
+releases, each its name, commit, target `{ vps, app }`, key, state, folder,
+manifest and output `{ sha256, bytes }`, pasted signature, version and message)
+is saved at each step through the caller's `save`, so a restarted editor given
+it again waits again or goes on where it was.
+
+A start (`{ commit, target, key }`) is refused before anything is built unless
+the Stack has the line (`production_signed_release_unconfigured`), the commit is
+a full hash, the target names a machine and an app and the key a fingerprint
+(`_start_invalid`), the key is one of the project's release keys (`_key_unknown`,
+the adapter's `listReleaseKeys`) and the machine runs that app of the project's
+releases (`_target_missing`, `readVpsApp`, a catalogue package's app being
+none); a release being handed over or followed refuses another (`_busy`). The
+host's runner (`build`) runs the line's command at the commit in a checkout of
+its own, with `V64_COMMIT`, `V64_RELEASE_KEY` and `V64_RELEASE_DIR` (a folder it
+makes and answers), its output reported as it comes. What it leaves is checked
+before anything waits for a signature: a `manifest.json` and an `output.tar`,
+the manifest mobilynet's (`readReleaseManifest`), naming the key chosen, and the
+output of the size and SHA-256 it names; anything else fails the release in
+words naming the fix, as a command that fails does. The manifest the key's
+holder signs is `manifestOf(record)`: `{ fileName, bytes, sha256 }`, its name the
+app's and the commit's.
+
+A pasted signature is trimmed and must be an Ed25519 signature in base64 (88
+characters), else refused before anything is sent (`_signature_invalid`, `422`);
+with no release waiting for one, `_nothing` (`409`). Files gone or changed since
+the build fail the release. Then the adapter's `releasePrebuilt` hands the
+target that one release, the only write a signed release makes at the provider:
+a refusal (mobilynet's `422`, its `409 host_not_updated`, or any answer not
+worth repeating) fails it in the provider's words, sent once; no answer is sent again after backoff pauses, five times in a
+call, then the call ends still releasing, to send it again at the next (the same
+output answers the release it made). Following reads the app at each pause (a
+read that fails is made again) until it runs the release (`live`), or isn't
+moving to it any longer (its host switched it back: "Switched back to
+<version>: <its lastFailure>"), fails or is gone, each `failed`; a machine that
+needs a restart first is said once as a wait. A call ends after `maxReads`
+reads, still following. Each call reports steps (`build`, `release`, `follow`),
+the build's output, its waits (`signature`, `provider`, `restart`) and its end
+(`{ kind: "end", outcome }`).
+
 ## Implementation map
 
 - `needsOfStack()` — the needs from the inspected Stack.
@@ -1222,5 +1307,7 @@ request's signature (or the gateway's token), for the engine's tests.
 - `aliasesProblem()` — why the domain's other names can't be routed and given to the app, or "".
 - `setInstances()` — how many instances a running App Service runs, set at its provider at once.
 - `createMobilynetAdapter()` — the provider's side of the plan and steps.
+- `createPrebuiltCalls()` — the mobilynet adapter's signed prebuilt release, its machines' apps and the project's release keys.
+- `signedRelease()`, `manifestOf()` — a Production the Stack releases as a signed release, and the manifest its key's holder signs.
 - `createGoogleAdapter()` — the same for Google Cloud; `createGoogleClient()` its REST client.
 - `createAwsAdapter()` — the same for AWS; `createAwsClient()` its client.

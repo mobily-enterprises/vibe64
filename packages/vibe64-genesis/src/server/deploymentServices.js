@@ -20,6 +20,7 @@ import {
   PACKAGES_PREFIX,
   PRODUCTION_PREFIX,
   SANDBOX_ALLOWS_PREFIX,
+  SIGNED_RELEASE_PREFIX,
   STEP_LINE,
   VIBE64_DEPLOYMENT_SANDBOX_ALLOWANCES,
   deploymentStep,
@@ -189,6 +190,9 @@ function parseServiceLine(service, source, deploymentPath, line) {
   }
   if (source.startsWith(`${PRODUCTION_PREFIX}managed by `)) {
     fail("who manages Production is the whole Deployment's: put `- Production: managed by` above the first ### heading.");
+  }
+  if (source.startsWith(SIGNED_RELEASE_PREFIX)) {
+    fail("a signed release is the whole Deployment's: put `- Signed release` above the first ### heading.");
   }
   if (source.startsWith(PRODUCTION_PREFIX)) {
     once("Production");

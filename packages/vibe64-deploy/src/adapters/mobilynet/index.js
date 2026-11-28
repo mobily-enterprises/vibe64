@@ -18,9 +18,13 @@
 // the engine asks mobilynet for, and its stand-in answers them; until mobilynet builds them, an adapter made without
 // `leases: true` takes none, which is safe only while one editor deploys a project's environment (Managed today:
 // the workspace's own editor is the only writer).
+//
+// A signed release (prebuilt.js): one signed prebuilt release of an app a machine of the project runs, the machines'
+// apps and the project's release keys, which a Production of a signed release asks for, and nothing of the above.
 import { LABEL } from "../../record.js";
 import { LINK_NEEDS_RELEASE } from "../../steps.js";
 import { MOBILYNET_INTERFACES, SERVICE_SETTINGS_FALLBACK, needAs, serviceUpload } from "./declaration.js";
+import { createPrebuiltCalls } from "./prebuilt.js";
 
 const RESOURCE_KIND_OF = Object.freeze(Object.fromEntries(Object.entries(MOBILYNET_INTERFACES).map(([kind, name]) => [name, kind])));
 // mobilynet's names for an App Service and a hosted service: 1 to 64 lowercase letters, digits and hyphens.
@@ -206,6 +210,7 @@ function createMobilynetAdapter({ client, project, region = "us", leases = false
     project,
     offer,
     inventory,
+    ...createPrebuiltCalls({ client, calls }),
     /** The proxies an app believes: the edge's addresses in the region, before it. */
     async trustedProxies() {
       const found = await regionRead();

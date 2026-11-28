@@ -1,5 +1,6 @@
 import { HOST_REGIONS, SERVICE_SETTINGS, previousTagNames } from "./standIn/catalogue.js";
 import { createStandInHosted } from "./standIn/hosted.js";
+import { createStandInMachines } from "./standIn/machines.js";
 import { createStandInNetwork } from "./standIn/network.js";
 import { prices } from "./standIn/prices.js";
 import { createStandInReleases } from "./standIn/releases.js";
@@ -16,8 +17,10 @@ import { createStandInServices } from "./standIn/services.js";
 // read with their use as mobilynet's readQuotas answers them, and a monthly spending cap that refuses new creates and
 // scale-ups (M13); and tags on App Services and hosted services, as mobilynet has them since its tags change (its
 // docs/stages/tags.md): `tags` in a create's or a change's body and in every answer, a list filtered by `tag=name:value`,
-// and tags' previous name, `labels` in a body or `label=` in a query, refused `422` under that name. Nothing here
-// reaches a network.
+// and tags' previous name, `labels` in a body or `label=` in a query, refused `422` under that name. A signed
+// release's part too: a project's machines and their apps, its release keys, and a prebuilt release of a machine's app,
+// checked at once and moved to as mobilynet does (standIn/machines.js, releases.js prebuilt). Nothing here reaches a
+// network.
 //
 // Keys: the stand-in starts with one mobilynet project (`projectId`) and one key of it (`key`) holding the scopes the
 // engine's key holds (ENGINE_SCOPES) unless made with `scopes`; `addKey` makes others, of a project or of the
@@ -49,6 +52,9 @@ import { createStandInServices } from "./standIn/services.js";
 //                      (`failed`, `timeout`, `machine_failed`) and the lines its instance's logs then hold
 //   olderHost          a host of each region with hosts runs an agent before 2.9.0, which takes 50 entries for an
 //                      app: an App Service there holds 49 settings and secrets in all, as its region says, not 199
+//   switchBack         a machine's app moving to a prebuilt release fails its check, and its host switches it back to
+//                      the version it ran: `true`, `check_failed`; `{ code, message }`, that failure in its lastFailure
+//   hostNotUpdated     a machine's server runs an older host agent: a prebuilt release answers `409 host_not_updated`
 //
 // Every request is kept in order (`requests()`: its method, path, query, Idempotency-Key, JSON body or upload's
 // SHA-256, and the status and error code it got), so a test can see what was asked and of what.
@@ -70,8 +76,11 @@ const QUOTAS = Object.freeze(Object.keys(DEFAULT_LIMITS));
 // Each quota's unit, as mobilynet's machines.js QUOTAS name them.
 const QUOTA_UNITS = Object.freeze({ machines: "machines", vcpus: "vCPU", memoryGib: "GiB of RAM", diskGib: "GiB of data disk" });
 const FAULTS = Object.freeze([
-  "down", "noCapacity", "instancesUnhealthy", "neverBoots", "releaseBuildFails", "buildsWait", "instantBuilds", "releaseTaskFails", "olderHost"
+  "down", "noCapacity", "instancesUnhealthy", "neverBoots", "releaseBuildFails", "buildsWait", "instantBuilds", "releaseTaskFails", "olderHost",
+  "switchBack", "hostNotUpdated"
 ]);
+// The bodies the stand-in reads as an upload's bytes: a release's tarball, gzip or (a prebuilt release) plain.
+const UPLOAD_TYPES = Object.freeze(["application/gzip", "application/x-tar"]);
 const LEASE_MAX_SECONDS = 3600;
 const LEASE_TEXT = 200;
 // mobilynet's Idempotency-Key: 1 to 128 printable characters (its idempotency.js).
@@ -99,6 +108,9 @@ const ROUTES = Object.freeze([
   [`^/v1/hosted-services/${ID}$`, { GET: "hosted:read", PATCH: "hosted:manage", DELETE: "hosted:manage" }],
   [`^/v1/hosted-services/${ID}/links(/${ID})?$`, { GET: "hosted:read", POST: "hosted:manage", DELETE: "hosted:manage" }],
   [`^/v1/hosted-services/${ID}/backups$`, { GET: "hosted:read" }],
+  [`^/v1/projects/${ID}/(vps|release-keys)$`, { GET: "vps:read" }],
+  [`^/v1/vps/${ID}/apps(/${ID})?$`, { GET: "vps:read" }],
+  [`^/v1/vps/${ID}/apps/${ID}/releases$`, { POST: "vps:manage" }],
   [`^/v1/leases(/${ID})?$`, { POST: "services:deploy", PATCH: "services:deploy", DELETE: "services:deploy" }]
 ].map(([pattern, methods]) => Object.freeze([new RegExp(pattern, "u"), Object.freeze(methods)])));
 const SERVICE_PATH = new RegExp(`^/v1/services/${ID}$`, "u");
@@ -124,6 +136,14 @@ function missingScope(method, path, body, held) {
   if (method === "GET" && BUILD_LOG_PATH.test(path) && held.has("packages:publish")) return null;
   const scope = ROUTES.find(([pattern]) => pattern.test(path))?.[1][method];
   return scope && !held.has(scope) ? scope : null;
+}
+
+/** An upload's bytes: a Buffer or typed array as it is, a stream or async iterable (a streamed body) read whole. */
+async function bytesOf(body) {
+  if (typeof body?.[Symbol.asyncIterator] !== "function") return Buffer.from(body);
+  const parts = [];
+  for await (const chunk of body) parts.push(Buffer.from(chunk));
+  return Buffer.concat(parts);
 }
 
 /**
@@ -224,11 +244,16 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
   const services = createStandInServices(world, { releases, network });
   const hosted = createStandInHosted(world, { services, prices });
   services.useHooks({ nameTaken: hosted.nameTaken, consumerGone: hosted.consumerGone, refreshFailed: hosted.refreshFailed });
+  const machines = createStandInMachines(world, { releases });
 
-  /** Moves everything one step on: releases build, services refresh, hosted services boot, links turn active. */
+  /**
+   * Moves everything one step on: releases build, services refresh, hosted services boot, links turn active, machines'
+   * apps move to their prebuilt releases.
+   */
   function advance() {
     services.advance();
     hosted.advance();
+    machines.advance();
   }
 
   /** A mobilynet project of the organisation, with mobilynet's default quotas, no spending cap and nothing spent. @param {string} name */
@@ -318,7 +343,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
   }
 
   /** One request, answered `{ status, body }`. */
-  function answerOf({ method, path, params, body, idempotencyKey, contentSha256, authorization }) {
+  function answerOf({ method, path, params, body, idempotencyKey, contentSha256, release, authorization }) {
     if (method === "GET" && path === "/v1/prices") return answer(200, prices.answer());
     const { caller, refusal } = callerOf(authorization);
     if (refusal) return refusal;
@@ -327,8 +352,8 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     const previous = previousTagNames(body, params);
     if (previous) return invalid(previous);
     if (autoAdvance) advance();
-    const request = { method, path, params, body, idempotencyKey, contentSha256, caller };
-    const answered = network.request(request) ?? services.request(request) ?? hosted.request(request);
+    const request = { method, path, params, body, idempotencyKey, contentSha256, release, caller };
+    const answered = network.request(request) ?? services.request(request) ?? hosted.request(request) ?? machines.request(request);
     if (answered) return answered;
     if (/^\/v1\/leases(\/[^/]+)?$/u.test(path)) return leaseRequest(method, path, body, caller) ?? world.notFound("route");
     const buildLog = method === "GET" ? BUILD_LOG_PATH.exec(path) : null;
@@ -373,11 +398,11 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     if (url.origin !== origin) throw new TypeError(`fetch failed (the stand-in answers ${origin} only)`);
     const method = String(init.method ?? "GET").toUpperCase();
     const headers = new Headers(init.headers ?? {});
-    const upload = headers.get("content-type") === "application/gzip";
+    const upload = UPLOAD_TYPES.includes(headers.get("content-type"));
     let body;
     let parseFailed = false;
     if (init.body !== undefined && init.body !== null) {
-      if (upload) body = Buffer.from(init.body);
+      if (upload) body = await bytesOf(init.body);
       else {
         try {
           body = JSON.parse(String(init.body));
@@ -393,6 +418,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
       body,
       idempotencyKey: headers.get("idempotency-key") ?? undefined,
       contentSha256: headers.get("mobilynet-content-sha256") ?? undefined,
+      release: headers.get("mobilynet-release") ?? undefined,
       authorization: headers.get("authorization")
     };
     const answered = parseFailed ? failure(400, "invalid_request", "The body isn't JSON.") : answerOf(request);
@@ -402,7 +428,7 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
       path: url.pathname,
       query: Object.fromEntries([...new Set(url.searchParams.keys())].map((name) => [name, url.searchParams.getAll(name)])),
       idempotencyKey: request.idempotencyKey ?? null,
-      body: upload ? { upload: request.contentSha256 ?? null } : structuredClone(body ?? null),
+      body: upload ? { upload: request.contentSha256 ?? null, ...(request.release ? { release: request.release } : {}) } : structuredClone(body ?? null),
       status: answered.status,
       errorCode: answered.body?.error?.code ?? null
     });
@@ -462,6 +488,16 @@ function createMobilynetStandIn({ now = () => new Date(), autoAdvance = false, s
     services: services.controls,
     /** Hosted services: `all()`, `service(id)` with their links and secrets, `catalogue()`. */
     hosted: hosted.controls,
+    /**
+     * A mobilynet project's machines: `add(projectId, { name, region, state })` answering its id, `addApp(id, { name,
+     * version, package })`, an app running a version of the project's releases or a catalogue package, and `app(id,
+     * name)` as mobilynet answers it.
+     */
+    machines: machines.controls,
+    /** Adds a release key to a mobilynet project, answering its fingerprint. @type {(projectId: string, key: { name: string, publicKey: string, createdBy?: string }) => string} */
+    addReleaseKey: machines.addReleaseKey,
+    /** Removes a mobilynet project's release key. @type {(projectId: string, fingerprint: string) => void} */
+    removeReleaseKey: machines.removeReleaseKey,
     /** The leases held now. */
     leases: () => [...leases.values()].filter((lease) => Date.parse(lease.expiresAt) > now().getTime()).map((lease) => ({ ...lease })),
     /** The events made, across the mobilynet projects. */

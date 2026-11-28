@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { gunzipSync } from "node:zlib";
 
 import { MAX_NEEDS, NEED_NAME, interfaceNamed, isRecord, needSettings } from "./catalogue.js";
@@ -21,7 +21,17 @@ import { MAX_NEEDS, NEED_NAME, interfaceNamed, isRecord, needSettings } from "./
 // A build block's `setup` names the release's setup script as mobilynet's declaration.js and releaseArchive.js check it
 // (main 50c51a16): a plain file name, never mobilynet.json, of a regular file at the archive's root holding 1 byte to
 // 64 KiB of UTF-8 text without NUL, each refused `422` under `declaration.build.setup` in mobilynet's words.
-// STAND-IN ONLY: a release from git (`{ git, deployKey }`) is refused; the stand-in takes uploads only.
+// A prebuilt release of a machine's app (`prebuilt`, mobilynet's prebuiltRelease.js and metal/hostd/lib/
+// releaseSignature.js, its docs/self-hosting.md B3) is an output built elsewhere: a plain tar of manifest.json,
+// manifest.sig and output.tar, in that order, checked at once in mobilynet's order and words, each refusal `422` under
+// its field: the signature against each of the project's release keys (Ed25519 over RELEASE_CONTEXT and the manifest's
+// bytes), and the manifest naming that key, under `signature` (`manifest` for a manifest that isn't one); the
+// MobilyNet-Content-SHA256 as the manifest's output (`upload`); the output's size and SHA-256 as the manifest's
+// (`output`); its mobilynet.json first, the one the manifest names (`declaration`), for the app, and running no build
+// (`declaration.build`). It joins the project's releases of the app, built: nothing runs. The same output again answers
+// the release it made; one released before as a build from source is refused.
+// STAND-IN ONLY: a release from git (`{ git, deployKey }`) is refused; the stand-in takes uploads only. A prebuilt
+// output's store paths are not checked, nor its declaration beyond its fields, its name and its build.
 
 const SHA256 = /^[0-9a-fA-F]{64}$/u;
 const UPLOAD_MAX_BYTES = 1024 * 1024 * 1024;
@@ -214,6 +224,166 @@ function declarationOf(archive, appName) {
   return { declaration: { ...raw, needs: (raw.needs ?? []).map((need) => ({ interface: need.interface, as: need.as })) } };
 }
 
+// What a release key signs: this context, then the manifest's bytes, never the manifest alone (releaseSignature.js).
+const RELEASE_CONTEXT = "mobilynet-release-v1\n";
+const MANIFEST_FORMAT = "mobilynet-release-manifest-1";
+const MOST_MANIFEST_BYTES = 1024 * 1024;
+const MOST_SIGNATURE_BYTES = 512;
+const MOST_PREBUILT_OUTPUT_BYTES = 4 * 1024 * 1024 * 1024;
+// After output.tar: the archive's end, its two zero blocks and the padding a tar may add to its last record.
+const MOST_TRAILER_BYTES = 20 * BLOCK;
+const HEX64 = /^[0-9a-f]{64}$/u;
+const SIGNATURE = /^[A-Za-z0-9+/]{86}==$/u;
+const PREBUILT_MEMBERS = Object.freeze(["manifest.json", "manifest.sig", "output.tar"]);
+const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+/** Whether a tar header's checksum is its own. @param {Buffer} header */
+function checksumOk(header) {
+  let sum = 0;
+  for (let at = 0; at < BLOCK; at += 1) sum += at >= 148 && at < 156 ? 0x20 : header[at];
+  const field = header.toString("latin1", 148, 156).replace(/[\0 ]+$/u, "").trim();
+  return /^[0-7]{1,8}$/u.test(field) && Number.parseInt(field, 8) === sum;
+}
+
+/**
+ * A prebuilt release's upload read in order (prebuiltRelease.js member, textOf and rest): manifest.json, manifest.sig and
+ * output.tar, each the next regular file of at most its size, then only zeros; or the refusal under its field.
+ * @param {Buffer} tar
+ * @returns {{ refusal: { field: string, message: string } } | { members: Buffer[] }}
+ */
+function prebuiltMembers(tar) {
+  const most = { "manifest.json": [MOST_MANIFEST_BYTES, "manifest"], "manifest.sig": [MOST_SIGNATURE_BYTES, "signature"], "output.tar": [MOST_PREBUILT_OUTPUT_BYTES, "output"] };
+  const members = [];
+  let offset = 0;
+  for (const name of PREBUILT_MEMBERS) {
+    const header = tar.subarray(offset, offset + BLOCK);
+    if (header.length < BLOCK) return { refusal: { field: "upload", message: "The upload ends early: it was cut short." } };
+    const said = textAt(header, 0, 100).replace(/^\.\//u, "");
+    const flag = String.fromCharCode(header[156]);
+    const sizeField = header.toString("latin1", 124, 136).replace(/[\0 ]+$/u, "").trim();
+    if (header.every((byte) => byte === 0) || !checksumOk(header) || said !== name || !["0", "\0"].includes(flag) || !/^[0-7]{1,12}$/u.test(sizeField)) {
+      return { refusal: { field: "upload", message: `A prebuilt release's upload is a plain tar of manifest.json, manifest.sig and output.tar, in that order: ${name} isn't next.` } };
+    }
+    const size = Number.parseInt(sizeField, 8);
+    const [limit, field] = most[name];
+    if (size > limit) return { refusal: { field, message: `${name} is over ${limit} bytes.` } };
+    if (offset + BLOCK + size > tar.length) return { refusal: { field: "upload", message: "The upload ends early: it was cut short." } };
+    members.push(tar.subarray(offset + BLOCK, offset + BLOCK + size));
+    offset += BLOCK + Math.ceil(size / BLOCK) * BLOCK;
+  }
+  const rest = tar.subarray(Math.min(offset, tar.length));
+  if (rest.length > MOST_TRAILER_BYTES || rest.some((byte) => byte !== 0)) {
+    return { refusal: { field: "upload", message: "Something follows output.tar: the upload is manifest.json, manifest.sig and output.tar, then the archive's end." } };
+  }
+  return { members };
+}
+
+/** A manifest's fields when it is one (releaseSignature.js manifestOf), or null. @param {string} manifest */
+function manifestFields(manifest) {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(manifest);
+  } catch {
+    return null;
+  }
+  return isRecord(parsed) && parsed.format === MANIFEST_FORMAT && HEX64.test(String(parsed.key ?? "")) && HEX64.test(String(parsed.output?.sha256 ?? "")) ? parsed : null;
+}
+
+/**
+ * The manifest a release key signed (releaseSignature.js verifyRelease): `{ fields }`, or `{ code, message }` naming why
+ * not: no signature, another key's, or a manifest that isn't one or names another key.
+ * @param {string} manifest @param {string} signature @param {{ publicKey: string, fingerprint: string }} key
+ */
+function verifiedBy(manifest, signature, key) {
+  if (manifest.length === 0 || Buffer.byteLength(manifest) > MOST_MANIFEST_BYTES) {
+    return { code: "release_manifest_invalid", message: `A release's manifest is JSON text of at most ${MOST_MANIFEST_BYTES} bytes.` };
+  }
+  if (!SIGNATURE.test(signature)) return { code: "release_unsigned", message: "The release carries no signature: an Ed25519 signature, base64." };
+  const publicKey = createPublicKey({ key: Buffer.from(key.publicKey, "base64"), format: "der", type: "spki" });
+  if (!verify(null, Buffer.concat([Buffer.from(RELEASE_CONTEXT, "utf8"), Buffer.from(manifest, "utf8")]), publicKey, Buffer.from(signature, "base64"))) {
+    return { code: "release_signature_invalid", message: `The release isn't signed by the key ${key.fingerprint}.` };
+  }
+  const fields = manifestFields(manifest);
+  if (!fields) {
+    return { code: "release_manifest_invalid", message: `A release's manifest is JSON of format ${MANIFEST_FORMAT}, naming its output's SHA-256 and its key's fingerprint.` };
+  }
+  if (fields.key !== key.fingerprint) return { code: "release_key_mismatch", message: `The manifest names the key ${fields.key}, not ${key.fingerprint}.` };
+  return { fields };
+}
+
+/**
+ * The project's key whose signature the manifest carries (prebuiltRelease.js signedBy): the first that verifies, or the
+ * refusal under `signature` (`manifest` for one that isn't a manifest), as a project with no key is refused.
+ * @param {ReadonlyArray<{ name: string, publicKey: string, fingerprint: string }>} keys @param {string} manifest @param {string} signature
+ */
+function signedBy(keys, manifest, signature) {
+  if (keys.length === 0) return { refusal: { field: "signature", message: "The project has no release key: an owner or admin adds one first, in the customer area." } };
+  let refused = null;
+  for (const key of keys) {
+    const checked = verifiedBy(manifest, signature, key);
+    if (checked.fields) return { key, fields: checked.fields };
+    // Another key's signature tells nothing; any other refusal is the same whichever key is tried.
+    if (checked.code !== "release_signature_invalid") return { refusal: { field: checked.code === "release_manifest_invalid" ? "manifest" : "signature", message: checked.message } };
+    refused = checked;
+  }
+  return {
+    refusal: {
+      field: "signature",
+      message: `The release isn't signed by any of the project's release keys (${keys.map((key) => key.fingerprint.slice(0, 12)).join(", ")}): ${refused.message}`
+    }
+  };
+}
+
+/**
+ * A prebuilt output's declaration (prebuiltRelease.js declarationOf): its first entry after its root folder, the
+ * mobilynet.json the manifest names, a JSON object for this app with only the fields mobilynet knows, running no build.
+ * @param {Buffer} output @param {Record<string, any>} fields the manifest's @param {string} appName
+ * @returns {{ refusal: Record<string, string> } | { declaration: any }}
+ */
+function prebuiltDeclarationOf(output, fields, appName) {
+  const wanted = String(fields.declaration?.sha256 ?? "");
+  if (!HEX64.test(wanted)) return { refusal: { manifest: "A prebuilt release's manifest names its declaration's SHA-256: { \"declaration\": { \"sha256\": \"…\" } }." } };
+  let offset = 0;
+  let entry = null;
+  while (offset + BLOCK <= output.length) {
+    const header = output.subarray(offset, offset + BLOCK);
+    if (header.every((byte) => byte === 0)) break;
+    const size = Number.parseInt(textAt(header, 124, 12).trim() || "0", 8);
+    const name = textAt(header, 0, 100).replace(/^\.?\//u, "");
+    const type = textAt(header, 156, 1) || "0";
+    if (!(type === "5" && (name === "" || name === "."))) {
+      entry = { name, type, bytes: output.subarray(offset + BLOCK, offset + BLOCK + size) };
+      break;
+    }
+    offset += BLOCK + Math.ceil(size / BLOCK) * BLOCK;
+  }
+  if (!entry || entry.name !== DECLARATION_FILE || entry.type !== "0") {
+    return { refusal: { declaration: `The output's first entry is its ${DECLARATION_FILE}, a file.` } };
+  }
+  const sha256 = createHash("sha256").update(entry.bytes).digest("hex");
+  if (sha256 !== wanted) return { refusal: { declaration: `The output's ${DECLARATION_FILE} has the SHA-256 ${sha256}; its manifest names ${wanted}.` } };
+  let raw;
+  try {
+    raw = JSON.parse(UTF8.decode(entry.bytes));
+  } catch (error) {
+    return { refusal: { declaration: `${DECLARATION_FILE} isn't valid JSON text: ${error.message}` } };
+  }
+  if (!isRecord(raw)) return { refusal: { declaration: `${DECLARATION_FILE} must hold a JSON object.` } };
+  const errors = {};
+  for (const key of Object.keys(raw)) {
+    if (Object.hasOwn(GONE_FIELDS, key)) errors[`declaration.${key}`] = GONE_FIELDS[key];
+    else if (!FIELDS.includes(key)) errors[`declaration.${key}`] = "Unknown field.";
+  }
+  if (raw.name !== appName) errors["declaration.name"] = `Must be ${JSON.stringify(appName)}, the app this release is for.`;
+  if (Object.keys(errors).length > 0) return { refusal: errors };
+  const { build } = raw;
+  const plain = isRecord(build) && Object.keys(build).length === 1 && Array.isArray(build.output) && build.output.length === 1 && build.output[0] === ".";
+  if (!plain) {
+    return { refusal: { "declaration.build": "A prebuilt release runs no build: its build is { \"output\": [\".\"] } alone, with no setup, command, packages, settings or cache." } };
+  }
+  return { declaration: raw };
+}
+
 /**
  * @param {{ failure: Function, nextId: (prefix: string) => string, at: () => string, now: () => Date, faults: { releaseBuildFails: boolean, buildsWait: any } }} world
  */
@@ -270,6 +440,76 @@ function createStandInReleases(world) {
       declaration: read.declaration
     };
     versions.set(release.version, release);
+    return { release, started: true };
+  }
+
+  /**
+   * A prebuilt release of an app from its upload (prebuiltRelease.js openPrebuilt, releases.js fromPrebuilt): refused
+   * `422` under its field, in mobilynet's order and words, or the release (the same output's again), `started` true for
+   * a new one. Its output is checked and kept: no build runs, so it is built at once.
+   * @param {string} projectId @param {string} app @param {Buffer} body the plain tar of manifest.json, manifest.sig and output.tar
+   * @param {string | undefined} sha256 its MobilyNet-Content-SHA256, the output's when sent
+   * @param {ReadonlyArray<{ name: string, publicKey: string, fingerprint: string }>} keys the project's release keys
+   * @returns {{ refusal: any } | { release: any, started: boolean }}
+   */
+  function prebuilt(projectId, app, body, sha256, keys) {
+    const refused = (fieldErrors) => ({ refusal: invalid(fieldErrors) });
+    if (sha256 !== undefined && !SHA256.test(String(sha256))) return refused({ upload: "MobilyNet-Content-SHA256 is the output's SHA-256: 64 hexadecimal digits." });
+    const read = prebuiltMembers(body);
+    if (read.refusal) return refused({ [read.refusal.field]: read.refusal.message });
+    const [manifestBytes, signatureBytes, output] = read.members;
+    let manifest;
+    let signature;
+    try {
+      manifest = UTF8.decode(manifestBytes);
+    } catch {
+      return refused({ manifest: "It isn't UTF-8 text." });
+    }
+    try {
+      signature = UTF8.decode(signatureBytes).trim();
+    } catch {
+      return refused({ signature: "It isn't UTF-8 text." });
+    }
+    const signed = signedBy(keys, manifest, signature);
+    if (signed.refusal) return refused({ [signed.refusal.field]: signed.refusal.message });
+    const { fields, key } = signed;
+    if (sha256 !== undefined && String(sha256).toLowerCase() !== fields.output.sha256) {
+      return refused({ upload: `MobilyNet-Content-SHA256 is ${String(sha256).toLowerCase()}; the manifest names the output ${fields.output.sha256}.` });
+    }
+    const versions = releases.get(keyOf(projectId, app)) ?? new Map();
+    const existing = [...versions.values()].find((one) => one.source.upload.sha256 === fields.output.sha256);
+    if (existing && !existing.prebuilt) return refused({ output: "This output was released before as a build from source: a prebuilt release is a new output." });
+    if (existing) return { release: existing, started: false };
+    const bytes = Number(fields.output?.bytes);
+    if (!Number.isSafeInteger(bytes) || bytes < 1) {
+      return refused({ manifest: "A prebuilt release's manifest names its output's size in bytes: { \"output\": { \"sha256\": \"…\", \"bytes\": … } }." });
+    }
+    if (output.length !== bytes) return refused({ output: `output.tar is ${output.length} bytes; its manifest names ${bytes}.` });
+    const digest = createHash("sha256").update(output).digest("hex");
+    if (digest !== fields.output.sha256) return refused({ output: `The output's SHA-256 is ${digest}; its manifest names ${fields.output.sha256}.` });
+    const taken = prebuiltDeclarationOf(output, fields, app);
+    if (taken.refusal) return refused(taken.refusal);
+    const version = `${now().toISOString().slice(0, 10).replace(/-/gu, "")}-${digest.slice(0, 7)}`;
+    const release = {
+      projectId,
+      app,
+      version,
+      state: "active",
+      source: { upload: { sha256: digest, sizeBytes: output.length, deletedAt: null } },
+      createdAt: at(),
+      retiredAt: null,
+      build: "built",
+      buildId: nextId("bld"),
+      error: null,
+      buildCreatedAt: at(),
+      buildStartedAt: at(),
+      buildFinishedAt: at(),
+      log: `Checked the prebuilt output of ${app} ${version}, signed by ${key.name} (${key.fingerprint.slice(0, 12)}): nothing to build\n`,
+      declaration: taken.declaration,
+      prebuilt: { fingerprint: key.fingerprint, keyName: key.name }
+    };
+    versions.set(version, release);
+    releases.set(keyOf(projectId, app), versions);
     return { release, started: true };
   }
 
@@ -392,6 +632,7 @@ function createStandInReleases(world) {
 
   return Object.freeze({
     upload,
+    prebuilt,
     named,
     view,
     advance,

@@ -10,3 +10,4 @@ export { deleteResource, takeOffline } from "./offline.js";
 export { deployStopOf } from "./stop.js";
 export { setInstances } from "./instances.js";
 export { moveDomain } from "./domain.js";
+export { SIGNED_RELEASE_RECORD_FORMAT, manifestOf, signedRelease } from "./signedRelease.js";
