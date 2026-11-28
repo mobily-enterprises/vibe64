@@ -20,35 +20,46 @@ const shared = {
   hosts: 0,
   /** @type {any} the page's error runtime, once src/error.js installed the offer */
   runtime: null,
-  // The offer JSKIT's own banner shows, from before a top banner was on the page.
-  /** @type {ClientUpdateOffer | null} */
+  /**
+   * The offer JSKIT's own banner shows, from before a top banner was on the page.
+   * @type {ClientUpdateOffer | null}
+   */
   shownByShell: null
 };
 
 function offerFrom(id, payload) {
-  return Object.freeze({ id, message: String(payload.message || ""), action: payload.action || null });
+  return Object.freeze({
+    id,
+    message: String(payload.message || ""),
+    action: payload.action || null
+  });
 }
 
 /** The presenter the policy hands the offer to while a top banner is on the page; its id is the offer's. */
 function createClientUpdatePresenter() {
   let shown = 0;
+  function supports() {
+    return true;
+  }
+  function present(payload) {
+    shown += 1;
+    const id = `${CLIENT_UPDATE_PRESENTER_ID}-${shown}`;
+    shared.offer.value = offerFrom(id, payload);
+    return id;
+  }
+  // JSKIT withdraws the offer by its id when the server serves the page's own build again; no id clears it, as the
+  // shell's own presenters clear their channel.
+  function dismiss(presentationId = "") {
+    const offer = shared.offer.value;
+    if (!offer || (presentationId && presentationId !== offer.id)) return 0;
+    shared.offer.value = null;
+    return 1;
+  }
   return Object.freeze({
     id: CLIENT_UPDATE_PRESENTER_ID,
-    supports: () => true,
-    present(payload) {
-      shown += 1;
-      const id = `${CLIENT_UPDATE_PRESENTER_ID}-${shown}`;
-      shared.offer.value = offerFrom(id, payload);
-      return id;
-    },
-    // JSKIT withdraws the offer by its id when the server serves the page's own build again; no id clears it, as the
-    // shell's own presenters clear their channel.
-    dismiss(presentationId = "") {
-      const offer = shared.offer.value;
-      if (!offer || (presentationId && presentationId !== offer.id)) return 0;
-      shared.offer.value = null;
-      return 1;
-    }
+    supports,
+    present,
+    dismiss
   });
 }
 

@@ -68,6 +68,11 @@ function healthSummaryForAssistant(result) {
   };
 }
 
+/** The host's planned restart, as every editor's banner reads it. */
+function plannedRestartStatus() {
+  return { ok: true, ...plannedRestart().status() };
+}
+
 /**
  * @param {object} dependencies
  * @param {StudioHealthService} dependencies.studioHealth
@@ -116,7 +121,7 @@ function createStudioHealthActions({ studioHealth, crashes }) {
       id: ACTION_READ_PLANNED_RESTART,
       input: studioHealthQueryInputValidator,
       extensions: { ...NOT_A_TOOL, vibe64: WORKSPACE_OPERATION },
-      execute: () => ({ ok: true, ...plannedRestart().status() })
+      execute: () => plannedRestartStatus()
     }),
     // Crash records stay off the assistant's tools: an error's message and stack may hold what no AI should read.
     Object.freeze({
