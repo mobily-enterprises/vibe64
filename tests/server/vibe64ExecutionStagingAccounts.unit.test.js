@@ -168,10 +168,10 @@ test("a staging account has a login shell only while root holds its staging key"
 });
 
 // A boot can take the staging key away while the account keeps its login shell: a mobilynet machine keeps keys and sudo
-// rules on tmpfs, and its accounts build gives every login shell, /bin/sh included, its own (/usr/lib/mobilynet/shell)
-// at boot. The helper then refused the account for every use: FINAL3's activation on mercmobily (28 Nov) could not
-// install daniela's unit, and the editor's grant at the first staging login after a boot was refused the same way.
-const MOBILYNET_SHELL = "/usr/lib/mobilynet/shell";
+// rules on tmpfs, and its accounts build gives every login shell, /bin/sh included, its own at boot (here a made-up
+// path). The helper then refused the account for every use: on 28 Nov a workspace's activation could not install a
+// Staging app's unit, and the editor's grant at the first staging login after a boot was refused the same way.
+const MOBILYNET_SHELL = "/usr/libexec/host-login-shell";
 
 test("a login shell whose staging key a boot took away is access the boot ended: the helper ends it as revoke does, then " +
   "uses the account; the host's own form of the login shell is a login shell too", async (t) => {

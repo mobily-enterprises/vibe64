@@ -205,7 +205,7 @@ function stagingAccountProblem(user = {}, identity = {}, facts = {}) {
 // Whether the account is the one the helper makes but for a login shell whose staging key root no longer holds:
 // access a boot ended. A host may keep the keys and sudo rules on tmpfs and give every login shell its own at boot
 // (a mobilynet machine does both), and nothing took the shell back, so the helper refused every use of the account
-// (FINAL3's activation on mercmobily, 28 Nov 2026, could not install daniela's unit, and the editor's grant at the
+// (on 28 Nov 2026 a workspace's activation could not install a Staging app's unit, and the editor's grant at the
 // first staging login after a boot was refused the same way).
 function lapsedStagingLogin(user, identity = {}, facts = {}) {
   return Boolean(user) && user.shell !== STAGING_ACCOUNT_SHELL && facts.stagingAccess !== true &&

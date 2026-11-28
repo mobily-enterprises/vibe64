@@ -539,7 +539,7 @@ test("an empty canonical repository is created bare on the requested branch for 
   );
 });
 
-// A host's login profile may give Git command-scope config of its own: mobilynet's /etc/profile.d/90-mobilynet.sh
+// A host's login profile may give Git command-scope config of its own: mobilynet's machines' login profile script
 // exports GIT_CONFIG_COUNT=2 with core.hooksPath and core.fsmonitor, replacing a caller's entries, so a login shell
 // loses every one Vibe64 gave its command (27 Nov: opening a GitHub project lost its token transport's credential
 // helper so). The canonical repository's scripts keep their safe directories whatever such a profile sets: this
