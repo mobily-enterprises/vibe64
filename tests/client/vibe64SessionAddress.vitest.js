@@ -126,6 +126,17 @@ describe("the session the address names", () => {
     expect(sessionAddressQuery({ ...handover, route: route("s1"), renewal: { fromId: "s1", confirmed: true } }))
       .toEqual({ session: "s2", pane: "dashboard" });
   });
+
+  it("stays the renewed session while its renewal does not confirm the successor shown", () => {
+    const sessions = [{ sessionId: "s1" }, { sessionId: "s2" }];
+    const route = { params: { slug: "demo" }, query: { session: "renewed", chat: "main" } };
+    const shown = { route, projectSlug: "demo", sessions, shownSessionId: "s2" };
+
+    // No renewal known for it, or one naming another successor: the selection may fall back to s2, the address waits.
+    expect(sessionAddressQuery({ ...shown, renewal: { fromId: "renewed", confirmed: false } })).toBe(null);
+    // A session that has gone with no renewal behind the one shown gives way to it.
+    expect(sessionAddressQuery({ ...shown, renewal: { fromId: "", confirmed: false } })).toEqual({ session: "s2" });
+  });
 });
 
 describe("the project page's address", () => {
