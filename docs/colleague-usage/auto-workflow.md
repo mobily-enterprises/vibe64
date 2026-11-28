@@ -253,9 +253,12 @@ line says the same; **Check delivery** stays available. **Continue planning**,
 **Continue implementation**, and **Continue review** act on the saved workflow
 without resending its original chat message. **Check delivery** inspects the saved
 attempt without starting another copy. If a control cannot start or the saved
-plan has changed, its error appears beside the controls; inspect the current
-state before trying again. **Implement plan** still sends a new request, and
-shows a refusal beside the controls if that request cannot start.
+plan has changed, Vibe64 says why in a message at the bottom of the screen and
+beside the controls. The reason beside the controls stays until you press a
+workflow control again or the workflow itself moves on (another request, or a
+new stage, state or delivery); inspect the current state before trying again.
+**Implement plan** still sends a new request, and shows a refusal the same way
+if that request cannot start.
 
 When Auto is waiting at Planning with an active saved plan, the notice offers
 **Implement plan**, **View plan** and **Stop**. These are

@@ -203,11 +203,14 @@ describe("Vibe64 direct session view", () => {
     expect(owner).toBeTruthy();
     const routingRequest = vue.ref({ messageId: "planning-request", input: { message: "Make a plan" }, workPlan: { revision: "current-plan" } });
     const routingActionSending = vue.ref("");
+    // The chat's action feedback: a refusal's message, cleared by success() as each new attempt starts.
     const routingActionError = vue.ref("");
+    const routingFeedback = { success: () => { routingActionError.value = ""; },
+      error: (error, fallback) => { routingActionError.value = error?.message || fallback; } };
     let finish;
     const props = { sendAgentMessage: vi.fn(() => new Promise(resolve => { finish = resolve; })),
       conversationRuntime: { continueWorkflow: vi.fn(async () => ({ ok: true })) } };
-    const action = new Function("routingRequest", "routingActionSending", "routingActionError", "props", `${owner}\nreturn sendRoutingAction;`)(routingRequest, routingActionSending, routingActionError, props);
+    const action = new Function("routingRequest", "routingActionSending", "routingFeedback", "props", `${owner}\nreturn sendRoutingAction;`)(routingRequest, routingActionSending, routingFeedback, props);
     const pending = action("implement");
     expect(routingActionSending.value).toBe("implement");
     await action("implement");

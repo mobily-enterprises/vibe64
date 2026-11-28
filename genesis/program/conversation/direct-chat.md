@@ -2211,7 +2211,11 @@ small JSKIT buttons and a 44px coarse-pointer summary. Its workflow action
 disabled-says-why pattern: held by other chat work, it stays greyed out with its
 reason beside it ("Available when this answer ends.", tied by
 `aria-describedby`), while Check delivery, which only reads the saved attempt,
-stays available. Errors and review
+stays available. A refused workflow action (a Continue, Implement plan, Check
+delivery, or the finished plan's Yes or No) goes through the shell's action
+feedback to the snackbar and stays beside its control until the person acts
+again or the saved request's id, stage, status or delivery changes; a read that
+brings back the same request changes nothing. Errors and review
 recovery actions remain visible, while a newly interrupted or skipped coding review
 uses the shell's brief notification. Restoring a chat does not replay old notices.
 Discussion and planning complete without reporting a skipped implementation review.
