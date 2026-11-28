@@ -80,7 +80,7 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/kernel": "0.2.35",
+    "@jskit-ai/kernel": "0.2.36",
     "@local/vibe64-atomic-file": "0.1.0",
     "node-pty": "^1.1.0"
   }

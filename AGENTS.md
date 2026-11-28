@@ -5,9 +5,10 @@ This app is built on JSKIT. Its guide,
 `https://mobily-enterprises.github.io/jskit-ai/guide/`, and its pattern
 library, `https://mobily-enterprises.github.io/jskit-ai/patterns/`, describe
 the current JSKIT release. `@jskit-ai/agent-docs` is not an app dependency, so
-the guide has no copy under `node_modules`. Keep the app on the current release
-(`npm run jskit:update`) so the two agree. A pattern whose owner runtime package
-is installed is also in that package's `patterns/` folder, at the app's
+the guide has no copy under `node_modules`. `npm run jskit:update` moves the app
+to the current release, so the two agree, unless this project's own rules say
+who moves its JSKIT versions: then follow them. A pattern whose owner runtime
+package is installed is also in that package's `patterns/` folder, at the app's
 version. Never install a runtime package only to read its documentation.
 
 Read the guide's page before the work it covers:
@@ -33,10 +34,11 @@ Read the guide's page before the work it covers:
 
 `npm run verify` runs the checks listed in
 `https://mobily-enterprises.github.io/jskit-ai/guide/framework/typed-features#running-the-checks`.
-`npm test` runs every Node test file; `npm test -- <file>` runs exactly that
-file. Each finding links the guide section that explains it: fix it in the
-code, and excuse one only with the guide's `readable-check: allow` comment and
-reason prefix.
+`npm test -- <file>` runs exactly that file, and `npm test` every Node test
+file, unless this project's own rules say how its tests run and when the whole
+suite does: then follow them. Each finding links the guide section that
+explains it: fix it in the code, and excuse one only with the guide's
+`readable-check: allow` comment and reason prefix.
 
 Where the host provides a managed browser runner, such as Vibe64's, every
 Playwright suite runs through it from the first run, on a declared test target:

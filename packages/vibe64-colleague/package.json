@@ -55,12 +55,12 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/assistant-core": "0.2.96",
-    "@jskit-ai/assistant-runtime": "0.2.102",
-    "@jskit-ai/assistant-voice": "0.2.102",
-    "@jskit-ai/kernel": "0.2.35",
-    "@jskit-ai/realtime": "0.2.60",
-    "@jskit-ai/shell-web": "0.2.57",
+    "@jskit-ai/assistant-core": "0.2.97",
+    "@jskit-ai/assistant-runtime": "0.2.103",
+    "@jskit-ai/assistant-voice": "0.2.103",
+    "@jskit-ai/kernel": "0.2.36",
+    "@jskit-ai/realtime": "0.2.61",
+    "@jskit-ai/shell-web": "0.2.58",
     "@local/studio-terminal-core": "0.1.0",
     "@local/vibe64-accounts": "0.1.0",
     "@local/vibe64-core": "0.1.0",
