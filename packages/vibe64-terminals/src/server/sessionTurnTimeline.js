@@ -1,5 +1,6 @@
 import { currentProjectActionRequestMeta, currentProjectRuntimeRoot } from "@local/vibe64-core/server/projectRequestContext";
 import { recordSessionTimelineEvent, timelineActor, timelineRequestTrigger } from "@local/vibe64-core/server/sessionTimeline";
+import { receiptTurnId } from "./assistantRoutingRequests.js";
 
 // What a session's timeline (vibe64-core's sessionTimeline.js) says about its
 // turns and conversations: what was asked of the AI engine, by whom and why,
@@ -29,10 +30,6 @@ const ENDED_RUN_EVENTS = Object.freeze({
 // The turns seen running, so each is recorded once however often it reports progress.
 const RUNNING_TURNS_KEPT = 1024;
 const runningTurns = new Set();
-
-function turnIdOf(result) {
-  return result?.turnId || result?.turn?.id || result?.codexAgentTurn?.turnId || "";
-}
 
 /**
  * What asked: a follow-up turn Vibe64 sends by itself names its step (`context.timelineTrigger`, such as
@@ -86,7 +83,7 @@ async function withSessionTurnTimeline(method, context, input, operation) {
     record(refused, { ok: false, code: result.code });
   } else {
     const steered = method === "sendMessage" && input?.submissionKind === "steer";
-    record(steered ? "steered" : requested, { turn: turnIdOf(result), conversation: context.routingConversationId || result?.conversationId || input?.conversationId });
+    record(steered ? "steered" : requested, { turn: receiptTurnId(result), conversation: context.routingConversationId || result?.conversationId || input?.conversationId });
   }
   return result;
 }
