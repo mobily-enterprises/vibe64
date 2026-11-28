@@ -104,3 +104,7 @@ task or a pass.
 Ask it to send database investigation or a requested change to a coding conversation
 and report the evidence. Data-changing work retains its existing confirmation
 requirements; a how-to question alone authorizes no query or mutation.
+Where the host runs the project's database server, the session's coding AI also
+sees the connections on its own databases and ends one holding a lock, and
+restarts the server as the last resort, with Need help raised: see
+[The AI and the project's servers](project-services.md).

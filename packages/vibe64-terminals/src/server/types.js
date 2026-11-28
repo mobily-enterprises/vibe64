@@ -60,6 +60,50 @@
  * @property {(request: { actor: object | null, environment: string, key: string, projectSlug: string, sessionId: string }) => Promise<object>} unlink
  */
 /**
+ * What a call of the host's service control names: the session's own project and session (never ones its caller
+ * chose), the session's source, the person whose request the AI works on, that request's turn while it works, whether
+ * it is for the project's development or its Staging, and a signal that aborts when the caller goes away.
+ * @typedef {{ projectSlug: string, sessionId: string, sourceRoot: string, actor: object | null, turnId: string,
+ *   target: "development" | "staging", signal: AbortSignal }} ServiceControlRequest
+ */
+/**
+ * One server the host runs for the project: its id (what the commands name), what it is, its state, whether every
+ * project on the workspace shares it (a database server), and a short note.
+ * @typedef {{ id: string, label: string, state: string, shared?: boolean, detail?: string }} ServiceControlService
+ */
+/**
+ * A connection on one of the session's databases: its id, database, user, how long it has been in its state, that state
+ * with what it waits on, and the start of its statement.
+ * @typedef {{ id: number, database: string, user: string, seconds: number, state: string, query: string }} ServiceControlConnection
+ */
+/**
+ * A composed host's control of the servers it runs for a project (vibe64.terminals.service-control,
+ * serviceControl.js), which vibe64-helper services calls for the session's AI. Each acts only on a service or database
+ * of the request's project, throws an Error whose message the AI reads when it refuses, never returns a password, and
+ * records each restart, stop, start and ended connection with the session, the service and the time where the host's
+ * people see it.
+ * @typedef {object} ServiceControl
+ * @property {(request: ServiceControlRequest) => Promise<{ services: ServiceControlService[], note?: string }>} listServices
+ * @property {(request: ServiceControlRequest & { serviceId: string, lines: number }) =>
+ *   Promise<{ service: ServiceControlService, state: string, source?: string, lines: string[] }>} readServiceLogs
+ *   the service's last `lines` log lines, newest first, and where they come from
+ * @property {(request: ServiceControlRequest & { serviceId: string, action: "restart" | "stop" | "start",
+ *   needHelp?: { raised: boolean, id?: string } }) =>
+ *   Promise<{ service: ServiceControlService, outcome: string, message: string, ok?: boolean }>} controlService
+ *   `ok: false` when the service was left as it was, with why in `message`; a shared server's restart or stop is
+ *   refused unless `needHelp.raised`
+ * @property {(request: ServiceControlRequest & { serviceId?: string }) => Promise<{ service: ServiceControlService,
+ *   running: boolean, connections: ServiceControlConnection[] }>} listDatabaseSessions the connections on the session's
+ *   databases on its database server (`serviceId`, or its only one); none, `running: false`, when it is not running
+ * @property {(request: ServiceControlRequest & { serviceId?: string }) => Promise<{ service: ServiceControlService,
+ *   running: boolean, waits: { waiting: ServiceControlConnection, blockers: (ServiceControlConnection & { lock: string })[],
+ *   elsewhere: number }[] }>} listDatabaseLocks each of those connections that waits, the ones of them it waits on, and
+ *   how many blockers are on another project's database
+ * @property {(request: ServiceControlRequest & { serviceId?: string, connectionId: number }) =>
+ *   Promise<{ service: ServiceControlService, connection: { id: number, database: string }, outcome: string,
+ *   message: string, ok?: boolean }>} endDatabaseConnection ends one of those connections, refusing any other
+ */
+/**
  * A composed host's own vibe64-helper group (vibe64.terminals.helper-command-groups, helperCommandGroups.js), run as
  * `vibe64-helper <name> [arguments]` after the session control's identity, the session's binding and refuseUnreadFields.
  * @typedef {object} HelperCommandGroup

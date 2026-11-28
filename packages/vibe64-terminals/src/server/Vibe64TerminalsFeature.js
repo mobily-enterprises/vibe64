@@ -22,6 +22,7 @@ import {
 } from "./stagingEnvironment.js";
 import { NO_SAVED_ENV_VALUE_LINKS, TERMINALS_SAVED_ENV_VALUE_LINKS_TOKEN, assertSavedEnvValueLinks } from "./savedEnvValueLinks.js";
 import { NO_HELPER_COMMAND_GROUPS, TERMINALS_HELPER_COMMAND_GROUPS_TOKEN, assertHelperCommandGroups } from "./helperCommandGroups.js";
+import { NO_SERVICE_CONTROL, TERMINALS_SERVICE_CONTROL_TOKEN, assertServiceControl } from "./serviceControl.js";
 import {
   NO_PRODUCTION_ENVIRONMENT,
   TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
@@ -43,6 +44,7 @@ import { startProjectRuntimeDormancyCleanupSchedule } from "./projectRuntimeDorm
 /** @typedef {import("./types.js").ProductionEnvironmentProvider} ProductionEnvironmentProvider */
 /** @typedef {import("./types.js").SavedEnvValueLinks} SavedEnvValueLinks */
 /** @typedef {import("./types.js").HelperCommandGroup} HelperCommandGroup */
+/** @typedef {import("./types.js").ServiceControl} ServiceControl */
 
 // Each terminals service's idle-project sweep, started in setup and stopped at shutdown.
 const cleanupSchedules = new WeakMap();
@@ -64,13 +66,14 @@ const Vibe64TerminalsFeature = defineFeature({
     uploads: "runtime.uploads",
     project: "vibe64.project"
   },
-  // A composed host's staging Env, Production Env and saved values for the agent Env command, and its own
-  // vibe64-helper groups.
+  // A composed host's staging Env, Production Env and saved values for the agent Env command, its own
+  // vibe64-helper groups, and its control of the servers it runs for a project (vibe64-helper services).
   optional: {
     stagingEnvironmentProvider: TERMINALS_STAGING_ENVIRONMENT_TOKEN,
     productionEnvironmentProvider: TERMINALS_PRODUCTION_ENVIRONMENT_TOKEN,
     savedEnvValueLinks: TERMINALS_SAVED_ENV_VALUE_LINKS_TOKEN,
-    helperCommandGroups: TERMINALS_HELPER_COMMAND_GROUPS_TOKEN
+    helperCommandGroups: TERMINALS_HELPER_COMMAND_GROUPS_TOKEN,
+    serviceControl: TERMINALS_SERVICE_CONTROL_TOKEN
   },
   provides: {
     terminals: "vibe64.terminals"
@@ -87,6 +90,7 @@ const Vibe64TerminalsFeature = defineFeature({
    * @param {ProjectService} capabilities.project
    * @param {SavedEnvValueLinks | null} capabilities.savedEnvValueLinks
    * @param {HelperCommandGroup[] | null} capabilities.helperCommandGroups
+   * @param {ServiceControl | null} capabilities.serviceControl
    * @param {FeatureSetupContext} context
    */
   setup({
@@ -99,12 +103,14 @@ const Vibe64TerminalsFeature = defineFeature({
     productionEnvironmentProvider,
     project,
     savedEnvValueLinks,
-    helperCommandGroups
+    helperCommandGroups,
+    serviceControl
   }, { actionCatalogue }) {
     assertStagingEnvironmentProvider(stagingEnvironmentProvider);
     assertProductionEnvironmentProvider(productionEnvironmentProvider);
     assertSavedEnvValueLinks(savedEnvValueLinks);
     assertHelperCommandGroups(helperCommandGroups);
+    assertServiceControl(serviceControl);
     // Session debug logging, which the sessions and their agent work share, follows the server's env.
     configureVibe64SessionDebugLog(env);
     const projectContext = getStudioProjectContext();
@@ -121,7 +127,8 @@ const Vibe64TerminalsFeature = defineFeature({
       conversationTurns: createConversationTurnPublishers(events),
       runtimeProfile: projectContext.runtimeProfile,
       savedEnvValueLinks: savedEnvValueLinks ?? NO_SAVED_ENV_VALUE_LINKS,
-      helperCommandGroups: helperCommandGroups ?? NO_HELPER_COMMAND_GROUPS
+      helperCommandGroups: helperCommandGroups ?? NO_HELPER_COMMAND_GROUPS,
+      serviceControl: serviceControl ?? NO_SERVICE_CONTROL
     });
     registerRoutes(http, {
       fastify,

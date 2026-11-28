@@ -142,3 +142,9 @@ together about every 30 minutes, ask it to stop that server and run the tests
 on the session's test databases. Colleague can explain the limit, the note and
 the test databases on desktop and mobile; it can't run the assistant's commands
 or stop a process.
+
+When a statement hangs on a lock, or the session's database server stops
+answering, the assistant finds and ends the connection holding it with
+`vibe64-helper services` where the host runs the project's servers, and restarts
+a server every project shares only as the last resort, with Need help raised:
+see [The AI and the project's servers](project-services.md).
