@@ -36,4 +36,10 @@ describe("planned restart words", () => {
     expect(plannedRestartAfterText({ restartedAt: restartAt, sessions: 0, stopped: [] }))
       .toBe("Restarted for an update at 07:40. Nothing was lost.");
   });
+
+  it("ends with the reload when the update changed the page's code", () => {
+    expect(plannedRestartAfterText({ restartedAt: restartAt, sessions: 1, stopped: [] }, { updated: true }))
+      .toBe("Restarted for an update at 07:40. Nothing was lost. The AI that was working picked up where it left off. " +
+        "Reload to get the latest version.");
+  });
 });

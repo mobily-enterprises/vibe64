@@ -5,6 +5,7 @@ import {
   DEVELOPMENT_PATH,
   SCOPED_API_PREFIX
 } from "./support/base-shell-data";
+import { expectReadableButton } from "./support/readable-button";
 import { SHELL_READS } from "./support/shell-reads";
 import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 
@@ -129,6 +130,119 @@ test("a tab still running the build before an update offers Reload when it opens
   await expect(notice).toHaveCount(0);
 });
 
+// After an update a page still running the build before it learns from realtime that the server serves another one
+// (JSKIT's served client build). The editor shows that once, in one notice, and its buttons read as the controls they
+// are on the notice's colour (WCAG's 4.5:1 for their words). On 28 Nov 2026 a restart for an update showed the green
+// "Restarted for an update at 11:46. Nothing was lost." with faded Reload and Dismiss, and JSKIT's blue "Vibe64 was
+// updated. Reload to get the latest version." under it, for the same update.
+const PLANNED_RESTART_PATH = "/api/studio/health/planned-restart";
+const UPDATED_SENTENCE = "Reload to get the latest version.";
+// The build the server serves after the update, which no page here runs.
+const UPDATED_BUILD = "0000000000000000";
+
+test("after a restart for an update the page shows one notice, with Reload and Dismiss that read as enabled", async ({ page }) => {
+  const realtime = await mockRealtime(page, UPDATED_BUILD);
+  const restarted = { id: "restart-a", restartedAt: new Date().toISOString(), reason: "An update", sessions: 0, stopped: [] };
+  await mockReadyStudioShell(page, { plannedRestart: () => ({ ok: true, active: null, restarted }) });
+  await page.goto(DEVELOPMENT_PATH);
+  await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
+  await realtime.announced;
+
+  const notice = page.getByTestId("vibe64-planned-restart-after");
+  await expect(notice.getByRole("status")).toHaveText(
+    new RegExp(`^Restarted for an update at \\d{2}:\\d{2}\\. Nothing was lost\\. ${UPDATED_SENTENCE.replace(".", "\\.")}$`, "u")
+  );
+  await expect(updateNotices(page)).toHaveCount(1);
+  for (const name of ["Reload", "Dismiss"]) {
+    await expectReadableButton(notice.getByRole("button", { name, exact: true }));
+  }
+
+  // Reload opens the same address again, which then runs the build the server serves: the message stays until it is
+  // dismissed, without Reload.
+  realtime.announce = await page.locator('meta[name="jskit-client-build"]').getAttribute("content") || "";
+  expect(realtime.announce).toMatch(/^[0-9a-f]+$/u);
+  const reloaded = page.waitForEvent("load");
+  await notice.getByRole("button", { name: "Reload", exact: true }).click();
+  await reloaded;
+  await expect(notice.getByRole("status")).toHaveText(/^Restarted for an update at \d{2}:\d{2}\. Nothing was lost\.$/u);
+  await expect(notice.getByRole("button", { name: "Reload", exact: true })).toHaveCount(0);
+  await expectReadableButton(notice.getByRole("button", { name: "Dismiss", exact: true }));
+  await notice.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await expect(updateNotices(page)).toHaveCount(0);
+});
+
+test("an update without a planned restart shows JSKIT's offer to reload as the one notice, which Dismiss closes", async ({ page }) => {
+  const realtime = await mockRealtime(page, UPDATED_BUILD);
+  await mockReadyStudioShell(page);
+  await page.goto(DEVELOPMENT_PATH);
+  await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
+  await realtime.announced;
+
+  const notice = page.getByTestId("vibe64-client-update");
+  await expect(notice.getByRole("status")).toHaveText(`Vibe64 was updated. ${UPDATED_SENTENCE}`);
+  await expect(updateNotices(page)).toHaveCount(1);
+  for (const name of ["Reload", "Dismiss"]) {
+    await expectReadableButton(notice.getByRole("button", { name, exact: true }));
+  }
+  await notice.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await expect(updateNotices(page)).toHaveCount(0);
+});
+
+test("while the editor restarts for its planned restart the page says Updating… alone, and the countdown again once it answers", async ({ page }) => {
+  let unanswered = false;
+  const notice = { id: "restart-b", restartAt: new Date(Date.now() + 120_000).toISOString(), expiresAt: new Date(Date.now() + 300_000).toISOString(), reason: "An update" };
+  await mockReadyStudioShell(page, {
+    failGet: () => unanswered,
+    plannedRestart: () => ({ ok: true, active: notice, restarted: null })
+  });
+  await page.goto(DEVELOPMENT_PATH);
+  await expect(page.getByRole("button", { name: "New Session" })).toBeVisible();
+  const countdown = page.getByTestId("vibe64-planned-restart-banner");
+  await expect(countdown.getByRole("status")).toHaveText(/^This workspace restarts at \d{2}:\d{2} \(in 2 minutes\): An update\. /u);
+
+  // The restart: nothing answers, and the page's next read (a page the person opens) finds no editor.
+  unanswered = true;
+  await page.evaluate((path) => {
+    const app = (document.querySelector("#app") as unknown as { __vue_app__: { config: { globalProperties: { $router: { push(path: string): Promise<unknown> } } } } }).__vue_app__;
+    return app.config.globalProperties.$router.push(path).catch(() => undefined);
+  }, `${DASHBOARD_PATH}/history`);
+  const updating = page.locator(".shell-error-host__banner").filter({ hasText: "Updating…" });
+  await expect(updating).toBeVisible();
+  await expect(countdown).toHaveCount(0);
+
+  unanswered = false;
+  await expect(updating).toHaveCount(0);
+  await expect(countdown).toBeVisible();
+});
+
+/** Every notice on the page about the update: the editor's banners and JSKIT's. */
+function updateNotices(page: Page) {
+  return page.getByRole("alert").filter({ hasText: /\bupdate/iu });
+}
+
+/**
+ * The page's realtime connection, answered here as the editor's server answers it (Socket.IO over a WebSocket): each
+ * connection hears the build the server serves, JSKIT's realtime.served-client-build, from `announce` as it is then.
+ * The test server never connects the mocked shell's page (it stays "Realtime disconnected"), so the page's socket is
+ * answered here. `announced` resolves once the first connection was told.
+ */
+async function mockRealtime(page: Page, announce: string) {
+  let told = () => {};
+  const realtime = { announce, announced: new Promise<void>((resolve) => { told = resolve; }) };
+  await page.routeWebSocket(/\/socket\.io\//u, (socket) => {
+    // Engine.IO's open packet; no pings during a test.
+    socket.send(`0${JSON.stringify({ sid: "e2e-engine", upgrades: [], pingInterval: 600_000, pingTimeout: 600_000, maxPayload: 1_000_000 })}`);
+    socket.onMessage((message) => {
+      // The client joins the default namespace ("40", with its auth), and is connected.
+      if (!String(message).startsWith("40")) return;
+      socket.send(`40${JSON.stringify({ sid: "e2e-socket" })}`);
+      socket.send(`42${JSON.stringify(["realtime.served-client-build", { buildId: realtime.announce }])}`);
+      told();
+    });
+  });
+  return realtime;
+}
+
 function escapedPathPattern(pathValue: string) {
   return String(pathValue || "").replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
@@ -140,6 +254,8 @@ function developmentUrlPattern() {
 type MockReadyStudioShellOptions = {
   failGet?: (apiPathname: string) => boolean;
   failInitialGetCounts?: Record<string, number>;
+  // The planned restart's read, in place of "no planned restart".
+  plannedRestart?: () => unknown;
 };
 
 async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOptions = {}) {
@@ -367,7 +483,9 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
       return;
     }
 
-    await fulfillJson(route, apiPayloads.get(apiPathname));
+    await fulfillJson(route, apiPathname === PLANNED_RESTART_PATH && options.plannedRestart
+      ? options.plannedRestart()
+      : apiPayloads.get(apiPathname));
   });
 }
 

@@ -56,7 +56,7 @@ const StudioHealthFeature = defineFeature({
   actions({ env, studioHealth }) {
     // The server records its crashes in the system root it settled on (server.js), which every feature's env names.
     const crashes = createCrashService({ systemRoot: env[VIBE64_SYSTEM_ROOT_ENV] });
-    return createStudioHealthActions({ studioHealth, crashes, appRoot: resolveStudioAppRoot({ env }) });
+    return createStudioHealthActions({ studioHealth, crashes });
   }
 });
 

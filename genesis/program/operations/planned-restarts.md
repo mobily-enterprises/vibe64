@@ -24,9 +24,11 @@ but the minutes it takes.
 - `src/composables/usePlannedRestart.js`
 - `src/lib/vibe64PlannedRestartPresentation.js`
 - `src/components/studio/Vibe64PlannedRestartBanner.vue`
+- `src/lib/vibe64ClientUpdateOffer.js`
 - `tests/server/plannedRestart.unit.test.js`
 - `tests/server/plannedRestartResume.unit.test.js`
 - `tests/client/vibe64PlannedRestartPresentation.vitest.js`
+- `tests/client/vibe64ClientUpdateOffer.vitest.js`
 - `docs/colleague-usage/planned-restarts.md`
 
 ## Public contract
@@ -76,11 +78,18 @@ recovery checks again; a chat the person stopped is skipped as
 why. `GET
 /api/studio/health/planned-restart` reports the restart
 for 30 minutes (`restarted: { id, restartedAt, reason, sessions, stopped }`,
-with `active` and the served `clientBuildId`). Otherwise the restart did not
+with `active`). Otherwise the restart did not
 happen: every told chat hears "Vibe64: the planned restart didn't happen; carry
 on.", and owed steps start.
 
 The shell layout shows the amber banner (time, countdown, reason) while a
 notice is in force, and once afterwards a green "Restarted for an update at
-HH:MM. Nothing was lost." with what stopped, **Dismiss**, and **Reload** only
-when the served client build differs from the page's.
+HH:MM. Nothing was lost." with what stopped, **Dismiss**, and, when JSKIT
+realtime's served client build differs from the page's, "Reload to get the
+latest version." with **Reload**. That offer is JSKIT's client update, which
+`src/error.js` routes into this banner (`src/lib/vibe64ClientUpdateOffer.js`), so
+an update is one notice; an update without a planned restart shows the offer's
+own sentence in the same banner, blue. While the page says **Updating…** the
+banner steps aside. Its buttons draw in the banner's on-colour (Reload filled,
+Dismiss outlined), as the crash banner's do: the app's primary default sat faded
+on its colour (28 Nov 2026).

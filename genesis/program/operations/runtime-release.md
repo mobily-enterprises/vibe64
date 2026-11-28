@@ -123,11 +123,18 @@ loads one of its modules finds that file gone (404), and JSKIT's shell shows
 An open tab keeps the client build it loaded. JSKIT names each production
 build in `index.html` (its `jskit-client-build` meta tag), and the realtime
 reconnection after a restart announces the build the server now serves. When
-they differ, the JSKIT shell's `ShellErrorHost` in `src/App.vue` shows **Vibe64
-was updated. Reload to get the latest version.** with **Reload**, naming the app
-from `index.html`'s `<title>`. Vibe64 adds no code of its own for this. Nothing
-polls, the page never reloads by itself, and a development (`npm run dev`) page
-has no build to compare. See `docs/colleague-usage/vibe64-updates.md`.
+they differ, the JSKIT shell offers **Vibe64 was updated. Reload to get the
+latest version.** with **Reload**, naming the app from `index.html`'s `<title>`.
+`src/error.js`'s policy hands that offer to `src/lib/vibe64ClientUpdateOffer.js`
+while the editor's top banner (`Vibe64PlannedRestartBanner.vue`, in every
+`StudioAppShellLayout`) is on the page, which shows it as the update's one
+notice: inside the green message after a planned restart, and on its own,
+blue, otherwise, with **Reload** (JSKIT's action) and **Dismiss**. An offer
+the shell's banner showed before the top banner came moves into it, keeping
+its id, so JSKIT's withdrawal still reaches it; a page without the top banner
+keeps the shell's banner (`ShellErrorHost` in `src/App.vue`). Nothing polls,
+the page never reloads by itself, and a development (`npm run dev`) page has no
+build to compare. See `docs/colleague-usage/vibe64-updates.md`.
 The build id follows the source alone, never the directory a build runs in:
 `vite.config.mjs` gives each component's scoped-style id (`data-v-…`) the hash
 of its source. The default hashes the path from the build's root as well, and a
@@ -157,7 +164,9 @@ that follow their own lost answers (`vibe64HeldMessage.js`, the Preview start,
 Create pull request), and its words say Vibe64 cannot tell whether it was done.
 `src/lib/vibe64EditorReconnect.js` holds whether the editor answers. After
 1.5 s without an answer `src/error.js` shows **Updating…** in the shell's
-banner, and clears it when the editor answers. While it is unreachable, a GET
+banner, and clears it when the editor answers; the top banner steps aside
+meanwhile, so a planned restart's countdown and **Updating…** never show
+together. While it is unreachable, a GET
 of `/api/health` watches for that answer. Once the editor answers, a realtime
 socket that lost it reconnects at once and the live queries refetch
 (`packages/main/src/client/vibe64RealtimeQueries.js`).

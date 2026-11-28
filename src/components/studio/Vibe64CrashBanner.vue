@@ -26,15 +26,18 @@
             <span v-if="turnsText">{{ ` ${turnsText}` }}</span>
             <span v-if="actionError" class="vibe64-crash-banner__error">{{ ` ${actionError}` }}</span>
           </p>
+          <!-- On the banner's red its buttons draw in its on-colour, as its words do: Acknowledge filled with it, the
+               others outlined in it. -->
           <div class="vibe64-crash-banner__actions">
-            <v-btn :to="VIBE64_CRASHES_PATH" size="small" variant="outlined">See crashes</v-btn>
-            <v-btn size="small" variant="outlined" @click="copyReport(latest)">
+            <v-btn :color="ON_ERROR" :to="VIBE64_CRASHES_PATH" size="small" variant="outlined">See crashes</v-btn>
+            <v-btn :color="ON_ERROR" size="small" variant="outlined" @click="copyReport(latest)">
               {{ copiedId === latest.id ? "Copied" : "Copy for a bug report" }}
             </v-btn>
             <v-btn
-              class="vibe64-crash-banner__acknowledge"
+              :color="ON_ERROR"
               :loading="acknowledging"
               size="small"
+              :style="{ color: ERROR }"
               variant="flat"
               @click="acknowledge(latest.id)"
             >
@@ -70,6 +73,9 @@ const {
   unacknowledged,
   visible
 } = useVibe64CrashSummary();
+
+const ERROR = "rgb(var(--v-theme-error))";
+const ON_ERROR = "rgb(var(--v-theme-on-error))";
 
 const headline = computed(() => (latest.value ? crashBannerHeadline(latest.value, unacknowledged.value) : ""));
 const turnsText = computed(() => (latest.value ? crashTurnsText(latest.value) : ""));
@@ -111,11 +117,6 @@ onBeforeUnmount(() => observer?.disconnect());
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-}
-
-.vibe64-crash-banner__acknowledge {
-  background: rgb(var(--v-theme-on-error)) !important;
-  color: rgb(var(--v-theme-error)) !important;
 }
 
 .vibe64-crash-line {
