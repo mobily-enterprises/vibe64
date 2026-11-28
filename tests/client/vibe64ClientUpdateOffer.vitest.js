@@ -44,7 +44,11 @@ function shellRuntime() {
       for (const listener of listeners) listener({ type: "reported", result });
       return result;
     },
-    dismiss(id = "") {
+    dismiss(id = "", { presenterId = "" } = {}) {
+      if (presenterId) {
+        const presenter = presenters.get(presenterId);
+        return presenter ? presenter.dismiss(id) : 0;
+      }
       let count = 0;
       for (const presenter of presenters.values()) count += presenter.dismiss(id);
       return count;
@@ -67,6 +71,18 @@ function offerReload(runtime, handler = vi.fn()) {
   });
 }
 
+/** The offer's sentence in each entry the shell's own banner shows. */
+function shellBanner(runtime) {
+  return [...runtime.banner.values()].map((entry) => entry.message);
+}
+
+/** Lets the page finish what it was doing (a top banner's leaving is acted on after the update that removed it). */
+function settled() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+const OFFER = "Vibe64 was updated. Reload to get the latest version.";
+
 let offers;
 let runtime;
 
@@ -84,7 +100,7 @@ afterEach(() => {
 });
 
 describe("the client update offer", () => {
-  it("goes to the top banner while one is on the page, and JSKIT's withdrawal takes it back", () => {
+  it("goes to the top banner while one is on the page, and JSKIT's withdrawal takes it back", async () => {
     const endHosting = offers.hostClientUpdateOffer();
     const shown = offerReload(runtime);
 
@@ -100,13 +116,15 @@ describe("the client update offer", () => {
     // Without the banner the shell's own banner shows the next one.
     endHosting();
     offerReload(runtime);
-    expect(runtime.banner.size).toBe(1);
+    await settled();
+    expect(shellBanner(runtime)).toEqual([OFFER]);
     expect(offers.clientUpdateOffer.value).toBeNull();
   });
 
-  it("shown by the shell's banner before a top banner came, moves into the first one, keeping its id", () => {
+  it("shown by the shell's banner before a top banner came, moves into the first one, keeping its id", async () => {
     const shown = offerReload(runtime);
-    expect(runtime.banner.size).toBe(1);
+    await settled();
+    expect(shellBanner(runtime)).toEqual([OFFER]);
 
     offers.hostClientUpdateOffer();
     expect(runtime.banner.size).toBe(0);
@@ -115,12 +133,54 @@ describe("the client update offer", () => {
     expect(offers.clientUpdateOffer.value).toBeNull();
   });
 
-  it("closed in the shell's banner stays closed when a top banner comes", () => {
-    const shown = offerReload(runtime);
-    runtime.banner.delete(shown.presentationId);
+  it("closed in the shell's banner stays closed when a top banner comes", async () => {
+    offerReload(runtime);
+    await settled();
+    // The person closes the shell's banner.
+    runtime.banner.clear();
 
     offers.hostClientUpdateOffer();
     expect(offers.clientUpdateOffer.value).toBeNull();
+  });
+
+  it("goes back to the shell's banner when the last top banner leaves the page, and into the next one when it comes", async () => {
+    // A page without the editor's layout: Learning holding the route, say, or a host's own page.
+    const endHosting = offers.hostClientUpdateOffer();
+    const shown = offerReload(runtime);
+    endHosting();
+    await settled();
+    expect(offers.clientUpdateOffer.value).toBeNull();
+    expect(shellBanner(runtime)).toEqual([OFFER]);
+
+    offers.hostClientUpdateOffer();
+    expect(shellBanner(runtime)).toEqual([]);
+    expect(offers.clientUpdateOffer.value?.message).toBe(OFFER);
+    expect(runtime.dismiss(shown.presentationId)).toBe(1);
+    expect(offers.clientUpdateOffer.value).toBeNull();
+  });
+
+  it("withdrawn by JSKIT while the shell's banner shows it for a page without a top banner, goes from there", async () => {
+    const endHosting = offers.hostClientUpdateOffer();
+    const shown = offerReload(runtime);
+    endHosting();
+    await settled();
+    expect(shellBanner(runtime)).toEqual([OFFER]);
+
+    // The server serves the page's own build again.
+    expect(runtime.dismiss(shown.presentationId)).toBeGreaterThan(0);
+    expect(shellBanner(runtime)).toEqual([]);
+    offers.hostClientUpdateOffer();
+    expect(offers.clientUpdateOffer.value).toBeNull();
+  });
+
+  it("stays in the top banner when one page's top banner gives way to the next page's, without showing in the shell's", async () => {
+    const endFirst = offers.hostClientUpdateOffer();
+    offerReload(runtime);
+    endFirst();
+    offers.hostClientUpdateOffer();
+    await settled();
+    expect(shellBanner(runtime)).toEqual([]);
+    expect(offers.clientUpdateOffer.value?.message).toBe(OFFER);
   });
 
   it("reloads with JSKIT's action, closes on Dismiss, and says so when the reload fails", async () => {
